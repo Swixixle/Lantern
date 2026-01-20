@@ -1,0 +1,179 @@
+You are now in the correct phase: heuristic reliability + measurable iteration. v0.1.0 has the right primitives (determinism, modes, offsets, engine versioning, first fixture). The next improvements should be narrowly aimed at (a) reducing false positives, (b) improving dedupe/normalization, and (c) making regression impossible to miss.
+
+What to improve next in the extraction engine
+
+1) Sentence segmentation and provenance integrity
+
+Most heuristic errors start with bad “sentence” boundaries.
+
+Implement a deterministic sentence splitter that:
+	•	Treats .?! as terminators unless preceded by common abbreviations (Mr., Dr., U.S., Inc., Ltd., months like Jan.).
+	•	Preserves newlines as hard boundaries when input is copied from tables/press releases.
+	•	Stores sentence_start / sentence_end offsets, not just sentence text.
+
+Acceptance gate:
+	•	substring(text, start, end) must equal the extracted surface form 100% of the time (hard fail otherwise).
+
+⸻
+
+2) Entities: stop-entity suppression + pattern tiers
+
+Capitalization alone will keep betraying you unless you apply structured filters.
+
+Add these rule tiers (applied in this order):
+
+Tier A — Hard excludes
+	•	Single tokens that are months/days (“January”, “Monday”), common section labels (“Introduction”, “Conclusion”), generic institutions (“Court”, “Government”) unless preceded by a qualifier (e.g., “Supreme Court”, “U.S. Government”).
+	•	Tokens that are sentence-initial and appear only once in the doc with no supporting pattern.
+
+Tier B — Positive patterns
+Emit an entity if it matches any of:
+	•	Consecutive Caps: ([A-Z][a-z]+)(\s+[A-Z][a-z]+)+ (New York, John Smith)
+	•	ORG suffix: Inc|LLC|Ltd|PLC|GmbH|University|Hospital|Department|Ministry|Committee|Agency|Bank
+	•	Acronym: \b[A-Z]{2,6}\b if it appears ≥ 2 times (reduce headline ALLCAPS noise)
+
+Tier C — Type inference (heuristic)
+	•	PERSON if 2–4 tokens, no org suffix, no location keyword.
+	•	ORG if suffix or leading “The” + capitalized phrase + org keyword (“The World Bank”).
+	•	LOCATION if preceded by in|at|near|from + cap phrase or matches known geo cue words (“County”, “City”, “River”).
+
+Noise control mapping:
+	•	Conservative: require Tier B OR repeated occurrence
+	•	Balanced: Tier A + Tier B + limited Tier C
+	•	Broad: Tier A only + full Tier C
+
+⸻
+
+3) Quotes: attribution rules that don’t hallucinate speakers
+
+Quotes are deceptively hard. Keep it strict.
+
+Rules:
+	•	Detect quoted spans using " and curly quotes.
+	•	Require minimum length (e.g., ≥ 12 chars) to avoid junk.
+	•	Speaker attribution only if within a window of ±120 chars you find:
+	•	X said|told|wrote|added|according to|stated
+	•	where X is either a PERSON candidate or ORG candidate already extracted
+	•	If attribution is not confidently found, set speaker = null (do not guess).
+
+Mode effects:
+	•	Conservative: attribution only if “said/told/stated” pattern + PERSON
+	•	Balanced: allow ORG
+	•	Broad: allow “according to” phrases and appositives (“…,” Smith said.)
+
+⸻
+
+4) Metrics: normalize without interpretation
+
+Metrics should become your highest-precision stream.
+
+Rules:
+	•	Capture raw + normalized:
+	•	Currency: $, USD, €, £
+	•	Percent: %, “percent”
+	•	Magnitudes: k|K|m|M|b|B|million|billion|trillion
+	•	Normalize:
+	•	raw_value_text
+	•	normalized_number (float)
+	•	scale (1 / 1e3 / 1e6 / 1e9)
+	•	unit (USD, %, people, etc.)
+	•	Do not infer units if absent. Store unit="unknown".
+
+Noise controls:
+	•	Conservative: must include explicit unit or currency/percent symbol
+	•	Balanced: allow “million/billion” without currency
+	•	Broad: allow “about/roughly” phrases
+
+⸻
+
+5) Timeline: keep ambiguity explicit
+
+Timeline should prefer “anchored but maybe ambiguous” over “resolved but wrong”.
+
+Rules:
+	•	Detect explicit dates: YYYY-MM-DD, Month Day, Year, Jan. 5, 2024
+	•	Detect partial dates: Jan. 5 (store normalized_date=null, keep raw_date_text)
+	•	Detect relative dates (“last Tuesday”, “yesterday”) but mark:
+	•	date_type="relative"
+	•	no normalization
+	•	Event summary should be sentence-level minimal: do not paraphrase beyond trimming whitespace.
+
+⸻
+
+6) Dedupe: canonical keys per stream
+
+Without dedupe, Broad mode becomes unusable.
+
+Canonical keys:
+	•	Entities: type + normalized_text
+	•	Quotes: quote_text_normalized
+	•	Metrics: raw_value_text + sentence_hash (or value+unit+sentence_index)
+	•	Timeline: raw_date_text + sentence_index
+
+Keep “first-seen provenance” and store occurrences: [] optionally later.
+
+⸻
+
+Testing: make the harness real (not symbolic)
+
+You have basic_test.json. Next step is a runnable scorer.
+
+Add 8 more fixtures immediately
+
+Each fixture should be designed to break one thing:
+	1.	All-caps headline
+	2.	Abbreviations (U.S., Dr., Inc.)
+	3.	Multiple quotes, multiple speakers
+	4.	Numbers in words (“three million”)
+	5.	Tables pasted as text
+	6.	Dates without years + relative dates
+	7.	Legal/medical text (domain-specific capitalization)
+	8.	Long narrative with repeated entities
+
+Add automated checks (minimum)
+	•	Provenance validity (substring match) – hard fail
+	•	Offsets within bounds – hard fail
+	•	Determinism: same input produces identical output across 5 runs – hard fail
+	•	Duplicate rate per mode – report
+	•	Precision/recall (once you create expected outputs) – report
+
+Even before full precision/recall, provenance/determinism gates will prevent “silent rot.”
+
+⸻
+
+Persistence: should you go full-stack now?
+
+What persistence buys you (real benefits)
+	•	Save curated packs; reopen and edit later
+	•	Organize by source, project, user
+	•	Enable “compare runs” across engine versions
+	•	Enable multi-document corpora workflows (eventually)
+
+What it costs you (real risks)
+	•	You will slow extraction iteration
+	•	You will add schema migration overhead before schema is stable
+	•	You may build UI flows that assume permanence (locking you in too early)
+
+Recommendation
+	•	Do not go “full-stack” broadly yet.
+	•	Do implement a minimal persistence slice when (and only when) these are true:
+	1.	schema lantern.extract.pack.v1 is frozen for at least 2–3 iterations
+	2.	harness exists with ≥ 10 fixtures
+	3.	provenance/determinism gates are green
+
+Minimal persistence slice (when ready):
+	•	POST /api/packs (store curated pack JSON + hashes + engine version)
+	•	GET /api/packs/:id
+	•	GET /api/packs?source_url=...
+	•	SQLite is sufficient.
+
+⸻
+
+Next iteration checklist (tight and executable)
+	1.	Improve sentence splitter + abbreviation handling
+	2.	Add stop-entity suppression + tiered entity emission rules
+	3.	Quote attribution rule window + “speaker=null” default
+	4.	Metric normalization fields + mode gating
+	5.	Add 8 fixtures + provenance/determinism gates
+
+Classification: PROCEED.
