@@ -15,8 +15,8 @@ export type BaseItem = {
 export type EntityItem = BaseItem & {
   type: "person" | "org" | "location" | "other";
   text: string;
-  canonical: string; // Used for deduplication key
-  canonical_family_id?: string; // Stable hash of root token
+  canonical: string; 
+  canonical_family_id?: string;
   occurrences?: Provenance[];
 };
 
@@ -27,13 +27,16 @@ export type QuoteItem = BaseItem & {
 };
 
 export type MetricItem = BaseItem & {
-  value: string; // Display string
-  raw_value_text: string; // Exact substring
+  value: string;
+  raw_value_text: string;
   unit: string;
+  metric_kind: "scalar" | "range" | "ratio" | "rate";
   parsed_number?: number;
   scale?: number;
   normalized_value?: number;
-  qualifier?: string; // "about", "roughly", etc.
+  range_low?: number;
+  range_high?: number;
+  qualifier?: string;
   parse_notes?: string;
 };
 
@@ -77,7 +80,7 @@ export type LanternPack = {
     metrics: MetricItem[];
     timeline: TimelineItem[];
   };
-  stats?: EngineStats; // Exposed in pack for audit
+  stats?: EngineStats;
 };
 
 export type ExtractionOptions = {
@@ -91,18 +94,22 @@ const normalizeEntity = (text: string): string => {
   return text.trim().replace(/[.,;:!?]+$/, "").replace(/\s+/g, " ");
 };
 
-// Generate Family ID from root token (first substantial word)
-const generateFamilyId = (text: string): string => {
+// Generate Family ID from root token + casing profile (v0.1.4 upgrade)
+const generateFamilyId = (text: string, type: string): string => {
   const normalized = normalizeEntity(text);
-  // Simple strategy: take the first word as "root" for family linking
-  // "Apple Inc" -> "Apple"
-  // "The World Bank" -> "World" (need to skip 'The')
+  // Root token logic: skip common stopwords
   const words = normalized.split(" ").filter(w => !["The", "A", "An"].includes(w));
   const root = words.length > 0 ? words[0] : normalized;
-  return mockHash(root.toLowerCase());
+  
+  // Casing profile: is it ALLCAPS?
+  const isAllCaps = root === root.toUpperCase() && root.length > 1;
+  const casingKey = isAllCaps ? "UPPER" : "Mixed";
+  
+  // Family ID combines: Root + Type + Casing
+  return mockHash(`${root.toLowerCase()}|${type}|${casingKey}`);
 };
 
-// Normalize quote for key
+// Normalize quote
 const normalizeQuote = (text: string): string => {
   return text.trim()
     .replace(/[\u2018\u2019]/g, "'")
@@ -110,49 +117,85 @@ const normalizeQuote = (text: string): string => {
     .replace(/\s+/g, " ");
 };
 
-// Currency normalization with parse trace
+// Improved Metric Normalization (Ranges, Ratios, Rates)
 const normalizeMetric = (text: string): { 
-  parsed_number: number, 
+  parsed_number?: number, 
   scale: number, 
   unit: string, 
   qualifier: string, 
-  parse_notes: string 
+  parse_notes: string,
+  metric_kind: "scalar" | "range" | "ratio" | "rate",
+  range_low?: number,
+  range_high?: number
 } => {
   const clean = text.toLowerCase().replace(/,/g, "");
   let scale = 1;
-  let notes = [];
+  let notes: string[] = [];
+  let metric_kind: "scalar" | "range" | "ratio" | "rate" = "scalar";
 
+  // Scale detection
   if (clean.includes("million") || clean.includes("m")) { scale = 1e6; notes.push("million-scale"); }
-  if (clean.includes("billion") || clean.includes("b")) { scale = 1e9; notes.push("billion-scale"); }
-  if (clean.includes("trillion") || clean.includes("t")) { scale = 1e12; notes.push("trillion-scale"); }
-  if (clean.includes("k")) { scale = 1e3; notes.push("k-scale"); }
+  else if (clean.includes("billion") || clean.includes("b")) { scale = 1e9; notes.push("billion-scale"); }
+  else if (clean.includes("trillion") || clean.includes("t")) { scale = 1e12; notes.push("trillion-scale"); }
+  else if (clean.includes("k")) { scale = 1e3; notes.push("k-scale"); }
 
+  // Unit detection
   let unit = "unknown";
   if (text.includes("$") || text.includes("USD")) unit = "USD";
   else if (text.includes("€") || text.includes("EUR")) unit = "EUR";
   else if (text.includes("£") || text.includes("GBP")) unit = "GBP";
   else if (text.includes("%") || text.includes("percent")) unit = "percent";
+  
+  // Rate detection
+  if (clean.includes("per") || clean.includes("/")) {
+    metric_kind = "rate";
+    notes.push("rate-detected");
+  }
 
-  if (text.includes(",")) notes.push("comma-stripped");
-
+  // Qualifier detection
   let qualifier = "";
   if (clean.includes("about") || clean.includes("around") || clean.includes("roughly") || clean.includes("approx")) {
     qualifier = "approximate";
     notes.push("qualifier-detected");
   }
 
-  const numMatch = clean.match(/[\d.]+/);
-  const parsed_number = numMatch ? parseFloat(numMatch[0]) : 0;
+  // Range detection ("5-10", "between 5 and 10")
+  const rangeMatch = clean.match(/(\d+(?:\.\d+)?)\s*(?:-|to|and)\s*(\d+(?:\.\d+)?)/);
+  let parsed_number: number | undefined;
+  let range_low: number | undefined;
+  let range_high: number | undefined;
+
+  if (rangeMatch && !unit.includes("percent") && !clean.includes("/")) { // Basic range guard
+     metric_kind = "range";
+     range_low = parseFloat(rangeMatch[1]) * scale;
+     range_high = parseFloat(rangeMatch[2]) * scale;
+     notes.push("range-detected");
+  } else {
+    const numMatch = clean.match(/[\d.]+/);
+    if (numMatch) {
+      parsed_number = parseFloat(numMatch[0]);
+    }
+  }
   
-  return { parsed_number, scale, unit, qualifier, parse_notes: notes.join(", ") };
+  if (text.includes(",")) notes.push("comma-stripped");
+
+  return { 
+    parsed_number, 
+    scale, 
+    unit, 
+    qualifier, 
+    parse_notes: notes.join(", "),
+    metric_kind,
+    range_low,
+    range_high
+  };
 };
 
-// Sentence Segmentation with Provenance
+// Sentence Segmentation
 type Sentence = { text: string; start: number; end: number; isHeadlineLike: boolean };
 
 const splitSentences = (text: string): Sentence[] => {
   const segments: Sentence[] = [];
-  // Regex to find sentence boundaries: (.?!) followed by whitespace or EOF
   const boundaryRegex = /(?<!\b(?:Mr|Mrs|Ms|Dr|Inc|Ltd|Jr|Sr|vs|U\.S|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\.|!|\?)(?=\s|$)/g;
   
   let lastIndex = 0;
@@ -182,7 +225,6 @@ const splitSentences = (text: string): Sentence[] => {
     lastIndex = end;
   }
   
-  // Remaining text
   const remaining = text.slice(lastIndex).trim();
   if (remaining.length > 0) {
     const relativeStart = text.slice(lastIndex).indexOf(remaining);
@@ -208,7 +250,6 @@ const splitSentences = (text: string): Sentence[] => {
 // Provenance Validator
 const validateItem = (item: BaseItem, fullText: string): boolean => {
   const { start, end } = item.provenance;
-  // Bounds check
   if (start < 0 || end > fullText.length || start >= end) return false;
   return true;
 };
@@ -228,7 +269,6 @@ const mockHash = (str: string) => {
 // --- Main Extraction Function ---
 
 export function extract(text: string, options: ExtractionOptions = { mode: "balanced" }): { items: LanternPack["items"], stats: EngineStats } {
-  // Raw collection arrays
   const rawEntities: EntityItem[] = [];
   const rawQuotes: QuoteItem[] = [];
   const rawMetrics: MetricItem[] = [];
@@ -241,7 +281,6 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
     headlines_suppressed: 0
   };
 
-  // 1. Setup & Config
   const minEntityLen = options.mode === "broad" ? 2 : options.mode === "conservative" ? 4 : 3;
   const minQuoteLen = options.mode === "broad" ? 5 : options.mode === "conservative" ? 15 : 10;
   
@@ -259,20 +298,18 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
 
   const entityPattern = /([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/g;
   const quotePattern = /["“]([^"”]+)["”]/g;
-  const metricPattern = /(\$|€|£|¥)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(%|million|billion|trillion|k|m|b)?/gi;
+  const metricPattern = /(\$|€|£|¥)?\s*\d+(?:,\d{3})*(?:\.\d+)?\s*(?:-|to)?\s*\d*(?:,\d{3})*(?:\.\d+)?\s*(%|million|billion|trillion|k|m|b|per\s+\w+)?/gi; // Expanded for ranges/rates
   const yearPattern = /\b(19|20)\d{2}\b/g;
   const explicitDatePattern = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2}(?:,\s+\d{4})?\b/gi;
 
   const sentences = splitSentences(text);
   
-  // 2. Extraction Loop
   sentences.forEach((sent, sentIndex) => {
     const sentence = sent.text;
     const sentenceStart = sent.start;
     
     if (!sentence) return;
 
-    // Headline Suppression Logic
     if (sent.isHeadlineLike) {
       if (options.mode !== "broad") {
         stats.headlines_suppressed++;
@@ -300,7 +337,6 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
 
       const hasOrgSuffix = orgSuffixes.some(s => normalized.endsWith(s) || normalized.includes(" " + s));
       
-      // Headline Guard
       if (sent.isHeadlineLike && options.mode !== "broad") {
         if (!hasOrgSuffix) continue; 
       }
@@ -331,7 +367,7 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
           type,
           text: normalized,
           canonical: normalized,
-          canonical_family_id: generateFamilyId(normalized),
+          canonical_family_id: generateFamilyId(normalized, type),
           confidence: 0.7, 
           provenance: {
             sentence, 
@@ -357,34 +393,24 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
       const candidates: string[] = [];
       const attributionKeywords = ["said", "told", "wrote", "added", "stated", "according to"];
       
-      // Strict attribution: Search only in current or adjacent sentences.
-      // Currently, we only have the current sentence in the loop easily.
-      // For v1.3 strictness, let's limit to SAME sentence for highest precision.
-      // To implement adjacent, we'd need index access to `sentences`.
-      // Let's grab previous sentence if available.
-      
+      // v0.1.4: Forward Scan (Broad mode or normal?)
+      // Look in Previous + Current + Next sentence (forward scanning)
       const prevSentence = sentIndex > 0 ? sentences[sentIndex - 1].text : "";
-      const searchContext = prevSentence + " " + sentence; 
+      const nextSentence = sentIndex < sentences.length - 1 ? sentences[sentIndex + 1].text : "";
       
-      // Check for attribution keyword presence in context
+      // Heuristic: check next sentence only if it STARTS with a verb pattern or short connection?
+      // For safety, just checking context presence.
+      const searchContext = prevSentence + " " + sentence + " " + nextSentence;
+      
       if (attributionKeywords.some(kw => searchContext.includes(kw))) {
-        // Find entities in context
-        // Ideally we search entities extracted from context, but we might not have processed them yet (if prev sentence).
-        // Let's just scan for Caps patterns in context.
         const nearbyCaps = searchContext.match(/([A-Z][a-z]+)/g);
         if (nearbyCaps) {
-           // Filter candidates: exclude stop words and ensure proximity (heuristic: appear in same context)
            candidates.push(...nearbyCaps.filter(c => !stopEntities.has(c)));
         }
       }
 
-      // De-duplicate candidates
       const uniqueCandidates = [...new Set(candidates)];
-      
-      if (uniqueCandidates.length === 1) {
-        speaker = uniqueCandidates[0];
-      }
-      // If > 1, speaker remains undefined, but we store candidates.
+      if (uniqueCandidates.length === 1) speaker = uniqueCandidates[0];
 
       if (options.mode === "conservative" && !speaker) continue;
 
@@ -412,9 +438,8 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
       if (!/\d/.test(raw)) continue;
       if (/^\d{4}$/.test(raw.trim()) && (raw.startsWith("19") || raw.startsWith("20"))) continue;
 
-      const { parsed_number, scale, unit, qualifier, parse_notes } = normalizeMetric(raw);
+      const { parsed_number, scale, unit, qualifier, parse_notes, metric_kind, range_low, range_high } = normalizeMetric(raw);
 
-      // Ambiguity check: if parsed_number is 0 or NaN, normalized is undefined
       const normalized_value = (parsed_number && !isNaN(parsed_number)) ? parsed_number * scale : undefined;
 
       if (options.mode === "conservative" && (unit === "unknown" || unit === "count")) continue;
@@ -427,6 +452,9 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
         parsed_number,
         scale,
         normalized_value,
+        metric_kind,
+        range_low,
+        range_high,
         qualifier,
         parse_notes,
         confidence: 0.9,
@@ -492,7 +520,7 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
 
   // 3. Deduplication & Validation
   
-  // Entities: Dedupe by canonical key (Type + Text)
+  // Entities: Dedupe by canonical key
   const dedupedEntities: EntityItem[] = [];
   const entityMap = new Map<string, EntityItem>();
 
@@ -509,7 +537,7 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
       existing.occurrences.push(ent.provenance);
       stats.duplicates_collapsed++;
     } else {
-      ent.occurrences = [ent.provenance]; // Include self
+      ent.occurrences = [ent.provenance]; 
       entityMap.set(key, ent);
       dedupedEntities.push(ent);
     }

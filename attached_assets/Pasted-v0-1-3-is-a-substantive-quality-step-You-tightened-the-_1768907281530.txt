@@ -1,0 +1,106 @@
+v0.1.3 is a substantive quality step. You tightened the two streams that most often poison downstream work (metrics and attribution), and you introduced a linkage concept (canonical families) without collapsing distinct entities. That is the correct kind of “added intelligence”: structured, reversible, and inspectable.
+
+Where you are now
+
+You have a reference-grade extraction pack generator in the sense that:
+	•	Every item is anchored (offsets + sentence context, with invalid provenance dropped).
+	•	Ambiguity is explicit (timeline date typing; qualifier flags).
+	•	Speaker inference is bounded (same/previous sentence constraint).
+	•	Outputs are now composable for downstream graphing (entity family IDs; metric anatomy).
+
+This is now a legitimate foundation for persistence and controlled NLP augmentation.
+
+⸻
+
+The most likely remaining failure modes (and the next fixes)
+
+1) Entity family linkage collisions
+
+Root-token families can misgroup:
+	•	“Apple” (company) vs “apple” (fruit) in mixed-case texts
+	•	“Washington” (person/state/city)
+	•	“Mercury” (planet/element/publication)
+
+v0.1.4 fix (safe, heuristic-only):
+	•	Make canonical_family_id incorporate a light context signature, not just root token:
+	•	root token + type guess (ORG/PERSON/LOC) + casing profile
+	•	If type is unknown, keep family linkage but mark family_confidence=low.
+
+This preserves grouping power while preventing silent conflation.
+
+⸻
+
+2) Metric parsing edge cases: ranges and ratios
+
+You’ve handled qualifiers, scale, units. Next common landmines:
+	•	ranges: “$5–7 million”, “between 10 and 12%”
+	•	ratios: “3-to-1”, “1 in 5”
+	•	per-units: “$40 per share”, “cases per 100,000”
+
+v0.1.4 fix:
+Add metric subtypes:
+	•	metric_kind: scalar | range | ratio | rate
+For ranges, store:
+	•	low, high, plus a derived normalized range if possible.
+
+Do not “average” by default; keep raw form.
+
+⸻
+
+3) Quote attribution in multi-speaker paragraphs
+
+Same/previous sentence is good, but when attribution appears after the quote (“…,” Smith said.), you need to allow a short forward scan.
+
+v0.1.4 fix:
+	•	Allow speaker detection in:
+	•	same sentence (before or after quote)
+	•	previous sentence
+	•	AND (optionally, Broad mode) next sentence if it begins with a speech verb pattern
+
+Still require the candidate entity to be explicit.
+
+⸻
+
+What you should build next: persistence (minimal slice)
+
+At this point, “Consider upgrading to full-stack” moves from PARK to PROCEED—but only as a constrained addition.
+
+Minimal persistence slice (do not overbuild)
+	•	Store curated packs exactly as exported:
+	•	pack_id, source_text_sha256, engine_version, created_at
+	•	pack_json blob
+	•	Endpoints:
+	•	POST /api/packs
+	•	GET /api/packs/:id
+	•	GET /api/packs?source_sha=...
+	•	SQLite is sufficient.
+	•	No auth complexity unless required; keep it local/dev first.
+
+Why now: you’re producing artifacts worth saving and re-opening, and you have enough schema stability to avoid constant migrations.
+
+⸻
+
+Testing: move from “green invariants” to “quality scoring”
+
+You have determinism + provenance passing. Next is measured quality.
+
+Add optional gold expectations for 3–5 fixtures (start small):
+	•	precision-focused (especially metrics and quotes)
+	•	compute simple scores:
+	•	counts match
+	•	key items present
+	•	zero forbidden items (stop-entity list)
+
+You do not need full IR-style scoring yet—just enough to prevent obvious regressions.
+
+⸻
+
+Decision
+
+You’ve done the right engineering work. Next step should be:
+	1.	Minimal persistence slice
+	2.	Metric subtype support (range/ratio/rate)
+	3.	Family-ID collision hardening
+	4.	Begin quality scoring on a few fixtures
+
+Classification: PROCEED.
