@@ -1,0 +1,151 @@
+Below are final, unambiguous instructions for the agent to close out Lantern Extract at this milestone. This is written as a “handoff directive” that freezes scope, defines acceptance gates, and parks Phase 3 items.
+
+⸻
+
+Final Instructions for Lantern Extraction Engine (Baseline Freeze)
+
+Objective
+
+Freeze Lantern Extract as a baseline release with locked integrity + locked quality measurement. The system must be stable, auditable, and regression-resistant. No new extraction features are to be added in this pass.
+
+⸻
+
+1) Baseline Release Tag
+	•	Set version to: v0.1.5 (Baseline Integrity + Quality Harness)
+	•	Ensure the following are visible in UI and exports:
+	•	engine_version
+	•	mode
+	•	stable_source_hash
+	•	pack_id
+	•	schema_version
+
+⸻
+
+2) Acceptance Gates (Must Pass)
+
+You must be able to run a single “full regression” and get PASS on all gates.
+
+A. Provenance Integrity (Hard Fail)
+
+For every emitted item:
+	•	0 <= start < end <= text.length
+	•	text.slice(start, end) === raw_value_text / extracted_text (stream-specific)
+	•	Any item failing validation is dropped and counted as invalid_dropped
+
+Fixture requirement: invalid_dropped must be 0 for all fixtures (fixtures represent controlled inputs).
+
+B. Determinism (Hard Fail)
+
+For each fixture and mode:
+	•	Run extraction 5x
+	•	Canonicalized pack JSON must hash identically each run
+
+C. Identity Semantics (Hard Fail)
+	•	stable_source_hash = sha256(source_text) is stable
+	•	pack_id = sha256(canonicalized_artifact) changes only when artifact content or curation changes
+	•	Local library:
+	•	Saves by pack_id
+	•	Overwrite only when pack_id matches
+	•	Different pack_id always creates a new snapshot
+
+D. Quality Scoring Contract Compliance (Hard Fail)
+	•	QUALITY_CONTRACT.md is the source of truth
+	•	createItemKey must match the contract exactly for all streams
+	•	normalizeForScore must remain scoped to safe transforms and metrics-only rules
+	•	Scoring must operate on structural keys, not display strings
+
+E. Cross-Mode Validation (Soft Fail with Flag)
+
+Dashboard must report (not necessarily fail builds) if:
+	•	Conservative emits > Broad emits (per fixture, per stream)
+	•	Conservative precision < Broad precision (flag as suspicious)
+	•	Broad recall < Conservative recall (flag as suspicious)
+
+These flags must be visible and explainable, not hidden.
+
+⸻
+
+3) Diff/Compare Requirements (Must Pass)
+
+diffPacks must produce:
+	•	Added
+	•	Removed
+	•	Changed
+	•	Unchanged
+
+Rules:
+	•	Identity is by semantic item keys
+	•	“Changed” means same semantic key exists in both packs but tracked attributes differ (at minimum: provenance offsets; also include speaker/unit/date_type where applicable)
+	•	Diff view must clearly indicate the compared pack IDs, engine versions, and modes
+
+⸻
+
+4) One-Click / One-Command Regression Run (Must Exist)
+
+Provide one of:
+	•	A single UI action: Run Full Quality Suite
+	•	Or a single script command (preferred if feasible in your environment): extract:test
+
+Output must include:
+	•	PASS/FAIL for determinism and provenance
+	•	P/R/F1 per stream per fixture per mode
+	•	Cross-mode flags summary
+	•	Counts: emitted, deduped, invalid_dropped
+
+⸻
+
+5) Documentation (Must Be Present)
+
+Ensure these are in-repo and current:
+	•	QUALITY_CONTRACT.md (already created)
+	•	EXTRACTION_ENGINE.md (short) containing:
+	•	engine architecture summary
+	•	invariants
+	•	how to run tests
+	•	what “mode” changes
+	•	LIBRARY_STORAGE.md (short) containing:
+	•	localStorage key schema
+	•	snapshot/overwrite semantics
+	•	what is excluded from canonicalization/hashing
+
+⸻
+
+6) Scope Freeze (Do Not Do)
+
+Do not add:
+	•	new extraction heuristics
+	•	new LLM/NLP engines
+	•	backend persistence
+	•	graph/relationship mapping
+	•	new UI workflows beyond what supports testing and diffing
+
+Any desired enhancements go into Phase 3 backlog only.
+
+⸻
+
+7) Phase 3 Backlog (Park These Explicitly)
+
+Create a PHASE_3_BACKLOG.md and list:
+	•	SQLite/API persistence slice
+	•	Multi-source corpora support
+	•	Shadow NLP engine integration (Gemini/other) with offset enforcement
+	•	Advanced entity disambiguation
+	•	Pack-to-pack merge tooling
+	•	Batch processing and exports
+
+No implementation in this freeze.
+
+⸻
+
+Deliverable Definition
+
+This freeze is complete when:
+	•	Full regression suite passes (determinism + provenance hard gates)
+	•	Quality dashboard reflects contract-accurate scoring
+	•	Diff/compare reliably shows Added/Removed/Changed
+	•	Library snapshots are non-destructive and predictable
+	•	Documentation enables a new engineer to run and trust the system
+
+Stop after this. The next work begins only under a Phase 3 ticketed scope.
+
+⸻

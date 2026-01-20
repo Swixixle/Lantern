@@ -63,6 +63,8 @@ export default function LanternExtract() {
   const [qualityReports, setQualityReports] = useState<QualityReport[]>([]);
   const [runningTests, setRunningTests] = useState(false);
   const [modeValidation, setModeValidation] = useState<{ pass: boolean; warnings: string[] } | null>(null);
+  const [determinismStatus, setDeterminismStatus] = useState<"pending" | "pass" | "fail">("pending");
+  const [provenanceStatus, setProvenanceStatus] = useState<"pending" | "pass" | "fail">("pending");
 
   const [sourceText, setSourceText] = useState("");
   const [metadata, setMetadata] = useState({
@@ -87,7 +89,7 @@ export default function LanternExtract() {
     
     const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
         schema: "lantern.extract.pack.v1",
-        engine: { name: "heuristic", version: "0.1.4" },
+        engine: { name: "heuristic", version: "0.1.5" }, // UPDATED VERSION
         source: { ...metadata, retrieved_at: new Date().toISOString() },
         items,
         stats
@@ -138,24 +140,21 @@ export default function LanternExtract() {
   // Quality Runner
   const runQualityTests = () => {
     setRunningTests(true);
+    setDeterminismStatus("pending");
+    setProvenanceStatus("pending");
+    
     const reports: QualityReport[] = [];
     const modeWarnings: string[] = [];
+    let determinismFail = false;
+    let provenanceFail = false;
 
     // Helper to get stats for a mode
     const getModeStats = (mode: ExtractionOptions["mode"]) => {
         let totalCount = 0;
-        let totalPrecSum = 0;
-        let totalRecSum = 0;
-        
         fixtures.forEach((fixture: any) => {
              const { items } = extract(fixture.text, { mode });
-             // Proxy: Just counting entity/quote/metric totals
              const totalItems = items.entities.length + items.quotes.length + items.metrics.length;
              totalCount += totalItems;
-
-             // Note: Real precision/recall requires full scoring loop.
-             // For "Conservative <= Broad" check, total count is a good enough proxy for Recall monotonicity.
-             // "Conservative should not emit MORE items than Broad"
         });
         return { totalCount };
     };
@@ -164,17 +163,44 @@ export default function LanternExtract() {
     const consStats = getModeStats("conservative");
     const broadStats = getModeStats("broad");
 
-    // "Conservative emits <= Broad emits" Check
     if (consStats.totalCount > broadStats.totalCount) {
         modeWarnings.push(`Conservative emitted MORE items (${consStats.totalCount}) than Broad (${broadStats.totalCount}) (Suspicious)`);
     }
-    
     setModeValidation({ pass: modeWarnings.length === 0, warnings: modeWarnings });
 
 
     // Main Test Run (Balanced Mode default)
     fixtures.forEach((fixture: any) => {
-      const { items } = extract(fixture.text, { mode: "balanced" });
+      // 1. Provenance Integrity Check
+      const result = extract(fixture.text, { mode: "balanced" });
+      if (result.stats.invalid_dropped > 0) {
+          provenanceFail = true;
+      }
+
+      // 2. Determinism Check (Run 5x)
+      const baseHash = computePackId({
+          schema: "lantern.extract.pack.v1",
+          engine: { name: "heuristic", version: "0.1.5" },
+          source: { title: "Test", author: "Test", publisher: "Test", url: "", published_at: "", source_type: "News", retrieved_at: "TIME_IGNORED" },
+          items: result.items,
+          stats: result.stats
+      }, result.stable_source_hash);
+
+      for(let i=0; i<4; i++) {
+          const rerun = extract(fixture.text, { mode: "balanced" });
+          const rerunHash = computePackId({
+              schema: "lantern.extract.pack.v1",
+              engine: { name: "heuristic", version: "0.1.5" },
+              source: { title: "Test", author: "Test", publisher: "Test", url: "", published_at: "", source_type: "News", retrieved_at: "TIME_IGNORED" },
+              items: rerun.items,
+              stats: rerun.stats
+          }, rerun.stable_source_hash);
+          
+          if (rerunHash !== baseHash) determinismFail = true;
+      }
+
+      // 3. Scoring
+      const { items } = result;
       const failures: string[] = [];
 
       // Helper: normalize string for fuzzy check
@@ -195,8 +221,6 @@ export default function LanternExtract() {
              return actual.range_low === expected.range_low && 
                     actual.range_high === expected.range_high;
           }
-          // For ratios/rates, value string might vary slightly
-          // Expected: "3-to-1", Actual: "3-to-1" (or similar)
           return norm(actual.value).includes(norm(expected.value.split(" ")[0]));
         });
       }
@@ -207,7 +231,6 @@ export default function LanternExtract() {
         quoteScore = scoreExtraction(items.quotes, fixture.expected_quotes, (actual, expected) => {
           const quoteMatch = norm(actual.quote).includes(norm(expected.quote));
           if (!quoteMatch) return false;
-          // Speaker match if expected
           if (expected.speaker && norm(actual.speaker) !== norm(expected.speaker)) return false;
           return true;
         });
@@ -221,7 +244,7 @@ export default function LanternExtract() {
         });
       }
 
-      // Aggregate Score (Simple Average of F1s present)
+      // Aggregate Score
       const scores = [];
       if (fixture.expected_metrics) scores.push(metricScore.metrics.f1);
       if (fixture.expected_quotes) scores.push(quoteScore.metrics.f1);
@@ -249,6 +272,8 @@ export default function LanternExtract() {
     });
 
     setQualityReports(reports);
+    setDeterminismStatus(determinismFail ? "fail" : "pass");
+    setProvenanceStatus(provenanceFail ? "fail" : "pass");
     setRunningTests(false);
   };
 
@@ -395,30 +420,41 @@ export default function LanternExtract() {
           <header className="border-b border-border pb-6 flex items-end justify-between">
             <div>
               <h1 className="text-2xl font-mono font-bold">Quality Dashboard</h1>
-              <p className="text-xs font-mono text-muted-foreground mt-1">Engine v0.1.4 • 5 Fixtures</p>
+              <p className="text-xs font-mono text-muted-foreground mt-1">Engine v0.1.5 • 5 Fixtures</p>
             </div>
             <div className="flex gap-2">
                <Button onClick={runQualityTests} disabled={runningTests} className="font-mono bg-cyan-500 text-black hover:bg-cyan-400">
-                 <Play className="w-4 h-4 mr-2" /> {runningTests ? "Running..." : "Run Extraction Tests"}
+                 <Play className="w-4 h-4 mr-2" /> {runningTests ? "Running..." : "Run Full Quality Suite"}
                </Button>
                <Button variant="ghost" onClick={() => setStep("input")}>Close</Button>
             </div>
           </header>
 
-          {/* Mode Validation Panel */}
-          {modeValidation && (
-             <div className={cn("p-4 rounded-md border text-sm font-mono mb-6", 
-                modeValidation.pass ? "bg-emerald-500/10 border-emerald-500/20" : "bg-red-500/10 border-red-500/20")}>
-                <div className="flex items-center gap-2 mb-2 font-bold uppercase">
-                    {modeValidation.pass ? <Check className="w-4 h-4 text-emerald-500" /> : <AlertTriangle className="w-4 h-4 text-red-500" />}
-                    <span>Cross-Mode Validation: {modeValidation.pass ? "PASS" : "FAIL"}</span>
+          {/* Hard Gates Panel */}
+          {qualityReports.length > 0 && (
+            <div className="grid grid-cols-3 gap-4 mb-6">
+                <div className={cn("p-3 rounded border text-center", determinismStatus === "pass" ? "bg-emerald-500/10 border-emerald-500/20" : "bg-red-500/10 border-red-500/20")}>
+                    <p className="text-[10px] font-mono uppercase text-muted-foreground mb-1">Determinism (5x Run)</p>
+                    <div className="flex items-center justify-center gap-2 font-bold font-mono">
+                        {determinismStatus === "pass" ? <Check className="w-4 h-4 text-emerald-500" /> : <AlertTriangle className="w-4 h-4 text-red-500" />}
+                        {determinismStatus.toUpperCase()}
+                    </div>
                 </div>
-                {!modeValidation.pass && (
-                    <ul className="list-disc pl-5 text-red-600 text-xs">
-                        {modeValidation.warnings.map((w,i) => <li key={i}>{w}</li>)}
-                    </ul>
-                )}
-             </div>
+                <div className={cn("p-3 rounded border text-center", provenanceStatus === "pass" ? "bg-emerald-500/10 border-emerald-500/20" : "bg-red-500/10 border-red-500/20")}>
+                    <p className="text-[10px] font-mono uppercase text-muted-foreground mb-1">Provenance Integrity</p>
+                    <div className="flex items-center justify-center gap-2 font-bold font-mono">
+                        {provenanceStatus === "pass" ? <Check className="w-4 h-4 text-emerald-500" /> : <AlertTriangle className="w-4 h-4 text-red-500" />}
+                        {provenanceStatus.toUpperCase()}
+                    </div>
+                </div>
+                <div className={cn("p-3 rounded border text-center", modeValidation?.pass ? "bg-emerald-500/10 border-emerald-500/20" : "bg-amber-500/10 border-amber-500/20")}>
+                    <p className="text-[10px] font-mono uppercase text-muted-foreground mb-1">Cross-Mode Logic</p>
+                    <div className="flex items-center justify-center gap-2 font-bold font-mono">
+                        {modeValidation?.pass ? <Check className="w-4 h-4 text-emerald-500" /> : <AlertTriangle className="w-4 h-4 text-amber-500" />}
+                        {modeValidation?.pass ? "PASS" : "WARN"}
+                    </div>
+                </div>
+            </div>
           )}
 
           <div className="grid gap-4">
