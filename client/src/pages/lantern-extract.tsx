@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { 
   FileJson, 
   FileText, 
@@ -17,14 +18,12 @@ import {
   Quote, 
   Hash, 
   CalendarClock,
-  CheckCircle2,
-  XCircle,
-  Eye,
-  Download
+  Settings2,
+  Sliders
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { mockExtract, LanternPack, EntityItem, QuoteItem, MetricItem, TimelineItem } from "@/lib/lanternExtract";
+import { extract, LanternPack, ExtractionOptions } from "@/lib/lanternExtract";
 import { cn } from "@/lib/utils";
 
 export default function LanternExtract() {
@@ -39,14 +38,16 @@ export default function LanternExtract() {
     source_type: "News"
   });
   
+  const [extractOptions, setExtractOptions] = useState<ExtractionOptions>({ mode: "balanced" });
   const [pack, setPack] = useState<LanternPack | null>(null);
   const pdfRef = useRef<HTMLDivElement>(null);
 
   const handleExtract = () => {
-    const items = mockExtract(sourceText);
+    const items = extract(sourceText, extractOptions);
     const newPack: LanternPack = {
       schema: "lantern.extract.pack.v1",
       pack_id: `lex_${crypto.randomUUID().slice(0, 8)}`,
+      engine: { name: "heuristic", version: "0.1.0" },
       source: {
         ...metadata,
         retrieved_at: new Date().toISOString()
@@ -147,8 +148,24 @@ export default function LanternExtract() {
         {step === "input" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-2">
             <Card className="lg:col-span-2 border-border bg-card/50 backdrop-blur-sm">
-              <CardHeader>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle className="font-mono text-lg">Source Text</CardTitle>
+                <div className="flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-muted-foreground" />
+                  <Select 
+                    value={extractOptions.mode} 
+                    onValueChange={(val: any) => setExtractOptions({...extractOptions, mode: val})}
+                  >
+                    <SelectTrigger className="w-[140px] h-8 text-xs font-mono uppercase">
+                      <SelectValue placeholder="Mode" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="conservative">Conservative</SelectItem>
+                      <SelectItem value="balanced">Balanced</SelectItem>
+                      <SelectItem value="broad">Broad</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </CardHeader>
               <CardContent>
                 <Textarea 
@@ -281,7 +298,10 @@ export default function LanternExtract() {
             <div className="lg:col-span-1 border-l border-border pl-8 flex flex-col h-full">
               <div className="space-y-6 flex-1">
                 <div className="space-y-2">
-                  <h3 className="font-mono text-sm uppercase font-bold text-muted-foreground">Pack Summary</h3>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-mono text-sm uppercase font-bold text-muted-foreground">Pack Summary</h3>
+                    <Badge variant="outline" className="font-mono text-[10px]">{pack.engine.name} v{pack.engine.version}</Badge>
+                  </div>
                   <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                     <div className="flex justify-between p-2 bg-muted/30 rounded">
                       <span>Entities</span>
@@ -359,8 +379,8 @@ export default function LanternExtract() {
                     <p className="font-mono text-sm font-bold">{pack.pack_id}</p>
                   </div>
                   <div className="space-y-1">
-                    <p className="font-mono text-[10px] uppercase text-zinc-400">Generated At</p>
-                    <p className="font-mono text-sm">{new Date().toISOString()}</p>
+                    <p className="font-mono text-[10px] uppercase text-zinc-400">Engine</p>
+                    <p className="font-mono text-sm">{pack.engine.name} v{pack.engine.version}</p>
                   </div>
                   <div className="col-span-2 space-y-1">
                     <p className="font-mono text-[10px] uppercase text-zinc-400">Source Title</p>
@@ -375,7 +395,7 @@ export default function LanternExtract() {
                     {pack.items.entities.filter(i => i.included).slice(0, 3).map(item => (
                       <div key={item.id} className="border-l-2 border-zinc-200 pl-3">
                         <p className="font-bold text-sm">{item.text}</p>
-                        <p className="text-xs text-zinc-500 font-mono mt-1 truncate">{item.provenance.sentence}</p>
+                        <p className="text-xs text-zinc-500 font-mono mt-1 truncate">Ofs: {item.provenance.start}-{item.provenance.end}</p>
                       </div>
                     ))}
                     {pack.items.entities.filter(i => i.included).length > 3 && (
@@ -429,7 +449,7 @@ function ExtractionCard({ item, onToggle, icon, title, subtitle }: { item: any, 
           </div>
           
           <div className="bg-muted/50 p-2 rounded text-[10px] text-muted-foreground font-mono leading-relaxed break-words">
-            <span className="text-cyan-500 opacity-50 mr-2">SOURCE:</span>
+            <span className="text-cyan-500 opacity-50 mr-2">OFS {item.provenance.start}-{item.provenance.end}:</span>
             "{item.provenance.sentence}"
           </div>
         </div>

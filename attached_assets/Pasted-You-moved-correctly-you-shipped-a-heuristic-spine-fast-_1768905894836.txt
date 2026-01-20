@@ -1,0 +1,168 @@
+You moved correctly: you shipped a heuristic “spine” fast, proved the UX/export loop, and kept the future NLP layer as a swappable engine. Now the work is not “add features.” The work is make it reliable, measurable, and replaceable.
+
+Iterate loop: what to build next (in order)
+
+1) Build a test harness before you build anything else
+
+You need a repeatable way to answer: did extraction improve or regress?
+
+Minimum viable harness:
+	•	A /fixtures folder with 10–25 gold texts (short + medium + long)
+	•	For each fixture, a expected.pack.json (your curated ground truth)
+	•	A CLI or script that runs the extractor and computes:
+	•	Precision / Recall per stream (entities/quotes/metrics/timeline)
+	•	Provenance validity rate (offsets map to substring; sentence exists)
+	•	Duplicate rate (same item re-emitted)
+
+Pass/fail gates (reasonable v1 thresholds for heuristics):
+	•	Provenance validity: ≥ 99%
+	•	Duplicate rate after dedupe: ≤ 3%
+	•	Precision targets:
+	•	Metrics: high (≥ 0.85) because regex should be strong
+	•	Entities: medium (≥ 0.65) because capitalization is crude
+	•	Quotes: medium (≥ 0.60) depending on punctuation and attribution
+	•	Timeline: medium (≥ 0.60) with date regex + sentence capture
+
+If you do only one thing this week, do this.
+
+⸻
+
+2) Normalize what you emit (without “interpreting”)
+
+Heuristic extractors fail less when you make outputs consistent.
+
+Add lightweight normalization rules:
+	•	Entities:
+	•	Strip trailing punctuation
+	•	Collapse whitespace
+	•	Title-case only if originally title-cased (don’t “fix” user text)
+	•	Basic dedupe: identical entity text + type
+	•	Quotes:
+	•	Normalize quote marks (“ ” vs “ “)
+	•	Require quote length ≥ N characters (e.g., 12) to reduce junk
+	•	Metrics:
+	•	Normalize currency/percent:
+	•	$1.2B, 1.2 billion, 1,200,000,000 → store raw + normalized_number + scale
+	•	Timeline:
+	•	Store both raw_date_text and normalized_date (ISO when unambiguous)
+
+Key constraint: normalization must not invent meaning; it must only standardize form.
+
+⸻
+
+3) Add offsets (real provenance) rather than sentence-only provenance
+
+Right now you have provenance as a sentence. Good. But the next reliability jump is:
+	•	start_char, end_char for the extracted substring in the full source text
+	•	plus the sentence and/or sentence index
+
+This enables:
+	•	click-to-highlight in UI
+	•	strict integrity checks in tests
+	•	downstream “exact citation” behavior
+
+If you already have this, enforce it in the harness as a hard gate.
+
+⸻
+
+4) Add a “noise control panel” (keeps heuristics usable)
+
+Heuristics will always be noisy; make the noise tunable.
+
+Simple controls:
+	•	Entities:
+	•	Minimum token length (e.g., ≥ 3 chars)
+	•	Exclude stop-entities: Monday, January, Court, President (config list)
+	•	Require either:
+	•	consecutive capitalized tokens (“New York”), or
+	•	known org suffix (Inc, LLC, Ltd, University), or
+	•	person pattern (First Last)
+	•	Timeline:
+	•	Require explicit date string OR “on/at/by/in” + time phrase
+	•	Quotes:
+	•	Require speech verbs near quote (“said”, “told”, “wrote”, “according to”)
+
+Expose these as “Conservative / Balanced / Broad” presets.
+
+⸻
+
+5) Schema hardening: version + deterministic hashing
+
+You want exports to behave like artifacts.
+
+Implement:
+	•	pack_id: deterministic from source_text_sha256 + selected_item_ids
+	•	pack_sha256: hash of canonicalized JSON (stable key order)
+	•	engine: { name: "heuristic", version: "0.1.0" } so later NLP swaps are auditable
+
+This matters when people compare packs or ingest them repeatedly.
+
+⸻
+
+What to test next (practical fixture set)
+
+Create 10 fixtures that specifically break your current heuristics:
+	1.	Capitalization traps
+
+	•	“The Court held…” “The Company said…” (false orgs)
+
+	2.	All-caps headlines
+
+	•	will explode entity extraction
+
+	3.	Mixed punctuation quotes
+
+	•	nested quotes, single quotes, no attribution
+
+	4.	Metrics in words
+
+	•	“three million”, “a dozen”, “mid-six figures”
+
+	5.	Dates without years
+
+	•	“Jan. 5” ambiguity
+
+	6.	Relative dates
+
+	•	“last Tuesday” (should remain raw, not normalized)
+
+	7.	Tables copied as text
+
+	•	numbers + line breaks
+
+	8.	Non-English names
+
+	•	diacritics, multi-part surnames
+
+	9.	Multiple speakers
+
+	•	quote attribution confusion
+
+	10.	Long-form narrative
+
+	•	entities repeated across paragraphs (dedupe + first-seen provenance)
+
+Your harness should tell you exactly which category regressed.
+
+⸻
+
+One module you should NOT build yet
+
+Do not add “summaries,” “insights,” or “themes” into Extract. That will collapse the separation you fought to preserve and will contaminate downstream use.
+
+Extract must remain:
+	•	anchored
+	•	reversible
+	•	provenance-first
+	•	curation-centered
+
+⸻
+
+Concrete next sprint (tight)
+	1.	Test harness + 10 fixtures + score report
+	2.	Provenance offsets as hard requirement
+	3.	Conservative/Balanced/Broad presets
+	4.	Deterministic hashing + engine version tags
+	5.	Iterate: tune heuristics until metrics precision is very high and entities noise is manageable
+
+Classification: PROCEED.
