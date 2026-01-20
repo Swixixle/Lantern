@@ -1,0 +1,212 @@
+Understood. You already have Lantern Core (claim-focused, highlight-to-receipt, JSON/PDF export). The clean next step is a sibling module that is not “claims,” but still follows the same interaction pattern: paste → extract → curate → export.
+
+Proposed module: Lantern Extract ( /extract )
+
+A general-purpose extraction module that outputs structured artifacts other than claims—useful for building datasets, timelines, entity maps, and quote banks from the same raw source text.
+
+What it extracts (v1 scope)
+
+From pasted article text + metadata, it produces an Extraction Pack with these item types:
+	1.	Entities
+
+	•	People, organizations, locations
+	•	Optional normalization fields (display name, canonical guess)
+	•	First-seen snippet + character offsets
+
+	2.	Key Quotes
+
+	•	Direct quotations and attributed statements
+	•	Speaker (if inferable), quote text, surrounding context
+
+	3.	Numbers & Metrics
+
+	•	Counts, percentages, dollar amounts, dates/times
+	•	Value + unit + sentence context
+
+	4.	Timeline Candidates
+
+	•	Date/time references paired with described events
+	•	Outputs: date, event summary, source sentence
+
+This is intentionally “dataset-y,” not verdict-y. Lantern Core validates a claim; Lantern Extract structures the source.
+
+⸻
+
+UX flow (mirrors Core)
+
+Screen layout
+
+Left: Source Input (raw text + metadata)
+	•	Title, publisher, author, URL, published_at, retrieved_at
+	•	Optional: “Source Type” dropdown (News / Blog / Academic / Government / Social)
+
+Center: Extraction Results
+	•	Tabs: Entities | Quotes | Metrics | Timeline
+	•	Each result is a card with:
+	•	Extracted item (highlighted / visualized)
+	•	Confidence indicator (Low/Med/High)
+	•	Provenance: sentence + offsets
+	•	“Include in export” toggle (default ON)
+
+Right: Pack Builder + Export
+	•	Shows export counts by type
+	•	Generates:
+	•	Extraction Pack JSON (data)
+	•	PDF Pack (visual receipt pack)
+	•	Optional: CSV (entities.csv, quotes.csv, metrics.csv, timeline.csv)
+
+⸻
+
+Data model (stable, versioned)
+
+This should be versioned separately from Lantern Receipt to avoid schema coupling.
+
+{
+  "schema": "lantern.extract.pack.v1",
+  "pack_id": "lex_...",
+  "source": {
+    "title": "",
+    "publisher": "",
+    "author": "",
+    "url": "",
+    "published_at": "",
+    "retrieved_at": "",
+    "source_type": ""
+  },
+  "hashes": {
+    "source_text_sha256": "",
+    "pack_sha256": ""
+  },
+  "items": {
+    "entities": [
+      {
+        "id": "ent_...",
+        "type": "person|org|location|other",
+        "text": "",
+        "canonical": "",
+        "confidence": 0.0,
+        "provenance": {
+          "sentence": "",
+          "start": 0,
+          "end": 0
+        },
+        "tags": []
+      }
+    ],
+    "quotes": [
+      {
+        "id": "qt_...",
+        "quote": "",
+        "speaker": "",
+        "confidence": 0.0,
+        "provenance": { "sentence": "", "start": 0, "end": 0 },
+        "tags": []
+      }
+    ],
+    "metrics": [
+      {
+        "id": "met_...",
+        "value": "",
+        "unit": "",
+        "normalized_value": null,
+        "confidence": 0.0,
+        "provenance": { "sentence": "", "start": 0, "end": 0 },
+        "tags": []
+      }
+    ],
+    "timeline": [
+      {
+        "id": "tl_...",
+        "date": "",
+        "event": "",
+        "confidence": 0.0,
+        "provenance": { "sentence": "", "start": 0, "end": 0 },
+        "tags": []
+      }
+    ]
+  }
+}
+
+
+⸻
+
+API surface (minimal, consistent with Core)
+
+Endpoints
+	1.	POST /api/extract
+
+	•	Input: { source, text, options }
+	•	Output: Extraction Pack JSON (no PDF yet)
+
+	2.	POST /api/extract/export/pdf
+
+	•	Input: { pack }
+	•	Output: PDF bytes (visual pack)
+
+	3.	POST /api/extract/export/json
+
+	•	Input: { pack }
+	•	Output: JSON file (download)
+
+	4.	Optional: POST /api/extract/export/csv
+
+	•	Output: zipped CSV bundle
+
+Options (v1)
+	•	modes: entities | quotes | metrics | timeline
+	•	aggressiveness: conservative | balanced | broad
+	•	max_items_per_mode
+	•	require_provenance: true (default)
+
+⸻
+
+PDF “visual pack” format
+
+Do not reuse the Lantern Receipt card verbatim; make it look like a binder:
+	•	Cover page: Source metadata + pack_id + hashes
+	•	Section dividers: Entities / Quotes / Metrics / Timeline
+	•	Each item prints with:
+	•	extracted content (large)
+	•	provenance sentence (smaller)
+	•	tags + confidence
+
+This makes the output useful for audit trails and human review.
+
+⸻
+
+Integration points with Lantern Core (high leverage)
+	•	Add a “Send to Core” button on any extracted quote/metric/timeline event:
+	•	It pre-fills Core’s source text and highlights the relevant sentence.
+	•	Add a shared hash strategy:
+	•	Source text SHA256 should match across Core and Extract when the same paste is used.
+
+⸻
+
+Acceptance criteria (what “done” means)
+	1.	/extract route accessible via the same bottom-right navigation toggle.
+	2.	Paste text + metadata → click “Extract” → results populate in four tabs.
+	3.	User can toggle items on/off and add tags.
+	4.	Export works:
+	•	JSON download matches lantern.extract.pack.v1
+	•	PDF pack downloads and is readable
+	5.	Every item contains provenance with offsets.
+
+⸻
+
+Primary failure mode to guard against
+
+Extraction without reliable provenance (hallucinated entities/quotes/metrics with no exact anchor in the text).
+Mitigation: enforce require_provenance=true and drop any item that cannot be traced to a substring + offsets.
+
+⸻
+
+Build order (fastest path)
+	1.	Implement /extract UI + POST /api/extract returning pack JSON.
+	2.	Add curation toggles + tags.
+	3.	Add JSON export (trivial).
+	4.	Add PDF pack export (reuse the PDF pipeline you already built for Core).
+	5.	Add “Send to Core” handoff.
+
+⸻
+
+Classification: PROCEED
