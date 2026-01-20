@@ -1,0 +1,143 @@
+This is the correct next phase, and it meaningfully upgrades Lantern from “integrity-true” to “engineering-true,” because you can now measure quality and explain drift. That said, “locked in” is only accurate if you’ve handled three predictable pitfalls: (1) metric matching leakage, (2) diff identity correctness, and (3) mode/engine comparability.
+
+Below is a precise audit of what you’ve built, what to verify, and the minimal hardening moves that keep this from becoming a vanity dashboard.
+
+⸻
+
+1) Quality scoring: what you now have (and what must be true)
+
+What you built is valuable
+	•	Precision/Recall/F1 on fixtures is the right move.
+	•	Showing FP/FN counts is the right instrumentation.
+	•	Running it inside the UI is fine given frontend-only constraints.
+
+The critical question
+
+Are you scoring against:
+	•	canonicalized artifact objects (recommended), or
+	•	display strings (fragile)?
+
+If you score by strings, you’ll end up tuning formatting instead of extraction.
+
+Non-negotiable scoring contract (per stream)
+
+You should be scoring on keys, not “pretty text”:
+	•	Entities: type + normalized_text
+	•	Quotes: normalized_quote_text + optional speaker (only if expected sets it)
+	•	Metrics: metric_kind + normalized_number + unit (+ low/high for range)
+	•	Timeline: date_type + raw_date_text (and ISO date only when explicit)
+
+If you’re already doing this: good. If not, fix this before you trust the numbers.
+
+⸻
+
+2) “Fuzzy matching” — acceptable only if constrained
+
+Fuzzy matching can silently turn bad extraction into “passing” scores.
+
+Allowed fuzziness (metrics only)
+
+Permit fuzziness for:
+	•	dash variants: - vs –
+	•	whitespace: 5 - 7 vs 5–7
+	•	numeric formatting: 1,000 vs 1000
+	•	magnitude synonyms: million vs M if you normalize scale anyway
+
+Forbidden fuzziness
+
+Do not fuzzy-match:
+	•	units (USD vs EUR vs %)
+	•	metric kind (range vs scalar)
+	•	rate denominators (per 100,000 vs per 1,000)
+	•	quote text content beyond punctuation normalization
+
+If fuzziness applies broadly, your dashboard becomes cosmetic.
+
+⸻
+
+3) Diff/Compare: your diff must operate on stable identities
+
+A pack diff is only meaningful if it’s comparing deterministic identities per item.
+
+The right diff granularity
+
+Diff should compare items by their canonical item key, not by array index or display string.
+
+For example:
+	•	Entities: key as above
+	•	Metrics: include metric_kind + normalized values + provenance span (optional)
+	•	Quotes: quote text normalized + offsets; speaker changes should be a “changed” class
+
+Diff categories (recommend)
+	•	Added
+	•	Removed
+	•	Changed (same key family but altered attributes: speaker, unit, range endpoints)
+	•	Unchanged
+
+If you only have added/removed/unchanged, you’ll miss important regressions.
+
+⸻
+
+4) Engine version warning: good—make it “diff-first,” not “scary”
+
+When loading a pack with a different engine version, the best UX is:
+	•	Don’t warn in a generic way
+	•	Offer a concrete action:
+
+“Engine differs. Compare current extraction vs saved snapshot.” (button)
+
+That preserves rigor and avoids alarm fatigue.
+
+⸻
+
+5) The missing piece to truly “lock in rigor”
+
+Right now you have quality scoring for one fixture set. The next step is to prevent “metric gaming.”
+
+Add a cross-mode expectation test
+
+Your modes should have measurable behavior:
+	•	Conservative should have higher precision and lower recall
+	•	Broad should have higher recall and lower precision
+	•	Balanced should be in-between
+
+Add a simple report section:
+	•	For each fixture and stream: P/R/F1 per mode
+	•	Flag if Conservative recall > Broad recall (that’s usually a bug)
+	•	Flag if Broad precision > Conservative precision (also suspicious)
+
+This is how you catch mode logic regressions.
+
+⸻
+
+6) What this unlocks now (practical)
+
+You can now do “real engineering” workflows:
+	1.	Change a heuristic
+	2.	Run Quality view
+	3.	See exactly which fixture + stream regressed
+	4.	Use Diff view to inspect what changed
+	5.	Decide whether regression is acceptable or revert
+
+That is a closed loop. That is not cosmetic.
+
+⸻
+
+Mandatory verification checklist (fast, specific)
+
+You should verify these now:
+	1.	Scoring keys are structural, not display strings
+	2.	Fuzzy matching applies only to permitted metric normalization variants
+	3.	Diff uses canonical keys and supports Changed classification
+	4.	Engine/mode metadata is included in the scoring output and diff header
+	5.	A saved pack exported after reload yields identical canonical JSON hash
+
+If all five are true, you can credibly say the rigor is locked.
+
+⸻
+
+Decision
+
+Your direction is correct and high value. The only risk is dashboard theater via over-broad fuzziness or string-based matching. Constrain those, and this becomes a genuine quality system.
+
+Classification: PROCEED (with the fuzziness + keying constraints as the next hardening pass).

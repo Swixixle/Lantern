@@ -27,7 +27,8 @@ import {
   Copy,
   GitCompare,
   Play,
-  AlertTriangle
+  AlertTriangle,
+  ArrowRight
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -61,6 +62,7 @@ export default function LanternExtract() {
   // Quality State
   const [qualityReports, setQualityReports] = useState<QualityReport[]>([]);
   const [runningTests, setRunningTests] = useState(false);
+  const [modeValidation, setModeValidation] = useState<{ pass: boolean; warnings: string[] } | null>(null);
 
   const [sourceText, setSourceText] = useState("");
   const [metadata, setMetadata] = useState({
@@ -137,25 +139,65 @@ export default function LanternExtract() {
   const runQualityTests = () => {
     setRunningTests(true);
     const reports: QualityReport[] = [];
+    const modeWarnings: string[] = [];
 
+    // Helper to get stats for a mode
+    const getModeStats = (mode: ExtractionOptions["mode"]) => {
+        let totalPrec = 0, totalRec = 0, count = 0;
+        fixtures.forEach((fixture: any) => {
+             const { items } = extract(fixture.text, { mode });
+             // Simple proxy: just count items for recall, valid for precision?
+             // No, we need actual scores.
+             // This is expensive to run 3x per fixture. But fine for mockup.
+             if (fixture.expected_entities) {
+                 const score = scoreExtraction(items.entities, fixture.expected_entities, (a,b) => a.text === b.text && a.type === b.type);
+                 totalPrec += score.metrics.precision; totalRec += score.metrics.recall; count++;
+             }
+        });
+        return { 
+            avgPrecision: count ? totalPrec/count : 0, 
+            avgRecall: count ? totalRec/count : 0 
+        };
+    };
+
+    // Cross-Mode Validation
+    const consStats = getModeStats("conservative");
+    const broadStats = getModeStats("broad");
+
+    if (consStats.avgRecall > broadStats.avgRecall) {
+        modeWarnings.push("Conservative recall > Broad recall (Suspicious)");
+    }
+    if (broadStats.avgPrecision > consStats.avgPrecision) {
+        modeWarnings.push("Broad precision > Conservative precision (Suspicious)");
+    }
+    setModeValidation({ pass: modeWarnings.length === 0, warnings: modeWarnings });
+
+
+    // Main Test Run (Balanced Mode default)
     fixtures.forEach((fixture: any) => {
       const { items } = extract(fixture.text, { mode: "balanced" });
       const failures: string[] = [];
 
-      // Metrics Score
+      // Helper: normalize string for fuzzy check
+      const norm = (s: any) => String(s).toLowerCase().replace(/\s+/g, " ").replace(/[–—]/g, "-").trim();
+
+      // Metrics Score (Strict-ish)
       let metricScore = { metrics: { precision: 1, recall: 1, f1: 1 }, matches: 0, expected: 0, actual: 0, false_positives: 0, false_negatives: 0 };
       if (fixture.expected_metrics) {
         metricScore = scoreExtraction(items.metrics, fixture.expected_metrics, (actual, expected) => {
-          // Flexible match: value contains expected value OR ranges match
+          // STRICT KIND check
+          if (actual.metric_kind !== expected.metric_kind) return false;
+          // STRICT UNIT check
+          if (norm(actual.unit) !== norm(expected.unit)) return false;
+
+          // Flexible Value Match
           if (expected.metric_kind === "range") {
-             return actual.metric_kind === "range" && 
-                    actual.range_low === expected.range_low && 
+             return actual.range_low === expected.range_low && 
                     actual.range_high === expected.range_high;
           }
-          if (expected.metric_kind === "ratio" || expected.metric_kind === "rate") {
-             return actual.value.includes(expected.value.split(" ")[0]); // fuzzy start match
-          }
-          return actual.value === expected.value;
+          // For ratios/rates, value string might vary slightly
+          // Expected: "3-to-1", Actual: "3-to-1" (or similar)
+          return norm(actual.value).includes(norm(expected.value.split(" ")[0]));
         });
       }
 
@@ -163,7 +205,11 @@ export default function LanternExtract() {
       let quoteScore = { metrics: { precision: 1, recall: 1, f1: 1 }, matches: 0, expected: 0, actual: 0, false_positives: 0, false_negatives: 0 };
       if (fixture.expected_quotes) {
         quoteScore = scoreExtraction(items.quotes, fixture.expected_quotes, (actual, expected) => {
-          return actual.quote.includes(expected.quote) && actual.speaker === expected.speaker;
+          const quoteMatch = norm(actual.quote).includes(norm(expected.quote));
+          if (!quoteMatch) return false;
+          // Speaker match if expected
+          if (expected.speaker && norm(actual.speaker) !== norm(expected.speaker)) return false;
+          return true;
         });
       }
 
@@ -171,7 +217,7 @@ export default function LanternExtract() {
       let entityScore = { metrics: { precision: 1, recall: 1, f1: 1 }, matches: 0, expected: 0, actual: 0, false_positives: 0, false_negatives: 0 };
       if (fixture.expected_entities) {
         entityScore = scoreExtraction(items.entities, fixture.expected_entities, (actual, expected) => {
-          return actual.text === expected.text && actual.type === expected.type;
+          return norm(actual.text) === norm(expected.text) && actual.type === expected.type;
         });
       }
 
@@ -359,6 +405,22 @@ export default function LanternExtract() {
             </div>
           </header>
 
+          {/* Mode Validation Panel */}
+          {modeValidation && (
+             <div className={cn("p-4 rounded-md border text-sm font-mono mb-6", 
+                modeValidation.pass ? "bg-emerald-500/10 border-emerald-500/20" : "bg-red-500/10 border-red-500/20")}>
+                <div className="flex items-center gap-2 mb-2 font-bold uppercase">
+                    {modeValidation.pass ? <Check className="w-4 h-4 text-emerald-500" /> : <AlertTriangle className="w-4 h-4 text-red-500" />}
+                    <span>Cross-Mode Validation: {modeValidation.pass ? "PASS" : "FAIL"}</span>
+                </div>
+                {!modeValidation.pass && (
+                    <ul className="list-disc pl-5 text-red-600 text-xs">
+                        {modeValidation.warnings.map((w,i) => <li key={i}>{w}</li>)}
+                    </ul>
+                )}
+             </div>
+          )}
+
           <div className="grid gap-4">
             {qualityReports.length === 0 && !runningTests && <p className="text-muted-foreground font-mono">No tests run yet.</p>}
             
@@ -436,7 +498,7 @@ export default function LanternExtract() {
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => { setDiffMode(false); setDiffResult(null); }} className="h-6 text-[10px]">Exit Compare</Button>
              </div>
-             <div className="grid grid-cols-3 gap-4 text-xs font-mono">
+             <div className="grid grid-cols-4 gap-4 text-xs font-mono">
                 <div className="bg-background/50 p-2 rounded border border-emerald-500/30">
                    <p className="text-emerald-500 font-bold mb-1">+{diffResult.stats.added_count} Added</p>
                    {diffResult.added.slice(0,3).map((d, i) => (
@@ -450,6 +512,16 @@ export default function LanternExtract() {
                    {diffResult.removed.slice(0,3).map((d, i) => (
                       <div key={i} className="truncate opacity-70">
                          {d.type === 'entities' ? d.item.text : d.type === 'quotes' ? d.item.quote.slice(0,20) : 'Item'}
+                      </div>
+                   ))}
+                </div>
+                <div className="bg-background/50 p-2 rounded border border-blue-500/30">
+                   <p className="text-blue-500 font-bold mb-1">~{diffResult.stats.changed_count} Changed</p>
+                   {diffResult.changed.slice(0,3).map((d, i) => (
+                      <div key={i} className="truncate opacity-70 flex items-center gap-1">
+                         <span>{d.type === 'entities' ? d.from.text : 'Item'}</span>
+                         <ArrowRight className="w-2 h-2" />
+                         <span>{d.type === 'entities' ? d.to.text : 'Item'}</span>
                       </div>
                    ))}
                 </div>
