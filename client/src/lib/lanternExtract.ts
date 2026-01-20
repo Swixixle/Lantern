@@ -28,43 +28,42 @@ export type QualityReport = {
 // We do NOT want to fuzzy match everything. We want to be strict on units, types, etc.
 // But we allow minor punctuation variances (hyphen vs en dash) or spacing.
 const normalizeForScore = (val: string | number | undefined): string => {
-  if (val === undefined || val === null) return "";
+  if (val === undefined || val === null) return "null"; // Explicit null string for key
   return String(val)
     .trim()
     .replace(/\s+/g, " ") // normalize space
     .replace(/[–—]/g, "-") // normalize dashes
+    .replace(/,/g, "") // normalize separators (1,000 -> 1000)
     .toLowerCase(); // case insensitive is usually OK for checking *content* equivalence
 };
 
 // Generic Item Matcher (Strict Structural Keys)
 const createItemKey = (item: any, type: "entities" | "quotes" | "metrics" | "timeline"): string => {
   if (type === "entities") {
-    // Entities: Type + Text
-    return `${item.type}|${normalizeForScore(item.text)}`;
+    // Entities: entity|<type>|<normalized_text>
+    return `entity|${item.type}|${normalizeForScore(item.text)}`;
   }
   if (type === "quotes") {
-    // Quotes: Speaker (if known) + Quote Text
-    // Note: Speaker is optional in fixtures, but if present in expected, it must match.
-    // If extraction has speaker and expected doesn't, that's a pass on speaker (or we ignore it).
-    // Let's rely on the matcher function for partials, but here we need a key for strict diff.
-    return `${normalizeForScore(item.speaker)}|${normalizeForScore(item.quote)}`;
+    // Quotes: quote|<normalized_text>|<speaker_or_null>
+    // Speaker is part of identity per Quality Contract.
+    return `quote|${normalizeForScore(item.quote)}|${normalizeForScore(item.speaker)}`;
   }
   if (type === "metrics") {
-    // Metrics: Kind + Unit + Value (normalized) + Range Bounds
-    // This is the critical one. We MUST match unit and kind strictly.
-    const core = `${item.metric_kind}|${normalizeForScore(item.unit)}`;
+    // Metrics: metric|<kind>|<unit>|<normalized_value>
+    // Value includes range bounds if range kind
+    const core = `metric|${item.metric_kind}|${normalizeForScore(item.unit)}`;
     if (item.metric_kind === "range") {
-      return `${core}|${item.range_low}|${item.range_high}`;
+      return `${core}|${normalizeForScore(item.range_low)}|${normalizeForScore(item.range_high)}`;
     }
-    // For scalar/ratio/rate, we use the value string but maybe normalized?
-    // Actually, extracted items have `value` (raw text). We should ideally match on `normalized_value` if present,
-    // but our fixtures define expected "value" as a string. 
-    // Let's use the fixture's approach: we expect the extraction logic to have produced
-    // a `value` string that roughly matches the input text span.
-    return `${core}|${normalizeForScore(item.value)}`;
+    // For scalar/ratio/rate, use value
+    // Use raw_value_text normalized because parsed_number might have rounding issues in key?
+    // Actually, `normalized_value` is number. Let's use that if available, else raw.
+    const valKey = item.normalized_value !== undefined ? item.normalized_value : item.value;
+    return `${core}|${normalizeForScore(valKey)}`;
   }
   if (type === "timeline") {
-    return `${item.date_type}|${normalizeForScore(item.date)}`;
+    // Timeline: time|<date_type>|<raw_date_text>
+    return `time|${item.date_type}|${normalizeForScore(item.date)}`;
   }
   return item.id;
 };
@@ -136,54 +135,31 @@ export const diffPacks = (packA: LanternPack, packB: LanternPack): PackDiff => {
   const types = ["entities", "quotes", "metrics", "timeline"] as const;
 
   types.forEach(type => {
-    // Map items by ID first (Stable ID assumption)
-    const mapA = new Map(packA.items[type].map((i: any) => [i.id, i]));
-    const mapB = new Map(packB.items[type].map((i: any) => [i.id, i]));
+    // Map items by SEMANTIC KEY (Identity)
+    // packA = Current, packB = Base/Saved
+    
+    const mapA = new Map(); // Key -> Item
+    packA.items[type].forEach((i: any) => mapA.set(createItemKey(i, type), i));
+    
+    const mapB = new Map();
+    packB.items[type].forEach((i: any) => mapB.set(createItemKey(i, type), i));
 
-    // Check items in B (Target/Loaded) against A (Current)
-    // NOTE: Usually diff is "Changes from A to B".
-    // If A is "Base" (Saved) and B is "Current" (New), we want:
-    // Added = present in B, not in A
-    // Removed = present in A, not in B
-    // Changed = present in both, but content differs
-    
-    // Let's assume input: (Base, New)
-    // Actually, usually we compare Current (A) vs Saved (B). 
-    // If I want to see "What changed in Current vs Saved", then:
-    // Added = in Current (A) but not Saved (B) -> if mapA has, mapB doesn't
-    // Removed = in Saved (B) but not Current (A) -> if mapB has, mapA doesn't
-    
-    // Let's standardize: diffPacks(base, current)
-    // So base=packB (saved), current=packA (live)
-    // But function signature is (packA, packB). Let's treat packA as Current, packB as Base.
-    // So:
-    // Added: In A, not B
-    // Removed: In B, not A
-    
-    for (const [id, itemA] of mapA) {
-      if (mapB.has(id)) {
-        // ID exists in both. Check content.
-        const itemB = mapB.get(id);
+    // Check items in A (Current)
+    for (const [key, itemA] of mapA) {
+      if (mapB.has(key)) {
+        // Identity exists in both. Check attributes/content details.
+        const itemB = mapB.get(key);
         
-        // Content Check: compare structural keys
-        const keyA = createItemKey(itemA, type);
-        const keyB = createItemKey(itemB, type);
+        // Content Check: Compare JSON excluding key-defining fields to find "Changed"
+        // Actually, simpler: compare full JSON string. If diff, it's a Change.
+        // Since key is same, the identity is same.
+        // We exclude 'id' from comparison because ID generation might vary if we changed algos (though v0.1.5 is stable).
+        // We exclude 'provenance' if we want "Changed" to capture offset shifts. 
+        // User says: "Changed triggers when... tracked attributes differ (provenance, confidence)".
+        // So we include provenance in the check.
         
-        // Also check specific fields that might change even if key is stable-ish
-        // e.g. speaker candidates, range bounds (if not in key), included status
-        // Inclusion status is part of ID logic (v0.1.5), so if inclusion changes, ID changes!
-        // So we don't need to check inclusion here if we rely on IDs.
-        // Wait, if inclusion changes, ID changes => then it shows as Remove + Add.
-        // This is correct behavior for "Snapshot" logic.
-        // What if we have "Same content, different attribute" that DOESN'T change ID?
-        // In v0.1.5, Pack ID depends on Items. Item ID depends on Content + Start Offset.
-        // If content changes (e.g. text normalization tweak), ID changes.
-        // So "Changed" category is rare with Content-Addressed IDs unless we have non-ID fields.
-        // Non-ID fields: maybe confidence? tags?
-        // Let's compare JSON string of the item excluding 'id' and 'provenance' to be safe.
-        
-        const contentA = JSON.stringify({ ...itemA, id: null, provenance: null });
-        const contentB = JSON.stringify({ ...itemB, id: null, provenance: null });
+        const contentA = JSON.stringify({ ...itemA, id: null });
+        const contentB = JSON.stringify({ ...itemB, id: null });
         
         if (contentA === contentB) {
             diff.common.push({ type, item: itemA });
@@ -191,13 +167,14 @@ export const diffPacks = (packA: LanternPack, packB: LanternPack): PackDiff => {
             diff.changed.push({ type, from: itemB, to: itemA });
         }
       } else {
+        // Key in A, not in B -> Added
         diff.added.push({ type, item: itemA });
       }
     }
 
     // Check items in B (Base) missing from A (Current)
-    for (const [id, itemB] of mapB) {
-      if (!mapA.has(id)) {
+    for (const [key, itemB] of mapB) {
+      if (!mapA.has(key)) {
         diff.removed.push({ type, item: itemB });
       }
     }

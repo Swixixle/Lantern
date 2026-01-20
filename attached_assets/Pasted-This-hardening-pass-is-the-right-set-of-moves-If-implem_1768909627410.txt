@@ -1,0 +1,113 @@
+This hardening pass is the right set of moves. If implemented as you describe, Lantern Extract has now crossed into a genuinely disciplined “measurement + audit” system rather than a UI-driven extractor. At this point, the remaining work is not conceptual—it is verification of the verification: making sure the scoring and diff logic cannot be gamed and cannot drift as the schema evolves.
+
+Below is what I would validate next, and the few minimal refinements that turn “locked in” into “hard to accidentally break.”
+
+⸻
+
+1) Strict structural scoring: confirm key design is complete
+
+Your example key range|USD|5|10 is the right direction, but keys must be stream-specific and handle all metric kinds.
+
+Required canonical key shapes
+	•	Entities: entity|<type>|<normalized_text>
+	•	Quotes: quote|<normalized_quote_text>|<speaker_or_null>
+	•	Only include speaker in key if the expected set asserts a speaker; otherwise you will over-penalize correct unattributed quotes.
+	•	Metrics:
+	•	scalar: metric|scalar|<unit>|<normalized_number>
+	•	range: metric|range|<unit>|<low>|<high>
+	•	ratio: metric|ratio|<lhs>|<rhs>|<unit_or_null>
+	•	rate: metric|rate|<unit>|<normalized_number>|per|<per_unit>
+	•	Timeline: time|<date_type>|<raw_date_text> (+ ISO only when explicit and unambiguous)
+
+If any stream is still using display-ish fields (sentence text, pretty formatted numbers), tighten it.
+
+⸻
+
+2) Constrained fuzziness: “normalizeForScore” must be scoped
+
+This is the most common place dashboards get corrupted.
+
+Allowed transformations (metrics only)
+	•	Unicode dash normalization (– → -)
+	•	whitespace collapse (\s+ →  )
+	•	thousands separators removal (1,000 → 1000)
+	•	currency symbol normalization ($ → USD) only if you already normalize units upstream
+
+Forbidden transformations
+	•	changing units (USD ↔ EUR, % ↔ none)
+	•	changing metric kind (range ↔ scalar)
+	•	changing denominators on rates
+	•	rounding numbers unless your engine explicitly rounds (and then it must be consistent everywhere)
+
+Also: make sure fuzziness is not applied to entity text or quote content beyond quote-mark normalization. Otherwise you’ll pass bad extractions.
+
+⸻
+
+3) Enhanced diff: “Changed” must be keyed correctly
+
+You said “same ID but different content.” That only works if the “ID” is stable per item across pack versions.
+
+Two valid approaches:
+
+Best approach: stable item_key (semantic identity)
+	•	Compute a stable item_key per item (per stream) derived from:
+	•	stream type + normalized surface form (+ unit/kind for metrics)
+	•	Diff compares by item_key
+	•	“Changed” triggers when:
+	•	same item_key exists in both
+	•	but one or more tracked attributes differ (speaker, unit, normalized range endpoints, date_type, etc.)
+
+Acceptable approach: stable item_id (if you truly have it)
+
+If item IDs are generated deterministically from the anchored span (source_hash + start/end + stream), that can work. If not, do not use IDs.
+
+Pitfall to avoid: If item_id changes whenever the engine changes minor segmentation offsets, your “Changed” will become “Removed+Added” noise. The semantic key approach is more resilient.
+
+⸻
+
+4) Cross-mode validation: keep it from false alarms
+
+Your check “Conservative precision should not be lower than Broad precision” is directionally correct, but fixtures can break it in edge cases.
+
+Make cross-mode validation “soft-fail” with context
+	•	Flag as “Suspicious” not “Fail” unless it persists across multiple fixtures/streams.
+	•	Apply per stream:
+	•	Metrics should show strong monotonicity.
+	•	Entities may not be perfectly monotonic due to stop-word and pattern gating.
+
+Add one more check that matters
+	•	Conservative must not emit more total items than Broad for the same fixture (per stream). If it does, that’s almost always a bug.
+
+⸻
+
+5) The final lock: snapshot the “Quality Contract”
+
+Right now you have code that computes scores. To prevent future drift, you should write down the contract in-repo as a short spec:
+	•	what keys are used per stream
+	•	what fuzziness is allowed (and only where)
+	•	what cross-mode checks exist and their severity
+
+This avoids the “future you changes one function and silently redefines the meaning of scores” problem.
+
+⸻
+
+What you have now, in practical terms
+
+You have built:
+	•	an extraction engine with integrity gates
+	•	a persistence layer that preserves artifacts correctly
+	•	a scoring framework that measures quality objectively
+	•	diff tooling that exposes drift at the item level
+	•	mode validation that detects suspicious behavior
+
+That is no longer cosmetic. It is a closed-loop engineering system.
+
+⸻
+
+Next minimal steps
+	1.	Confirm item identity strategy for “Changed” (semantic key preferred)
+	2.	Ensure fuzziness is metrics-only and strictly bounded
+	3.	Add the “Conservative emits ≤ Broad emits” check
+	4.	Add a short “Quality Contract” markdown doc in the repo
+
+Classification: PROCEED.

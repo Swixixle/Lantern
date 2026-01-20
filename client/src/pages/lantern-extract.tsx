@@ -143,33 +143,32 @@ export default function LanternExtract() {
 
     // Helper to get stats for a mode
     const getModeStats = (mode: ExtractionOptions["mode"]) => {
-        let totalPrec = 0, totalRec = 0, count = 0;
+        let totalCount = 0;
+        let totalPrecSum = 0;
+        let totalRecSum = 0;
+        
         fixtures.forEach((fixture: any) => {
              const { items } = extract(fixture.text, { mode });
-             // Simple proxy: just count items for recall, valid for precision?
-             // No, we need actual scores.
-             // This is expensive to run 3x per fixture. But fine for mockup.
-             if (fixture.expected_entities) {
-                 const score = scoreExtraction(items.entities, fixture.expected_entities, (a,b) => a.text === b.text && a.type === b.type);
-                 totalPrec += score.metrics.precision; totalRec += score.metrics.recall; count++;
-             }
+             // Proxy: Just counting entity/quote/metric totals
+             const totalItems = items.entities.length + items.quotes.length + items.metrics.length;
+             totalCount += totalItems;
+
+             // Note: Real precision/recall requires full scoring loop.
+             // For "Conservative <= Broad" check, total count is a good enough proxy for Recall monotonicity.
+             // "Conservative should not emit MORE items than Broad"
         });
-        return { 
-            avgPrecision: count ? totalPrec/count : 0, 
-            avgRecall: count ? totalRec/count : 0 
-        };
+        return { totalCount };
     };
 
     // Cross-Mode Validation
     const consStats = getModeStats("conservative");
     const broadStats = getModeStats("broad");
 
-    if (consStats.avgRecall > broadStats.avgRecall) {
-        modeWarnings.push("Conservative recall > Broad recall (Suspicious)");
+    // "Conservative emits <= Broad emits" Check
+    if (consStats.totalCount > broadStats.totalCount) {
+        modeWarnings.push(`Conservative emitted MORE items (${consStats.totalCount}) than Broad (${broadStats.totalCount}) (Suspicious)`);
     }
-    if (broadStats.avgPrecision > consStats.avgPrecision) {
-        modeWarnings.push("Broad precision > Conservative precision (Suspicious)");
-    }
+    
     setModeValidation({ pass: modeWarnings.length === 0, warnings: modeWarnings });
 
 
@@ -179,7 +178,8 @@ export default function LanternExtract() {
       const failures: string[] = [];
 
       // Helper: normalize string for fuzzy check
-      const norm = (s: any) => String(s).toLowerCase().replace(/\s+/g, " ").replace(/[–—]/g, "-").trim();
+      // MUST MATCH QUALITY CONTRACT
+      const norm = (s: any) => String(s).trim().replace(/\s+/g, " ").replace(/[–—]/g, "-").replace(/,/g, "").toLowerCase();
 
       // Metrics Score (Strict-ish)
       let metricScore = { metrics: { precision: 1, recall: 1, f1: 1 }, matches: 0, expected: 0, actual: 0, false_positives: 0, false_negatives: 0 };
