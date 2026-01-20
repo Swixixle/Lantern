@@ -8,16 +8,51 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { MonthRow } from "@/lib/sovereigntyEngine";
 
-const flightPlanData = [
-  { year: 1, phase: "Cold Build", revenue: 30000, draw: 0, savings: 0, totalSavings: 15000, notes: "Start" },
-  { year: 2, phase: "First Proof", revenue: 100000, draw: 40000, savings: 0, totalSavings: 15000, notes: "Buffer Phase" },
-  { year: 3, phase: "MVSR Entry", revenue: 184000, draw: 112000, savings: 45000, totalSavings: 60000, notes: "Break-Even" },
-  { year: 4, phase: "Stability", revenue: 210000, draw: 130000, savings: 58000, totalSavings: 118000, notes: "Scale" },
-  { year: 5, phase: "Home Buy", revenue: 250000, draw: 160000, savings: 82000, totalSavings: 200000, notes: "Threshold" },
-];
+interface FlightPlanTableProps {
+  data: MonthRow[];
+}
 
-export function FlightPlanTable() {
+// Helper to aggregate monthly data into yearly summaries
+function aggregateYears(monthlyData: MonthRow[]) {
+  const years = [];
+  for (let i = 0; i < 5; i++) {
+    const startIdx = i * 12;
+    const endIdx = startIdx + 12;
+    const yearMonths = monthlyData.slice(startIdx, endIdx);
+    
+    if (yearMonths.length === 0) continue;
+
+    // Sums
+    const revenue = yearMonths.reduce((sum, m) => sum + m.revenue, 0);
+    const draw = yearMonths.reduce((sum, m) => sum + m.personalDrawGross, 0);
+    const savings = yearMonths.reduce((sum, m) => sum + m.personalSavingsDelta, 0);
+    
+    // End of year snapshot
+    const totalSavings = yearMonths[yearMonths.length - 1].totalSavings;
+
+    let phase = "Cold Build";
+    if (i === 1) phase = "First Proof";
+    if (i === 2) phase = "MVSR Entry";
+    if (i === 3) phase = "Stability";
+    if (i === 4) phase = "Home Buy";
+
+    years.push({
+      year: i + 1,
+      phase,
+      revenue,
+      draw,
+      savings,
+      totalSavings
+    });
+  }
+  return years;
+}
+
+export function FlightPlanTable({ data }: FlightPlanTableProps) {
+  const yearlyData = aggregateYears(data);
+
   return (
     <Card className="border-border bg-card/50 backdrop-blur-sm">
       <CardHeader>
@@ -38,7 +73,7 @@ export function FlightPlanTable() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {flightPlanData.map((row) => (
+            {yearlyData.map((row) => (
               <TableRow key={row.year} className="hover:bg-muted/50 border-muted group transition-colors">
                 <TableCell className="font-mono font-bold text-muted-foreground group-hover:text-foreground">
                   0{row.year}

@@ -1,11 +1,45 @@
+import { useState, useMemo } from "react";
 import { FlightPlanTable } from "@/components/FlightPlanTable";
-import { SovereigntyChart } from "@/components/SovereigntyChart";
+import { SavingsChart } from "@/components/SavingsChart";
+import { CashflowChart } from "@/components/CashflowChart";
+import { GapChart } from "@/components/GapChart";
 import { Stage1Checklist } from "@/components/Stage1Checklist";
+import { AssumptionsForm } from "@/components/AssumptionsForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, ShieldCheck, Target, TrendingUp } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowUpRight, ShieldCheck, Target, TrendingUp, Settings2, LayoutDashboard } from "lucide-react";
 import generatedTexture from "@assets/generated_images/subtle_dark_technical_grid_pattern_texture.png";
+import { runSovereigntyPlan, PlanInputs } from "@/lib/sovereigntyEngine";
+import { buildColdStartRevenueRamp, buildDrawRamp } from "@/lib/defaultRamps";
 
 export default function Dashboard() {
+  // Initial Plan State
+  const [inputs, setInputs] = useState<PlanInputs>({
+    homePrice: 350000,
+    downPaymentPct: 60, // UI shows 60, engine expects normalized or handles it? Let's check engine.
+                        // Engine: inputs.homePrice * (inputs.downPaymentPct / 100); 
+                        // So we store as whole number 60.
+    startingSavings: 15000,
+    monthlyPersonalExpenses: 3500,
+    weeklyCompanyBudget: 1000,
+    effectiveTaxRate: 0.25,
+    revenueByMonth: buildColdStartRevenueRamp(),
+    personalDrawGrossByMonth: buildDrawRamp(),
+  });
+
+  // Derived Data
+  const data = useMemo(() => runSovereigntyPlan(inputs), [inputs]);
+
+  // Current Stats (Year 1 Month 1 or current projection?)
+  // Let's take the last month of Year 1 as "Current Projection" or just the first month?
+  // Spec says: "Top KPIs: current savings, target savings, gap, monthly burn, runway months"
+  // Let's use the first month for "Current" or maybe Month 12 for "Year 1 Projection".
+  // Let's use Month 12 (index 11) for the metrics to show where we aim to be in Y1.
+  const currentMetric = data[11]; // End of Year 1
+  const latestMetric = data[0]; // Start of Year 1 (Current Reality)
+
+  const finalMetric = data[data.length - 1]; // End of Year 5
+
   return (
     <div className="min-h-screen bg-background text-foreground relative overflow-hidden font-sans selection:bg-amber-500/30">
       {/* Background Texture Overlay */}
@@ -34,48 +68,73 @@ export default function Dashboard() {
           </div>
         </header>
 
-        {/* Top Metrics Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <MetricCard 
-            label="MVSR Target" 
-            value="$184,000" 
-            subValue="Min. Viable Sovereignty Revenue"
-            icon={<Target className="w-4 h-4 text-muted-foreground" />}
-          />
-          <MetricCard 
-            label="Current Revenue" 
-            value="$30,000" 
-            subValue="Year 1 Projection"
-            icon={<TrendingUp className="w-4 h-4 text-amber-500" />}
-          />
-          <MetricCard 
-            label="Safety Net" 
-            value="$15,000" 
-            subValue="Post-Tax Liquid"
-            icon={<ShieldCheck className="w-4 h-4 text-emerald-500" />}
-          />
-          <MetricCard 
-            label="Home Goal" 
-            value="Year 5" 
-            subValue="$200k Down Payment"
-            icon={<ArrowUpRight className="w-4 h-4 text-muted-foreground" />}
-          />
-        </div>
+        <Tabs defaultValue="dashboard" className="w-full space-y-8">
+          <TabsList className="bg-muted/50 border border-border p-1">
+            <TabsTrigger value="dashboard" className="gap-2 font-mono uppercase text-xs">
+              <LayoutDashboard className="w-4 h-4" /> Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="inputs" className="gap-2 font-mono uppercase text-xs">
+              <Settings2 className="w-4 h-4" /> Plan Inputs
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto lg:h-[500px]">
-          <div className="lg:col-span-2 h-full">
-            <SovereigntyChart />
-          </div>
-          <div className="lg:col-span-1 h-full">
-            <Stage1Checklist />
-          </div>
-        </div>
+          <TabsContent value="dashboard" className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+             {/* Top Metrics Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <MetricCard 
+                label="Target Savings" 
+                value={`$${currentMetric.targetDownPayment.toLocaleString()}`}
+                subValue={`For ${inputs.homePrice.toLocaleString()} Home`}
+                icon={<Target className="w-4 h-4 text-muted-foreground" />}
+              />
+              <MetricCard 
+                label="Gap Remaining" 
+                value={`$${latestMetric.gapRemaining.toLocaleString()}`}
+                subValue="To Target"
+                icon={<TrendingUp className="w-4 h-4 text-amber-500" />}
+              />
+              <MetricCard 
+                label="Current Liquid" 
+                value={`$${latestMetric.totalSavings.toLocaleString()}`}
+                subValue="Starting Capital"
+                icon={<ShieldCheck className="w-4 h-4 text-emerald-500" />}
+              />
+              <MetricCard 
+                label="Monthly Burn" 
+                value={`$${(currentMetric.companyCosts + currentMetric.personalExpenses).toLocaleString()}`}
+                subValue="Personal + Company"
+                icon={<ArrowUpRight className="w-4 h-4 text-destructive" />}
+              />
+            </div>
 
-        {/* Data Table */}
-        <div className="w-full">
-          <FlightPlanTable />
-        </div>
+            {/* Main Content Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-auto">
+              <div className="lg:col-span-2 space-y-6">
+                <div className="h-[350px]">
+                  <SavingsChart data={data} />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[300px]">
+                  <CashflowChart data={data} />
+                  <GapChart data={data} />
+                </div>
+              </div>
+              <div className="lg:col-span-1 space-y-6">
+                <div className="h-full">
+                  <Stage1Checklist />
+                </div>
+              </div>
+            </div>
+
+            {/* Data Table */}
+            <div className="w-full">
+              <FlightPlanTable data={data} />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="inputs" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <AssumptionsForm inputs={inputs} onChange={setInputs} />
+          </TabsContent>
+        </Tabs>
 
         {/* Footer / Manifesto Quote */}
         <footer className="pt-12 pb-6 text-center border-t border-border mt-12">

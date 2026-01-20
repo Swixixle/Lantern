@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Lock, Unlock, CheckSquare, Square } from "lucide-react";
@@ -17,10 +17,31 @@ export function Stage1Checklist() {
   const [isLocked, setIsLocked] = useState(true);
   const [items, setItems] = useState(STAGE_1_ITEMS);
 
+  useEffect(() => {
+    const unlocked = localStorage.getItem("stage1_unlocked") === "true";
+    if (unlocked) setIsLocked(false);
+    
+    const savedItems = localStorage.getItem("stage1_items");
+    if (savedItems) {
+      try {
+        setItems(JSON.parse(savedItems));
+      } catch (e) {
+        console.error("Failed to parse saved checklist items", e);
+      }
+    }
+  }, []);
+
+  const handleUnlock = () => {
+    setIsLocked(false);
+    localStorage.setItem("stage1_unlocked", "true");
+  };
+
   const toggleItem = (id: number) => {
-    setItems(items.map(item => 
+    const newItems = items.map(item => 
       item.id === id ? { ...item, completed: !item.completed } : item
-    ));
+    );
+    setItems(newItems);
+    localStorage.setItem("stage1_items", JSON.stringify(newItems));
   };
 
   return (
@@ -54,7 +75,7 @@ export function Stage1Checklist() {
               <Button 
                 variant="outline" 
                 className="mt-4 border-amber-500/50 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 font-mono text-xs uppercase tracking-wider"
-                onClick={() => setIsLocked(false)}
+                onClick={handleUnlock}
               >
                 Access Checklist
               </Button>

@@ -1,0 +1,272 @@
+Below is a concrete, build-ready spec you can hand to the Replit agent to transform Lantern Sovereignty Dashboard into a financial dashboard with data visualizations. I’m assuming a modern Replit setup (Node/Next.js). If the project is already scaffolded differently, the same structure still applies.
+
+⸻
+
+Target: What the app is now
+
+A Financial Flight Plan Dashboard that:
+	•	stores your plan assumptions
+	•	calculates the 5-year curve (month-by-month + year summaries)
+	•	renders charts (revenue, savings, runway)
+	•	shows the phase table
+	•	keeps the Stage 1 checklist “locked” behind an explicit click
+
+This is not accounting software. It’s a navigational instrument.
+
+⸻
+
+Recommended stack (simple, reliable)
+	•	Next.js (App Router) + TypeScript
+	•	Tailwind for styling (you already have a design system direction)
+	•	Recharts for charts (fastest to implement; good enough)
+	•	Zod for validating plan inputs
+	•	Local persistence:
+	•	Day 1: localStorage
+	•	Day 2: SQLite (better) using better-sqlite3 or sqlite + Prisma (if you want ORM)
+	•	No auth initially
+
+⸻
+
+Core screens (MVP)
+	1.	Dashboard (Home)
+	•	Top KPIs: current savings, target savings, gap, monthly burn, runway months
+	•	Main chart: Savings trajectory over 60 months
+	•	Secondary chart: Revenue vs Costs vs Personal Draw
+	•	Phase table: Year 1–5 grid
+	2.	Assumptions / Inputs
+	•	Editable fields (home price, down payment %, expenses, op budget, tax rate, ramp schedule)
+	•	“Recompute” button
+	3.	Stage 1 Checklist (Locked)
+	•	Button: “ACCESS CHECKLIST”
+	•	Once clicked, reveal checklist + progress toggles (saved locally)
+
+⸻
+
+Data model (minimum)
+
+Inputs
+	•	homePrice (350000–400000)
+	•	downPaymentPct (0.6 default)
+	•	startingSavings (15000)
+	•	monthlyPersonalExpenses (3500)
+	•	weeklyCompanyBudget (1000)
+	•	effectiveTaxRate (0.25 default; editable)
+	•	rampSchedule (month-by-month revenue plan or phased)
+	•	drawPolicy (when personal draw starts; can be a ramp too)
+
+Derived
+	•	targetDownPayment = homePrice * downPaymentPct
+	•	gap = targetDownPayment - startingSavings
+	•	monthlyCompanyBurn = weeklyCompanyBudget * 52 / 12
+	•	monthlyPersonalBurn = monthlyPersonalExpenses
+	•	netSavingsPerMonth = (personalDrawAfterTax - personalBurn) + companyRetained?
+(For now: treat savings as personal only; keep company separate)
+
+Output dataset (for charts)
+
+Array of 60 rows:
+	•	monthIndex
+	•	dateLabel (“Y1 M1”)
+	•	revenue
+	•	companyCosts
+	•	personalDrawGross
+	•	personalTaxes
+	•	personalNet
+	•	personalExpenses
+	•	personalSavingsDelta
+	•	totalSavings
+
+⸻
+
+Calculation logic (the “engine”)
+
+You want a deterministic calculator module. Put it in:
+
+/lib/sovereigntyEngine.ts
+
+Rules
+	•	Month-by-month simulation (60 steps)
+	•	Revenue follows ramp schedule (0 for first N months if cold start)
+	•	Company costs are constant monthly burn (unless you add steps later)
+	•	Personal draw can be 0 until a chosen month, then ramps
+	•	Taxes apply to personal draw gross → net
+	•	Savings changes only if net > expenses
+
+This gives you charts that actually match your “curve.”
+
+⸻
+
+Code skeleton (give this to the agent)
+
+1) Engine module
+
+// lib/sovereigntyEngine.ts
+export type PlanInputs = {
+  homePrice: number;
+  downPaymentPct: number;
+  startingSavings: number;
+
+  monthlyPersonalExpenses: number;
+  weeklyCompanyBudget: number;
+
+  effectiveTaxRate: number; // e.g. 0.25
+
+  // 60-length arrays (or generator) for ramp behavior:
+  revenueByMonth: number[];          // gross company revenue
+  personalDrawGrossByMonth: number[]; // founder draw (gross)
+};
+
+export type MonthRow = {
+  m: number;
+  label: string;
+
+  revenue: number;
+  companyCosts: number;
+
+  personalDrawGross: number;
+  personalTaxes: number;
+  personalNet: number;
+
+  personalExpenses: number;
+  personalSavingsDelta: number;
+  totalSavings: number;
+
+  targetDownPayment: number;
+  gapRemaining: number;
+};
+
+export function runSovereigntyPlan(inputs: PlanInputs): MonthRow[] {
+  const months = 60;
+
+  const targetDownPayment = inputs.homePrice * inputs.downPaymentPct;
+  const monthlyCompanyCosts = (inputs.weeklyCompanyBudget * 52) / 12;
+
+  let totalSavings = inputs.startingSavings;
+
+  const rows: MonthRow[] = [];
+
+  for (let m = 0; m < months; m++) {
+    const revenue = inputs.revenueByMonth[m] ?? 0;
+    const companyCosts = monthlyCompanyCosts;
+
+    const personalDrawGross = inputs.personalDrawGrossByMonth[m] ?? 0;
+    const personalTaxes = personalDrawGross * inputs.effectiveTaxRate;
+    const personalNet = personalDrawGross - personalTaxes;
+
+    const personalExpenses = inputs.monthlyPersonalExpenses;
+    const personalSavingsDelta = Math.max(0, personalNet - personalExpenses);
+
+    totalSavings += personalSavingsDelta;
+
+    const gapRemaining = Math.max(0, targetDownPayment - totalSavings);
+
+    rows.push({
+      m,
+      label: `Y${Math.floor(m / 12) + 1} M${(m % 12) + 1}`,
+      revenue,
+      companyCosts,
+      personalDrawGross,
+      personalTaxes,
+      personalNet,
+      personalExpenses,
+      personalSavingsDelta,
+      totalSavings,
+      targetDownPayment,
+      gapRemaining,
+    });
+  }
+
+  return rows;
+}
+
+2) Default “Cold Start” ramp generator
+
+// lib/defaultRamps.ts
+export function buildColdStartRevenueRamp(): number[] {
+  // Example: 0 for 9 months, then ramp up
+  const months = 60;
+  const arr = Array(months).fill(0);
+
+  // Months 10–18: modest ramp to 60k annualized (~5k/mo)
+  for (let m = 9; m < 18; m++) arr[m] = 3000 + (m - 9) * 250;
+
+  // Months 19–36: ramp toward ~184k/yr (~15.3k/mo)
+  for (let m = 18; m < 36; m++) arr[m] = 7000 + (m - 18) * 450;
+
+  // Months 37–60: stabilize ~185k/yr
+  for (let m = 36; m < 60; m++) arr[m] = 15400;
+
+  return arr;
+}
+
+export function buildDrawRamp(): number[] {
+  const months = 60;
+  const arr = Array(months).fill(0);
+
+  // No draw for 9 months
+  // Then start draw slowly; adjust later in inputs UI
+  for (let m = 18; m < 36; m++) arr[m] = 5000 + (m - 18) * 150; // gross/mo
+
+  for (let m = 36; m < 60; m++) arr[m] = 11000; // gross/mo
+
+  return arr;
+}
+
+3) Charts (Recharts)
+	•	Savings curve line chart: totalSavings vs months, plus targetDownPayment as reference line
+	•	Revenue vs Costs chart: lines for revenue, companyCosts, personalDrawGross
+	•	Gap remaining: area chart gapRemaining
+
+⸻
+
+Visualizations (what user “gets” immediately)
+
+Dashboard top cards
+	•	Total Savings (current)
+	•	Target Down Payment
+	•	Gap Remaining
+	•	Personal Burn / Month
+	•	Company Burn / Month
+	•	Runway Months (if revenue=0, based on starting savings—optional, but useful)
+
+Charts
+	1.	Savings Trajectory (60 months)
+	•	Line: totalSavings
+	•	Reference: targetDownPayment
+	2.	Cashflow Overview
+	•	Lines: revenue, companyCosts, personalDrawGross
+	3.	Gap Remaining
+	•	Area: gapRemaining (should trend to 0)
+
+Table
+	•	Year-by-year summary (use your existing curve table, but computed from monthly rollups)
+
+⸻
+
+“Locked” Stage 1 Checklist implementation
+	•	UI shows a lock card with button “ACCESS CHECKLIST”
+	•	On click, set checklistUnlocked=true in localStorage
+	•	Render checklist items with toggles and persistent state
+
+Checklist items can be exactly the Stage 1 steps you already have (folder structure, first 5 receipts, review).
+
+⸻
+
+What to tell the Replit agent, verbatim
+
+“Convert this into a financial dashboard. Implement a deterministic simulation engine that outputs 60 months of data from editable assumptions, then visualize it with Recharts. Keep the Stage 1 checklist behind an explicit unlock button stored in localStorage. No auth, no backend required for MVP.”
+
+⸻
+
+If the agent asks “what’s the fastest first deliverable?”
+
+Answer:
+	1.	Engine produces the 60-row dataset
+	2.	One chart: total savings + target line
+	3.	Inputs page edits the assumptions and recomputes
+
+Everything else can follow.
+
+⸻
+
+If you paste back what tech stack the Replit agent scaffolded (Next vs React-Vite vs something else), I’ll adapt the instructions to that exact structure without changing the plan.
