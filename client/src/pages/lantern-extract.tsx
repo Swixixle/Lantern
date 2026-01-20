@@ -21,7 +21,10 @@ import {
   Sliders,
   Activity,
   Save,
-  FolderOpen
+  FolderOpen,
+  Filter,
+  Check,
+  Copy
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -45,6 +48,7 @@ export default function LanternExtract() {
   const [step, setStep] = useState<"input" | "extract" | "export">("input");
   const [showSaved, setShowSaved] = useState(false);
   const [savedPacks, setSavedPacks] = useState<LanternPack[]>([]);
+  const [filterSourceHash, setFilterSourceHash] = useState<string | null>(null);
   
   const [sourceText, setSourceText] = useState("");
   const [metadata, setMetadata] = useState({
@@ -98,8 +102,13 @@ export default function LanternExtract() {
 
   const handleSave = () => {
     if (pack) {
+      const existing = savedPacks.find(p => p.pack_id === pack.pack_id);
       savePack(pack);
-      alert(`Pack ${pack.pack_id} saved to library.`);
+      if (existing) {
+         alert(`Pack updated (Snapshot ${pack.pack_id.slice(0, 8)})`);
+      } else {
+         alert(`New Snapshot Saved (ID: ${pack.pack_id.slice(0, 8)})`);
+      }
     }
   };
 
@@ -140,7 +149,6 @@ export default function LanternExtract() {
     });
   };
 
-  // ... (Rest of component methods like downloadJSON, reset, render remain similar)
   const downloadJSON = () => {
     if (!pack) return;
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
@@ -172,6 +180,11 @@ export default function LanternExtract() {
     setPack(null);
   };
 
+  // Filtered Packs
+  const displayedPacks = filterSourceHash 
+    ? savedPacks.filter(p => p.hashes.source_text_sha256 === filterSourceHash)
+    : savedPacks;
+
   // Render Saved Packs List
   if (showSaved) {
     return (
@@ -181,16 +194,52 @@ export default function LanternExtract() {
             <h1 className="text-2xl font-mono font-bold">Saved Packs</h1>
             <Button variant="ghost" onClick={() => setShowSaved(false)}>Back to Editor</Button>
           </header>
+
+          {/* Library Toolbar */}
+          <div className="flex items-center gap-4 bg-muted/20 p-2 rounded-md">
+            <Button 
+                variant={filterSourceHash ? "secondary" : "ghost"} 
+                size="sm"
+                onClick={() => setFilterSourceHash(null)}
+                className="text-xs font-mono"
+            >
+                All Sources
+            </Button>
+             {/* Dynamic Source Filters would go here in full app */}
+             {filterSourceHash && (
+                 <Badge variant="outline" className="font-mono text-xs">
+                    Source: {filterSourceHash.slice(0, 8)}...
+                    <Button variant="ghost" size="icon" className="h-3 w-3 ml-2 p-0" onClick={() => setFilterSourceHash(null)}>×</Button>
+                 </Badge>
+             )}
+          </div>
+
           <div className="grid gap-4">
-            {savedPacks.length === 0 && <p className="text-muted-foreground font-mono">No packs saved yet.</p>}
-            {savedPacks.map(p => (
-              <Card key={p.pack_id} className="cursor-pointer hover:border-cyan-500 transition-colors" onClick={() => handleLoadPack(p)}>
+            {displayedPacks.length === 0 && <p className="text-muted-foreground font-mono">No packs found.</p>}
+            {displayedPacks.map(p => (
+              <Card key={p.pack_id} className="cursor-pointer hover:border-cyan-500 transition-colors group" onClick={() => handleLoadPack(p)}>
                 <CardContent className="p-4 flex justify-between items-center">
-                  <div>
-                    <p className="font-bold font-mono">{p.source.title || "Untitled"}</p>
-                    <p className="text-xs text-muted-foreground">{p.pack_id} • {p.engine.version} • {new Date(p.source.retrieved_at).toLocaleDateString()}</p>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                        <p className="font-bold font-mono text-sm">{p.source.title || "Untitled Source"}</p>
+                        <Badge variant="secondary" className="text-[10px] font-mono opacity-50">{p.engine.name} v{p.engine.version}</Badge>
+                    </div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
+                        <span className="flex items-center gap-1"><Hash className="w-3 h-3"/> {p.pack_id.slice(0, 8)}</span>
+                        <span>{new Date(p.source.retrieved_at).toLocaleDateString()}</span>
+                        <span className="text-cyan-500/70" onClick={(e) => { e.stopPropagation(); setFilterSourceHash(p.hashes.source_text_sha256); }}>
+                             Src: {p.hashes.source_text_sha256.slice(0, 6)}
+                        </span>
+                    </div>
                   </div>
-                  <Badge variant="outline">{p.items.entities.length + p.items.quotes.length + p.items.metrics.length + p.items.timeline.length} Items</Badge>
+                  <div className="flex items-center gap-4">
+                      <div className="flex gap-2 text-[10px] font-mono text-muted-foreground">
+                          <span className={p.items.entities.length ? "text-cyan-600" : ""}>{p.items.entities.length} Ent</span>
+                          <span className={p.items.quotes.length ? "text-amber-600" : ""}>{p.items.quotes.length} Qt</span>
+                          <span className={p.items.metrics.length ? "text-emerald-600" : ""}>{p.items.metrics.length} Met</span>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-cyan-500" />
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -212,7 +261,7 @@ export default function LanternExtract() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowSaved(true)} className="font-mono text-xs uppercase">
-              <FolderOpen className="w-3 h-3 mr-2" /> Open
+              <FolderOpen className="w-3 h-3 mr-2" /> Library
             </Button>
             <Button variant="ghost" size="sm" onClick={reset} className="font-mono text-xs uppercase text-muted-foreground hover:text-foreground">
               <RefreshCw className="w-3 h-3 mr-2" /> Reset
@@ -409,11 +458,19 @@ export default function LanternExtract() {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-mono text-sm uppercase font-bold text-muted-foreground">Pack Summary</h3>
-                    <Badge variant="outline" className="font-mono text-[9px] text-muted-foreground">
-                       ID: {pack.pack_id.slice(0, 8)}...
+                    <h3 className="font-mono text-sm uppercase font-bold text-muted-foreground">Pack Snapshot</h3>
+                    <Badge variant={pack.pack_id ? "outline" : "secondary"} className="font-mono text-[9px] text-muted-foreground">
+                       {pack.pack_id ? pack.pack_id.slice(0, 8) : "UNSAVED"}
                     </Badge>
                   </div>
+                  
+                  {savedPacks.some(p => p.pack_id === pack.pack_id) && (
+                      <div className="flex items-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded text-[10px] text-emerald-600 font-mono mb-2">
+                          <Check className="w-3 h-3" />
+                          Already in Library
+                      </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                     <div className="flex justify-between p-2 bg-muted/30 rounded">
                       <span>Entities</span>
@@ -435,10 +492,20 @@ export default function LanternExtract() {
                 </div>
 
                 <div className="space-y-4 pt-4 border-t border-border">
-                  <Button onClick={handleSave} variant="outline" className="w-full font-mono uppercase border-cyan-500 text-cyan-500 hover:bg-cyan-500/10">
-                    <Save className="w-4 h-4 mr-2" /> Save to Library
+                  <Button 
+                    onClick={handleSave} 
+                    variant={savedPacks.some(p => p.pack_id === pack.pack_id) ? "outline" : "default"}
+                    className={cn(
+                        "w-full font-mono uppercase",
+                        savedPacks.some(p => p.pack_id === pack.pack_id) 
+                            ? "border-emerald-500 text-emerald-500 hover:bg-emerald-500/10" 
+                            : "bg-cyan-500 text-black hover:bg-cyan-400"
+                    )}
+                  >
+                    <Save className="w-4 h-4 mr-2" /> 
+                    {savedPacks.some(p => p.pack_id === pack.pack_id) ? "Update Snapshot" : "Save New Snapshot"}
                   </Button>
-                  <Button onClick={() => setStep("export")} className="w-full font-mono uppercase bg-cyan-500 text-black hover:bg-cyan-400">
+                  <Button onClick={() => setStep("export")} className="w-full font-mono uppercase bg-zinc-800 text-white hover:bg-zinc-700">
                     Review & Export <ChevronRight className="w-4 h-4 ml-2" />
                   </Button>
                   <Button variant="ghost" onClick={reset} className="w-full font-mono uppercase text-xs">
@@ -477,6 +544,7 @@ export default function LanternExtract() {
             </div>
 
             {/* PDF PREVIEW (Hidden from view mostly, used for generation, but we show it here for effect) */}
+            // ... (PDF Preview code unchanged)
             <div className="order-1 lg:order-2 flex justify-center bg-zinc-100 p-8 rounded-lg overflow-hidden border border-zinc-200">
               <div 
                 // ref={pdfRef} // PDF generation disabled for mockup

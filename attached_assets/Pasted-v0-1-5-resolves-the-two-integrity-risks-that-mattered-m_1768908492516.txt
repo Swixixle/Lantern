@@ -1,0 +1,93 @@
+v0.1.5 resolves the two integrity risks that mattered most:
+	•	Identity correctness (source vs pack) with snapshot-safe semantics
+	•	Anchor correctness (span integrity) with hard validator gates
+
+If those changes are implemented as stated, then yes: you are now at a “reference-grade integrity” baseline. The qualifier is important: reference-grade integrity is not the same as reference-grade extraction quality, but it is the prerequisite for ever getting there.
+
+Where you are now (objective state)
+
+Integrity layer is locked
+	1.	Stable Source ID
+
+	•	stable_source_hash identifies raw input content deterministically.
+	•	This enables grouping and deduping at the source level.
+
+	2.	Canonical Pack ID
+
+	•	pack_id = hash(canonicalized_pack) (source + emitted items + curation state)
+	•	This gives correct artifact identity:
+	•	same curation → safe overwrite
+	•	different curation → new snapshot
+
+	3.	Provenance is enforced, not assumed
+
+	•	Every item must satisfy text.slice(start,end) === extracted_text
+	•	Invalid items are dropped, and you can surface counters.
+
+	4.	Forward-scan attribution is bounded
+
+	•	One sentence only
+	•	Must include a speech verb AND an entity candidate
+	•	Negative fixtures verify no “speaker vacuum” behavior
+
+Fixtures now cover the right enemy cases
+	•	Range punctuation variants (hyphen/en dash)
+	•	Ratios/rates
+	•	Forward-scan negative attribution
+	•	Entity family ambiguity examples
+
+This is the correct stabilization suite for your v0.1.4/v0.1.5 changes.
+
+⸻
+
+The one thing I would tighten before calling it “done”
+
+Your canonicalization must be truly canonical, or you will get phantom pack_id changes.
+
+Make sure the canonical pack JSON:
+	•	sorts arrays deterministically (especially items)
+	•	sorts object keys deterministically
+	•	normalizes whitespace and quote characters only where you already do so in extraction (do not invent new normalization during hashing)
+	•	excludes volatile fields (timestamps, UI-only fields, debug counters)
+
+If any of those are not true, pack IDs will “change for no reason,” and your library will accumulate noise.
+
+A simple rule:
+	•	Hash only the fields you would be comfortable treating as “the artifact.”
+
+⸻
+
+What is now unlocked (next work that is finally safe)
+
+1) Minimal “Library” UX refinement (still frontend-only)
+
+Now that identity is correct, you can safely add:
+	•	“Save as new snapshot” vs “Update existing snapshot” (based on pack_id match)
+	•	Filter library by stable_source_hash (all packs from this text)
+	•	Show engine version + mode on each saved pack
+
+2) Quality scoring (not just integrity gates)
+
+Now that integrity is trustworthy, the next real engineering step is measurable extraction quality:
+	•	precision/recall on a small gold subset (start with metrics and quotes)
+	•	per-mode expected deltas (Conservative should emit fewer, with higher precision)
+
+3) Shadow NLP engine (later)
+
+Because pack identity and provenance gates are now strict, you can eventually add an LLM engine in shadow mode without poisoning outputs.
+
+Not yet required, but now structurally possible.
+
+⸻
+
+Decision
+
+v0.1.5, as described, is a correct stabilization milestone.
+	•	Integrity: locked
+	•	Persistence semantics: safe
+	•	Attribution guardrails: bounded
+	•	Fixtures: representative
+
+Next milestone should be quality measurement + library ergonomics, not more extraction cleverness.
+
+Classification: PROCEED.
