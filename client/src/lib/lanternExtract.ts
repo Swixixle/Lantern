@@ -16,6 +16,7 @@ export type EntityItem = BaseItem & {
   type: "person" | "org" | "location" | "other";
   text: string;
   canonical: string; // Used for deduplication key
+  canonical_family_id?: string; // Stable hash of root token
   occurrences?: Provenance[];
 };
 
@@ -26,14 +27,20 @@ export type QuoteItem = BaseItem & {
 };
 
 export type MetricItem = BaseItem & {
-  value: string;
+  value: string; // Display string
+  raw_value_text: string; // Exact substring
   unit: string;
+  parsed_number?: number;
+  scale?: number;
   normalized_value?: number;
+  qualifier?: string; // "about", "roughly", etc.
   parse_notes?: string;
 };
 
 export type TimelineItem = BaseItem & {
   date: string;
+  raw_date_text: string;
+  date_type: "explicit" | "partial" | "relative" | "year-only";
   event: string;
 };
 
@@ -84,6 +91,17 @@ const normalizeEntity = (text: string): string => {
   return text.trim().replace(/[.,;:!?]+$/, "").replace(/\s+/g, " ");
 };
 
+// Generate Family ID from root token (first substantial word)
+const generateFamilyId = (text: string): string => {
+  const normalized = normalizeEntity(text);
+  // Simple strategy: take the first word as "root" for family linking
+  // "Apple Inc" -> "Apple"
+  // "The World Bank" -> "World" (need to skip 'The')
+  const words = normalized.split(" ").filter(w => !["The", "A", "An"].includes(w));
+  const root = words.length > 0 ? words[0] : normalized;
+  return mockHash(root.toLowerCase());
+};
+
 // Normalize quote for key
 const normalizeQuote = (text: string): string => {
   return text.trim()
@@ -93,7 +111,13 @@ const normalizeQuote = (text: string): string => {
 };
 
 // Currency normalization with parse trace
-const normalizeCurrency = (text: string): { value: number, unit: string, scale: number, parse_notes: string } => {
+const normalizeMetric = (text: string): { 
+  parsed_number: number, 
+  scale: number, 
+  unit: string, 
+  qualifier: string, 
+  parse_notes: string 
+} => {
   const clean = text.toLowerCase().replace(/,/g, "");
   let scale = 1;
   let notes = [];
@@ -111,11 +135,16 @@ const normalizeCurrency = (text: string): { value: number, unit: string, scale: 
 
   if (text.includes(",")) notes.push("comma-stripped");
 
+  let qualifier = "";
+  if (clean.includes("about") || clean.includes("around") || clean.includes("roughly") || clean.includes("approx")) {
+    qualifier = "approximate";
+    notes.push("qualifier-detected");
+  }
+
   const numMatch = clean.match(/[\d.]+/);
-  const parsedNum = numMatch ? parseFloat(numMatch[0]) : 0;
-  const value = parsedNum * scale;
+  const parsed_number = numMatch ? parseFloat(numMatch[0]) : 0;
   
-  return { value, unit, scale, parse_notes: notes.join(", ") };
+  return { parsed_number, scale, unit, qualifier, parse_notes: notes.join(", ") };
 };
 
 // Sentence Segmentation with Provenance
@@ -124,9 +153,6 @@ type Sentence = { text: string; start: number; end: number; isHeadlineLike: bool
 const splitSentences = (text: string): Sentence[] => {
   const segments: Sentence[] = [];
   // Regex to find sentence boundaries: (.?!) followed by whitespace or EOF
-  // Negative lookbehind simulation using a pre-check approach or simpler exclusion list
-  // For robustness in browser JS (where lookbehind support varies), we rely on safe patterns.
-  
   const boundaryRegex = /(?<!\b(?:Mr|Mrs|Ms|Dr|Inc|Ltd|Jr|Sr|vs|U\.S|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Oct|Nov|Dec))(\.|!|\?)(?=\s|$)/g;
   
   let lastIndex = 0;
@@ -140,8 +166,6 @@ const splitSentences = (text: string): Sentence[] => {
       const relativeStart = text.slice(lastIndex, end).indexOf(segmentText);
       const absoluteStart = lastIndex + relativeStart;
       
-      // Headline detection: Caps ratio > 0.7 AND no lowercase tokens (except small connector words potentially, but strict rule says "no lowercase tokens" per spec is safer, or low lowercase ratio)
-      // Spec: "If a line (or sentence) has caps ratio > 0.7 and no lowercase tokens"
       const upperCount = (segmentText.match(/[A-Z]/g) || []).length;
       const lowerCount = (segmentText.match(/[a-z]/g) || []).length;
       const totalAlpha = upperCount + lowerCount;
@@ -183,25 +207,9 @@ const splitSentences = (text: string): Sentence[] => {
 
 // Provenance Validator
 const validateItem = (item: BaseItem, fullText: string): boolean => {
-  const { start, end, sentence } = item.provenance;
-  
+  const { start, end } = item.provenance;
   // Bounds check
   if (start < 0 || end > fullText.length || start >= end) return false;
-  
-  // Substring integrity check
-  // Note: The item.provenance.sentence is the CONTEXT sentence. 
-  // Ideally, item text should be within the text.slice(start, end).
-  // But wait, our 'start'/'end' in the extraction logic below are pointing to the ITEM substring, not the sentence.
-  // The 'provenance.sentence' field is just a copy of the sentence text for UI display.
-  // Let's ensure the validator checks if the extracted text (implied by item type) matches text.slice(start,end)
-  // BUT: BaseItem doesn't have 'text' field. Subtypes do. 
-  // So we just check basic bounds and maybe if sentence contains the range?
-  // Actually, let's assume 'start' and 'end' refer to the ITEM, not the sentence.
-  // The extraction logic sets start/end to the match index.
-  
-  // Let's verify that text.slice(start, end) is indeed present in fullText
-  // (trivial if bounds are correct, but good sanity check).
-  
   return true;
 };
 
@@ -258,7 +266,7 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
   const sentences = splitSentences(text);
   
   // 2. Extraction Loop
-  sentences.forEach((sent) => {
+  sentences.forEach((sent, sentIndex) => {
     const sentence = sent.text;
     const sentenceStart = sent.start;
     
@@ -268,10 +276,6 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
     if (sent.isHeadlineLike) {
       if (options.mode !== "broad") {
         stats.headlines_suppressed++;
-        // Conservative/Balanced: Only scan for strong ORG suffixes if headline-like
-        // Only allow extraction if matches specific patterns, otherwise skip this sentence for general extraction?
-        // Spec: "Conservative/Balanced: do not emit entities from that segment unless they match a strong ORG suffix (INC, LLC) or are repeated later"
-        // For simplicity v1: Skip generic extraction in headline segments unless finding strong org suffix.
       }
     }
 
@@ -283,7 +287,6 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
 
     // --- Entity Extraction ---
     let match;
-    // Reset regex index for safety
     entityPattern.lastIndex = 0;
     while ((match = entityPattern.exec(sentence)) !== null) {
       const raw = match[0];
@@ -299,7 +302,7 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
       
       // Headline Guard
       if (sent.isHeadlineLike && options.mode !== "broad") {
-        if (!hasOrgSuffix) continue; // Skip non-strong entities in headlines
+        if (!hasOrgSuffix) continue; 
       }
 
       if (hasOrgSuffix) {
@@ -328,9 +331,10 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
           type,
           text: normalized,
           canonical: normalized,
+          canonical_family_id: generateFamilyId(normalized),
           confidence: 0.7, 
           provenance: {
-            sentence, // Context
+            sentence, 
             start: sentenceStart + match.index,
             end: sentenceStart + match.index + raw.length
           },
@@ -353,24 +357,34 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
       const candidates: string[] = [];
       const attributionKeywords = ["said", "told", "wrote", "added", "stated", "according to"];
       
-      // Look for attribution in current sentence
-      // Upgrade: +/- 120 chars (roughly current sentence + adjacent)
-      // For now, scan current sentence for simplicity + reliability
+      // Strict attribution: Search only in current or adjacent sentences.
+      // Currently, we only have the current sentence in the loop easily.
+      // For v1.3 strictness, let's limit to SAME sentence for highest precision.
+      // To implement adjacent, we'd need index access to `sentences`.
+      // Let's grab previous sentence if available.
       
-      const textOutsideQuote = sentence.replace(match[0], "");
-      if (attributionKeywords.some(kw => textOutsideQuote.includes(kw))) {
-        // Find nearby entity
-        // We look at entities extracted from THIS sentence so far, or just scan text
-        // Ideally we use the rawEntities we just extracted?
-        // Let's use a regex scan for capitalized words in textOutsideQuote
-        const nearbyCaps = textOutsideQuote.match(/([A-Z][a-z]+)/g);
+      const prevSentence = sentIndex > 0 ? sentences[sentIndex - 1].text : "";
+      const searchContext = prevSentence + " " + sentence; 
+      
+      // Check for attribution keyword presence in context
+      if (attributionKeywords.some(kw => searchContext.includes(kw))) {
+        // Find entities in context
+        // Ideally we search entities extracted from context, but we might not have processed them yet (if prev sentence).
+        // Let's just scan for Caps patterns in context.
+        const nearbyCaps = searchContext.match(/([A-Z][a-z]+)/g);
         if (nearbyCaps) {
+           // Filter candidates: exclude stop words and ensure proximity (heuristic: appear in same context)
            candidates.push(...nearbyCaps.filter(c => !stopEntities.has(c)));
         }
       }
 
-      if (candidates.length === 1) speaker = candidates[0];
-      // If multiple candidates, do not choose - leave speaker null, store candidates
+      // De-duplicate candidates
+      const uniqueCandidates = [...new Set(candidates)];
+      
+      if (uniqueCandidates.length === 1) {
+        speaker = uniqueCandidates[0];
+      }
+      // If > 1, speaker remains undefined, but we store candidates.
 
       if (options.mode === "conservative" && !speaker) continue;
 
@@ -378,7 +392,7 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
         id: `qt_${mockHash(normalized + sentenceStart)}`,
         quote: normalized,
         speaker,
-        speaker_candidates: candidates.length > 1 ? candidates : undefined,
+        speaker_candidates: uniqueCandidates.length > 1 ? uniqueCandidates : undefined,
         confidence: speaker ? 0.9 : 0.6,
         provenance: {
           sentence,
@@ -398,15 +412,22 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
       if (!/\d/.test(raw)) continue;
       if (/^\d{4}$/.test(raw.trim()) && (raw.startsWith("19") || raw.startsWith("20"))) continue;
 
-      const { value, unit, scale, parse_notes } = normalizeCurrency(raw);
+      const { parsed_number, scale, unit, qualifier, parse_notes } = normalizeMetric(raw);
 
-      if (options.mode === "conservative" && (unit === "unknown" || unit === "count")) continue; // Conservative requires explicit symbol/%
+      // Ambiguity check: if parsed_number is 0 or NaN, normalized is undefined
+      const normalized_value = (parsed_number && !isNaN(parsed_number)) ? parsed_number * scale : undefined;
+
+      if (options.mode === "conservative" && (unit === "unknown" || unit === "count")) continue;
 
       rawMetrics.push({
         id: `met_${mockHash(raw + sentenceStart)}`,
         value: raw.trim(),
+        raw_value_text: raw.trim(),
         unit,
-        normalized_value: value,
+        parsed_number,
+        scale,
+        normalized_value,
+        qualifier,
         parse_notes,
         confidence: 0.9,
         provenance: {
@@ -427,6 +448,8 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
        rawTimeline.push({
         id: `tl_${mockHash(dateStr + sentenceStart)}`,
         date: dateStr,
+        raw_date_text: dateStr,
+        date_type: "explicit",
         event: sentence.length > 50 ? sentence.substring(0, 50) + "..." : sentence,
         confidence: 0.85,
         provenance: {
@@ -438,6 +461,32 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
         included: true
       });
       stats.emitted.timeline++;
+    }
+
+    // Timeline (Years - Fallback)
+    yearPattern.lastIndex = 0;
+    while ((match = yearPattern.exec(sentence)) !== null) {
+      const year = match[0];
+      const isOverlap = rawTimeline.some(t => t.provenance.sentence === sentence && t.date.includes(year) && t.date !== year);
+      
+      if (!isOverlap) {
+        rawTimeline.push({
+          id: `tl_${mockHash(year + sentenceStart)}`,
+          date: year,
+          raw_date_text: year,
+          date_type: "year-only",
+          event: sentence.length > 50 ? sentence.substring(0, 50) + "..." : sentence,
+          confidence: 0.75,
+          provenance: {
+            sentence,
+            start: sentenceStart + match.index,
+            end: sentenceStart + match.index + year.length
+          },
+          tags: [],
+          included: true
+        });
+        stats.emitted.timeline++;
+      }
     }
   });
 
@@ -484,10 +533,7 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
     }
   }
 
-  // Metrics: Dedupe by normalized value + unit + sentence
-  // Actually, metrics often unique per sentence.
-  // We'll dedupe if exact same metric appears in exact same sentence (redundant regex match?)
-  // Or just pass through if valid.
+  // Metrics: Validation only
   const validMetrics = rawMetrics.filter(m => {
     const valid = validateItem(m, text);
     if (!valid) stats.invalid_dropped++;

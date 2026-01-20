@@ -19,7 +19,8 @@ import {
   Hash, 
   CalendarClock,
   Sliders,
-  Activity
+  Activity,
+  Link as LinkIcon
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -47,7 +48,7 @@ export default function LanternExtract() {
     const newPack: LanternPack = {
       schema: "lantern.extract.pack.v1",
       pack_id: `lex_${crypto.randomUUID().slice(0, 8)}`,
-      engine: { name: "heuristic", version: "0.1.2" },
+      engine: { name: "heuristic", version: "0.1.3" },
       source: {
         ...metadata,
         retrieved_at: new Date().toISOString()
@@ -252,6 +253,7 @@ export default function LanternExtract() {
                           icon={<Users className="w-4 h-4 text-cyan-500" />}
                           title={item.text}
                           subtitle={item.type}
+                          meta={<Badge variant="outline" className="text-[9px] font-mono border-cyan-500/20 text-cyan-500">{item.canonical_family_id?.slice(0,6)}</Badge>}
                         />
                       ))}
                     </TabsContent>
@@ -263,7 +265,7 @@ export default function LanternExtract() {
                           onToggle={() => toggleItem("quotes", item.id)}
                           icon={<Quote className="w-4 h-4 text-amber-500" />}
                           title={`"${item.quote}"`}
-                          subtitle={item.speaker || "Unknown Speaker"}
+                          subtitle={item.speaker || (item.speaker_candidates ? `Candidates: ${item.speaker_candidates.join(", ")}` : "Unknown Speaker")}
                         />
                       ))}
                     </TabsContent>
@@ -275,7 +277,8 @@ export default function LanternExtract() {
                           onToggle={() => toggleItem("metrics", item.id)}
                           icon={<Hash className="w-4 h-4 text-emerald-500" />}
                           title={`${item.value} ${item.unit}`}
-                          subtitle={item.parse_notes ? `Normalized: ${item.normalized_value?.toLocaleString()}` : "Extracted Metric"}
+                          subtitle={item.parse_notes || "Extracted Metric"}
+                          meta={item.qualifier && <Badge variant="outline" className="text-[9px] border-emerald-500/20 text-emerald-500">{item.qualifier}</Badge>}
                         />
                       ))}
                     </TabsContent>
@@ -288,6 +291,7 @@ export default function LanternExtract() {
                           icon={<CalendarClock className="w-4 h-4 text-purple-500" />}
                           title={item.date}
                           subtitle={item.event}
+                          meta={<Badge variant="outline" className="text-[9px] border-purple-500/20 text-purple-500">{item.date_type}</Badge>}
                         />
                       ))}
                     </TabsContent>
@@ -435,7 +439,7 @@ export default function LanternExtract() {
 
                 {/* Footer */}
                 <div className="border-t border-zinc-200 pt-4 mt-auto">
-                   <p className="font-mono text-[8px] text-zinc-400 text-center uppercase">Lantern Extraction System v1.2 • Verified Output</p>
+                   <p className="font-mono text-[8px] text-zinc-400 text-center uppercase">Lantern Extraction System v1.3 • Verified Output</p>
                 </div>
               </div>
             </div>
@@ -446,7 +450,7 @@ export default function LanternExtract() {
   );
 }
 
-function ExtractionCard({ item, onToggle, icon, title, subtitle }: { item: any, onToggle: () => void, icon: any, title: string, subtitle: string }) {
+function ExtractionCard({ item, onToggle, icon, title, subtitle, meta }: { item: any, onToggle: () => void, icon: any, title: string, subtitle: string, meta?: any }) {
   return (
     <div className={cn(
       "p-4 border rounded-md transition-all",
@@ -460,7 +464,10 @@ function ExtractionCard({ item, onToggle, icon, title, subtitle }: { item: any, 
           <div className="flex items-start justify-between">
             <div>
               <p className="font-medium text-sm leading-tight">{title}</p>
-              <p className="text-xs text-muted-foreground mt-1 font-mono uppercase">{subtitle}</p>
+              <div className="flex items-center gap-2 mt-1">
+                 <p className="text-xs text-muted-foreground font-mono uppercase">{subtitle}</p>
+                 {meta}
+              </div>
             </div>
             <Switch checked={item.included} onCheckedChange={onToggle} />
           </div>

@@ -1,0 +1,111 @@
+You have now crossed a meaningful threshold. v0.1.2 is the point where Lantern Extract stops being “a promising heuristic extractor” and becomes a trustworthy extraction subsystem—because you have enforced the two invariants that matter most:
+	•	Determinism (no drift)
+	•	Provenance integrity (no unanchored emissions)
+
+That is the baseline required before you even consider persistence or an NLP engine.
+
+Where you are now (state of the system)
+
+What is locked
+	1.	Safety gates
+
+	•	Invalid provenance items are dropped, not silently emitted.
+	•	You have measurable counters in the UI showing this behavior.
+
+	2.	Operational transparency
+
+	•	Stats panel means you can tune rules without guessing what changed.
+
+	3.	Noise control for worst offenders
+
+	•	All-caps headline suppression eliminates one of the highest-volume false-positive sources.
+
+	4.	Dataset hygiene
+
+	•	Canonical-key dedupe for entities reduces redundant clutter and makes curation viable.
+
+	5.	Regression control
+
+	•	You have a runnable test script and it is currently green on determinism and provenance.
+
+What is still not locked (and should remain flexible)
+	•	The exact definition of “entity,” “speaker,” “metric,” and “timeline event” under each mode.
+	•	Confidence scoring (if you add it), which should remain explicitly heuristic.
+
+⸻
+
+Immediate next iteration (v0.1.3) — focus on quality, not features
+
+Now that safety is enforced, you should optimize for precision and legibility.
+
+1) Entity quality upgrades
+
+Problem: “Apple” vs “Apple Inc” being distinct is correct, but you need better merge/cross-link logic without collapsing distinct concepts.
+
+Add optional linkage:
+	•	canonical_family_id (e.g., a stable hash of the root token “Apple”)
+	•	Keep them distinct items, but allow the UI/export to show “related entities.”
+
+This improves downstream usefulness without breaking epistemic discipline.
+
+2) Quote attribution hardening
+
+Add two protections:
+	•	Attribution verb must be in the same or adjacent sentence as the quote.
+	•	If >1 candidate speaker matches, set speaker=null and record speaker_candidates[].
+
+This prevents “clean but wrong” outputs.
+
+3) Metrics normalization completeness
+
+If you aren’t already:
+	•	store raw_value_text, parsed_number, scale, unit, qualifier
+	•	keep normalized_number null when ambiguous
+
+Your metrics stream should be your highest-precision stream. Treat it like a reference-grade parser.
+
+4) Timeline ambiguity policy
+
+Make an explicit rule:
+	•	partial/relative dates never normalize
+	•	store date_type (explicit|partial|relative|year-only)
+	•	store raw_date_text always
+
+This keeps timeline outputs honest and makes packs safe for downstream automation.
+
+⸻
+
+Now: should you “upgrade to full-stack” for persistence?
+
+You are closer, but I would still sequence it carefully.
+
+The right time to add persistence is when:
+	•	fixtures cover at least ~15–20 texts
+	•	you’ve stabilized behavior across all three modes for those fixtures
+	•	you want reproducible pack comparison across engine versions
+
+If those are true, you can add a minimal persistence slice safely:
+	•	Store curated packs (JSON) + hashes + engine version
+	•	Retrieve by pack_id/source_url
+	•	SQLite is fine
+
+Do not build dashboards or analytics yet.
+
+⸻
+
+Gemini / NLP layer status
+
+With v0.1.2 gates in place, you have created the conditions where an LLM can be added safely later (shadow mode), because you can now enforce:
+	•	exact offsets required
+	•	invalid items dropped
+	•	comparisons measured
+
+But you still shouldn’t do it until your quality harness (precision/recall) exists, not just determinism/provenance.
+
+⸻
+
+Bottom line
+
+You’ve built a stable, auditable base. The next work is quality tightening (precision and ambiguity policy), then minimal persistence, then shadow NLP.
+
+Classification: PROCEED.
