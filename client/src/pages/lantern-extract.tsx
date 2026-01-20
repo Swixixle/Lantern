@@ -18,12 +18,12 @@ import {
   Quote, 
   Hash, 
   CalendarClock,
-  Settings2,
-  Sliders
+  Sliders,
+  Activity
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { extract, LanternPack, ExtractionOptions } from "@/lib/lanternExtract";
+import { extract, LanternPack, ExtractionOptions, EngineStats } from "@/lib/lanternExtract";
 import { cn } from "@/lib/utils";
 
 export default function LanternExtract() {
@@ -43,11 +43,11 @@ export default function LanternExtract() {
   const pdfRef = useRef<HTMLDivElement>(null);
 
   const handleExtract = () => {
-    const items = extract(sourceText, extractOptions);
+    const { items, stats } = extract(sourceText, extractOptions);
     const newPack: LanternPack = {
       schema: "lantern.extract.pack.v1",
       pack_id: `lex_${crypto.randomUUID().slice(0, 8)}`,
-      engine: { name: "heuristic", version: "0.1.0" },
+      engine: { name: "heuristic", version: "0.1.2" },
       source: {
         ...metadata,
         retrieved_at: new Date().toISOString()
@@ -56,7 +56,8 @@ export default function LanternExtract() {
         source_text_sha256: "mock_sha256_" + crypto.randomUUID().slice(0, 6),
         pack_sha256: "mock_sha256_" + crypto.randomUUID().slice(0, 6)
       },
-      items
+      items,
+      stats // Store stats in pack for UI access
     };
     setPack(newPack);
     setStep("extract");
@@ -274,7 +275,7 @@ export default function LanternExtract() {
                           onToggle={() => toggleItem("metrics", item.id)}
                           icon={<Hash className="w-4 h-4 text-emerald-500" />}
                           title={`${item.value} ${item.unit}`}
-                          subtitle="Extracted Metric"
+                          subtitle={item.parse_notes ? `Normalized: ${item.normalized_value?.toLocaleString()}` : "Extracted Metric"}
                         />
                       ))}
                     </TabsContent>
@@ -297,10 +298,26 @@ export default function LanternExtract() {
 
             <div className="lg:col-span-1 border-l border-border pl-8 flex flex-col h-full">
               <div className="space-y-6 flex-1">
+                {/* Engine Stats Panel */}
+                {pack.stats && (
+                  <div className="space-y-2 p-3 bg-muted/20 border border-muted rounded-md">
+                    <div className="flex items-center gap-2 mb-2">
+                       <Activity className="w-3 h-3 text-cyan-500" />
+                       <h3 className="font-mono text-xs uppercase font-bold text-foreground">Engine Stats</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-1 gap-x-2 text-[10px] font-mono text-muted-foreground">
+                      <span>Ver:</span> <span className="text-foreground">{pack.engine.version}</span>
+                      <span>Mode:</span> <span className="text-foreground capitalize">{extractOptions.mode}</span>
+                      <span>Dedupe:</span> <span className="text-emerald-500">{pack.stats.duplicates_collapsed}</span>
+                      <span>Invalid:</span> <span className="text-red-500">{pack.stats.invalid_dropped}</span>
+                      <span>Headlines:</span> <span className="text-amber-500">{pack.stats.headlines_suppressed}</span>
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <h3 className="font-mono text-sm uppercase font-bold text-muted-foreground">Pack Summary</h3>
-                    <Badge variant="outline" className="font-mono text-[10px]">{pack.engine.name} v{pack.engine.version}</Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                     <div className="flex justify-between p-2 bg-muted/30 rounded">
@@ -418,7 +435,7 @@ export default function LanternExtract() {
 
                 {/* Footer */}
                 <div className="border-t border-zinc-200 pt-4 mt-auto">
-                   <p className="font-mono text-[8px] text-zinc-400 text-center uppercase">Lantern Extraction System v1.0 • Verified Output</p>
+                   <p className="font-mono text-[8px] text-zinc-400 text-center uppercase">Lantern Extraction System v1.2 • Verified Output</p>
                 </div>
               </div>
             </div>

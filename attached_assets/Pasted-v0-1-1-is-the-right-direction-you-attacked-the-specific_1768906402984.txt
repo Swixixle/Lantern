@@ -1,0 +1,147 @@
+v0.1.1 is the right direction: you attacked the specific failure modes (sentence breaks, stop-entities, quote attribution, metric normalization) and you expanded fixtures to the exact edge cases that will otherwise ambush you later. The next iteration should be about closing correctness gaps and making regressions unmissable.
+
+What to do next (v0.1.2 target)
+
+1) Enforce provenance integrity as a hard gate
+
+You now have start/end offsets. Treat them as non-negotiable.
+
+Add an internal validator that runs on every extraction result:
+	•	0 <= start < end <= text.length
+	•	text.slice(start, end) equals the emitted surface_text (byte-for-byte)
+	•	Sentence bounds (if you store them) contain the extracted span
+
+If any item fails:
+	•	drop the item
+	•	increment a dropped_invalid_provenance counter
+	•	expose counters in the UI “Engine Stats” panel (read-only)
+
+This prevents the most dangerous class of silent corruption.
+
+⸻
+
+2) Add deterministic dedupe and occurrence tracking
+
+Right now, repeated entities and dates will produce clutter and degrade curation.
+
+Implement canonical keys and merge logic:
+	•	Entities
+	•	key = type + "::" + normalizeEntity(text)
+	•	keep first provenance, add occurrences[] with additional offsets/sentences
+	•	Quotes
+	•	key = normalized quote text (trim, normalize quotes, collapse spaces)
+	•	if speakers differ, keep speaker=null and store candidates in speaker_candidates[]
+	•	Metrics
+	•	key = normalized_number + unit + sentence_index (or sentence hash)
+	•	Timeline
+	•	key = raw_date_text + sentence_index (timeline is sentence-coupled)
+
+Expose “collapsed duplicates: N” in stats.
+
+⸻
+
+3) Strengthen all-caps headline defense (fixture-driven)
+
+Your advanced fixture includes all-caps; that’s good. The usual heuristic failure is:
+	•	THIS IS A HEADLINE produces 10 fake ORGs
+
+Rule:
+	•	If a line (or sentence) has caps ratio > 0.7 and no lowercase tokens, treat it as “headline-like”
+	•	Conservative/Balanced: do not emit entities from that segment unless they match a strong ORG suffix (INC, LLC) or are repeated later in normal case
+	•	Broad: allow but down-rank confidence
+
+This one rule will buy you a lot of credibility.
+
+⸻
+
+4) Quotes: prevent “speaker overreach”
+
+Your current approach is correct (speaker only if nearby verb + entity). The upgrade is to prevent false matches.
+
+Add:
+	•	Attribution verb must be within ±120 chars AND within the same sentence (or adjacent sentence) as the quote boundary.
+	•	If multiple candidates match, do not choose—set speaker=null, store candidates.
+
+This keeps Extract from turning into an implicit interpreter.
+
+⸻
+
+5) Metrics: tighten normalization and store raw components
+
+Normalization is useful, but debugging is impossible without the parse trace.
+
+For each metric store:
+	•	raw_value_text (exact substring)
+	•	parsed_number
+	•	scale (1, 1e3, 1e6, 1e9)
+	•	unit
+	•	normalized_number = parsed_number * scale
+	•	parse_notes (e.g., “comma-stripped”, “billion-word-scale”)
+
+Mode gating:
+	•	Conservative: require explicit unit/currency/% symbol
+	•	Balanced: allow magnitude words
+	•	Broad: allow approximate qualifiers (“about”, “roughly”) but preserve them in qualifier
+
+⸻
+
+Test harness: make it executable and scoring-based
+
+Fixtures are necessary but not sufficient. Right now you need a single command that yields a clear go/no-go.
+
+Add npm run extract:test
+
+It should:
+	1.	Load each fixture
+	2.	Run engine in all three modes
+	3.	Validate provenance (hard fail)
+	4.	Output a report per stream:
+
+	•	emitted count
+	•	duplicates collapsed
+	•	invalid dropped
+	•	(later) precision/recall once you create expected outputs
+
+Even without gold labels, provenance + determinism + duplicate control are immediate quality gates.
+
+Add determinism check
+
+Run the same fixture 5 times; assert identical JSON output (after key-sorting). Hard fail if drift occurs.
+
+⸻
+
+UI: one addition only (do not overbuild)
+
+Add a small “Engine Stats” panel showing:
+	•	engine version
+	•	items emitted per stream
+	•	duplicates collapsed
+	•	invalid provenance dropped
+	•	headline segments suppressed
+
+This makes tuning transparent without adding new UX complexity.
+
+⸻
+
+Persistence: still PARK
+
+You are not yet at the point where storage helps more than it hurts. Once:
+	•	provenance validator is green
+	•	dedupe is in
+	•	tests run in one command
+
+…then you can add minimal SQLite pack storage as a contained enhancement.
+
+⸻
+
+Primary failure mode to keep watching
+
+If you ever find yourself thinking:
+
+“We could just guess the speaker/date/unit…”
+
+stop. That is the exact boundary where Extract becomes untrustworthy.
+
+⸻
+
+Classification: PROCEED.
