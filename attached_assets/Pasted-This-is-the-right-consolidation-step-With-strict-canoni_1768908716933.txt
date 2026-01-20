@@ -1,0 +1,110 @@
+This is the right consolidation step. With strict canonicalization plus a source-aware Library, you have effectively completed Phase 1 (Constraint Lock-In) + Phase 2 (Artifact Persistence UX) in a frontend-only context.
+
+There are two things to do now:
+	1.	Verify your “bit-for-bit identical” claim is provably true, not just intuitively true.
+	2.	Decide what the next phase is, so you do not drift into feature sprawl.
+
+⸻
+
+1) “Bit-for-bit identical” — what must be true
+
+Your canonicalization changes make this plausible, but it is only true if all artifact outputs are derived from the same canonical data and the export pipeline is deterministic.
+
+JSON export
+
+This can be bit-for-bit identical if:
+	•	you export exactly the canonical object you hash
+	•	you stringify with deterministic key order (your canonical sort)
+	•	you avoid volatile fields (you said you do)
+
+Action: add a test that compares:
+	•	canonicalize(pack) from live session
+	•	canonicalize(pack) after reload from library
+	•	assert deep equality and sha256(JSON_string) equality
+
+PDF export (this is the usual liar)
+
+PDF generation is frequently not bit-for-bit identical because many PDF libraries embed:
+	•	creation timestamps
+	•	document IDs
+	•	object ordering that varies
+	•	font subset ordering
+
+So your statement is likely true for JSON, but not necessarily true for PDF bytes, even if the content is identical.
+
+Correct framing:
+	•	“PDF is visually identical and semantically identical” (same fields, same ordering)
+	•	“JSON is bit-for-bit identical”
+
+Action: if you truly want bit-for-bit PDF:
+	•	explicitly disable metadata timestamps/IDs if your PDF library allows, or
+	•	accept “content-identical” rather than byte-identical and report a pdf_content_hash based on the canonical pack rather than the PDF bytes.
+
+⸻
+
+2) Integrity layer is locked — what phase starts now
+
+At this point, adding more heuristics yields diminishing returns unless you can measure them.
+
+The next phase should be: Quality Scoring
+
+You already have:
+	•	determinism
+	•	provenance gates
+	•	fixture execution
+	•	persistence
+
+Now you need:
+	•	precision/recall (even if coarse)
+	•	per-stream scoring
+	•	per-mode expectations
+
+Minimum viable scoring (start small):
+	•	Pick 3 fixtures and hand-author expected outputs for metrics and quotes
+	•	Compute:
+	•	Required items present
+	•	Forbidden items absent
+	•	Counts within expected ranges
+	•	Keep it ruthless: if it regresses, it fails CI (even if the “demo looks fine”).
+
+This is the engineering move that prevents slow degradation.
+
+⸻
+
+3) Library UI: what’s good, what’s next
+
+What you shipped is correct UX for a local artifact store:
+	•	source filtering
+	•	snapshot/update labeling
+	•	mode/version display
+
+Next, only add features that directly support quality and audit:
+
+High-value next Library additions
+	•	Diff view between two packs from the same source:
+	•	items added/removed
+	•	mode/version differences
+	•	“Re-run extraction” from a saved source in a selected mode
+	•	compare new output to previous pack (this becomes your shadow-testing UI)
+
+Avoid:
+	•	tags/search/folders until you have at least ~50 saved packs and feel real pain.
+
+⸻
+
+4) One more integrity guardrail to add
+
+Add a single banner/warning if:
+	•	stable_source_hash matches but engine_version differs and the user tries to “Update”
+Because with canonical pack IDs you will probably create a new snapshot anyway, but the UI should make it explicit:
+	•	“New snapshot (engine changed)”
+
+This prevents user confusion and reinforces auditability.
+
+⸻
+
+Decision
+
+You have a stable, auditable artifact system with correct identity semantics and a usable Library. The next correct move is not “more extraction.” It is measuring extraction quality and adding diff/compare tooling.
+
+Classification: PROCEED.
