@@ -1,0 +1,126 @@
+You advanced the right items for v0.1.4, and the “frontend-only persistence” choice (localStorage) is the correct compromise under your current constraint. At this point the work shifts from “add capability” to verify invariants still hold and tighten the parts most likely to regress.
+
+Where v0.1.4 is strong
+
+Metric parsing (ranges/ratios/rates)
+
+If you are now emitting structured subtypes (scalar/range/ratio/rate) and preserving raw text plus parsed anatomy, that is the correct outcome. This is the single highest leverage stream for downstream pipelines.
+
+Quote forward-scan
+
+Allowing next-sentence attribution catches real-world journalistic structure. If you kept this bounded (only next sentence, only when it begins with attribution verbs/patterns), it is safe.
+
+Entity family ID hardening
+
+Adding casing/profile context is the right direction. Root-token-only families are guaranteed to conflate otherwise.
+
+Persistence slice
+
+“Save to Library” using localStorage delivers the product experience without prematurely committing to backend schemas or auth.
+
+⸻
+
+What must be verified immediately (non-negotiable)
+
+You reported that determinism and provenance were green in v0.1.2. Adding parsing complexity and local persistence introduces three common regressions.
+
+1) Provenance invariants still hold
+
+You must confirm:
+	•	text.slice(start,end) === surface_text for all emitted items
+	•	For range parsing: offsets should refer to the full original span (“$5–7 million”), not just the first number.
+	•	For ratios/rates: span must include the unit phrase (“per share”, “1 in 5”).
+
+If any of these fail, you risk silently generating “reference-grade structures” with non-reference provenance.
+
+2) Determinism under ES2020 + iteration changes
+
+Upgrading TS target can change iteration semantics around Maps/Sets in edge builds. Make sure your test harness checks:
+	•	same fixture, same mode, 5 runs → identical canonicalized JSON
+
+3) localStorage does not break determinism or hashing
+
+If you generate pack_id using timestamps or insertion order from localStorage, you will introduce nondeterminism.
+
+Rule:
+	•	pack_id should be computed from stable inputs only:
+	•	source_text_sha256 + canonicalized curated items
+	•	localStorage keys should be pack_id (not Date.now()).
+
+⸻
+
+Specific implementation checks (these are the likely weak points)
+
+A) Metric parsing edge cases you should fixture right now
+
+Add a new fixture file that includes:
+	•	en dash vs hyphen: 5–7 vs 5-7
+	•	spaced ranges: 5 - 7 million
+	•	“to” ranges: 5 to 7 million
+	•	percent ranges: 10–15%
+	•	ratio variants: 3-to-1, 3:1, 1 in 5
+	•	rates: $40 per share, cases per 100,000, mg/kg/day
+
+Expected behavior:
+	•	metric_kind correct
+	•	both endpoints parsed for range
+	•	unit captured
+	•	qualifier captured (about/roughly/at least)
+
+B) Quote attribution forward scan guardrails
+
+Forward scan must not become an attribution vacuum cleaner.
+
+Hard rules (even in Broad):
+	•	Only scan one sentence forward
+	•	Only accept attribution if the next sentence:
+	•	contains a speech verb pattern, AND
+	•	includes an explicit entity candidate within the same sentence
+	•	If multiple candidates: speaker=null, populate speaker_candidates[]
+
+Add fixture:
+	•	quote followed by a non-attribution sentence that contains a person name → must not attribute.
+
+C) Entity family casing profile: “Apple” problem is not only casing
+
+Casing helps, but ambiguity persists even with same casing:
+	•	“Apple” (brand) vs “Apple” (music label vs fruit in title case)
+
+A safe incremental improvement:
+	•	include local context cue words (within ±4 tokens):
+	•	if near “Inc, CEO, shares, earnings” → ORG-ish
+	•	if near “tree, fruit, orchard” → common noun-ish
+Store:
+	•	family_confidence and/or family_disambiguation_notes
+
+Do not overreach; keep it heuristic and inspectable.
+
+⸻
+
+Persistence slice: what “good” looks like (frontend-only)
+
+You’ve built the right UX pattern. Now ensure it is stable:
+
+Minimum library schema in localStorage:
+	•	lantern.library.index.v1 → list of { pack_id, title, publisher, saved_at, engine_version, source_hash }
+	•	lantern.pack.<pack_id>.v1 → the pack JSON blob
+
+Behaviors:
+	•	Saving the same pack_id overwrites (or versions) deterministically
+	•	Exported JSON/PDF is identical whether loaded fresh or loaded from library
+
+⸻
+
+Your next iteration loop (v0.1.4 stabilization)
+	1.	Add 1 new fixture file for ranges/ratios/rates + forward-scan negative case
+	2.	Run extract:test across all modes
+	3.	Add one additional gate: “no invalid provenance dropped” on fixtures (your fixtures should be clean)
+	4.	Only then consider v0.1.5 changes
+
+⸻
+
+Classification
+
+You made the correct moves for v0.1.4. Now you need to prove nothing regressed and that the library feature is deterministic and artifact-safe.
+
+Classification: PROCEED (stabilize and fixture-test).

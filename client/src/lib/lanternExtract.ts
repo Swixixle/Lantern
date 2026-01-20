@@ -94,6 +94,17 @@ const normalizeEntity = (text: string): string => {
   return text.trim().replace(/[.,;:!?]+$/, "").replace(/\s+/g, " ");
 };
 
+// Hashing
+const mockHash = (str: string) => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(16);
+};
+
 // Generate Family ID from root token + casing profile (v0.1.4 upgrade)
 const generateFamilyId = (text: string, type: string): string => {
   const normalized = normalizeEntity(text);
@@ -107,6 +118,14 @@ const generateFamilyId = (text: string, type: string): string => {
   
   // Family ID combines: Root + Type + Casing
   return mockHash(`${root.toLowerCase()}|${type}|${casingKey}`);
+};
+
+// Stable Pack ID Generation (v0.1.5 Fix for Determinism)
+// Must depend ONLY on source text and engine version, NOT random UUIDs or timestamps.
+const generatePackId = (sourceText: string, engineVersion: string): string => {
+  const contentHash = mockHash(sourceText);
+  const engineHash = mockHash(engineVersion);
+  return `lex_${contentHash.slice(0, 6)}_${engineHash.slice(0, 4)}`;
 };
 
 // Normalize quote
@@ -254,21 +273,10 @@ const validateItem = (item: BaseItem, fullText: string): boolean => {
   return true;
 };
 
-// Hashing
-const mockHash = (str: string) => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16);
-};
-
 
 // --- Main Extraction Function ---
 
-export function extract(text: string, options: ExtractionOptions = { mode: "balanced" }): { items: LanternPack["items"], stats: EngineStats } {
+export function extract(text: string, options: ExtractionOptions = { mode: "balanced" }): { items: LanternPack["items"], stats: EngineStats, stable_pack_id: string, stable_source_hash: string } {
   const rawEntities: EntityItem[] = [];
   const rawQuotes: QuoteItem[] = [];
   const rawMetrics: MetricItem[] = [];
@@ -585,6 +593,11 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
     }
   }
 
+  // Compute Stable ID components
+  const engineVersion = "0.1.4"; 
+  const sourceHash = "sha256_" + mockHash(text);
+  const packId = generatePackId(text, engineVersion);
+
   return { 
     items: {
       entities: dedupedEntities,
@@ -592,6 +605,8 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
       metrics: validMetrics,
       timeline: dedupedTimeline
     },
-    stats
+    stats,
+    stable_pack_id: packId,
+    stable_source_hash: sourceHash
   };
 }
