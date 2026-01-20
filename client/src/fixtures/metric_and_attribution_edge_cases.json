@@ -27,6 +27,13 @@
     ]
   },
   {
+    "id": "attribution_forward_scan_negative_no_verb",
+    "text": "\"I disagree.\" The market is volatile. Johnson later apologized.",
+    "expected_quotes": [
+      { "quote": "I disagree", "speaker": null }
+    ]
+  },
+  {
     "id": "entity_family_context",
     "text": "Apple Inc reported earnings. I ate an apple for lunch. The Big Apple is busy.",
     "expected_entities": [

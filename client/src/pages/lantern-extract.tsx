@@ -25,13 +25,13 @@ import {
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { extract, LanternPack, ExtractionOptions } from "@/lib/lanternExtract";
+import { extract, computePackId, LanternPack, ExtractionOptions } from "@/lib/lanternExtract";
 import { cn } from "@/lib/utils";
 
 // Minimal Persistence Mock (using localStorage)
 const savePack = (pack: LanternPack) => {
   const existing = JSON.parse(localStorage.getItem("lantern_packs") || "[]");
-  // Overwrite if pack_id exists (deterministic updates)
+  // Overwrite ONLY if pack_id matches (same curation)
   const filtered = existing.filter((p: LanternPack) => p.pack_id !== pack.pack_id);
   filtered.push(pack);
   localStorage.setItem("lantern_packs", JSON.stringify(filtered));
@@ -65,24 +65,33 @@ export default function LanternExtract() {
   }, [step, showSaved]);
 
   const handleExtract = () => {
-    // Note: extract now returns stable_pack_id and stable_source_hash
-    const { items, stats, stable_pack_id, stable_source_hash } = extract(sourceText, extractOptions);
+    // Extract returns raw items and source hash
+    const { items, stats, stable_source_hash } = extract(sourceText, extractOptions);
+    
+    // Construct initial pack object
+    const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
+        schema: "lantern.extract.pack.v1",
+        engine: { name: "heuristic", version: "0.1.4" },
+        source: {
+          ...metadata,
+          retrieved_at: new Date().toISOString()
+        },
+        items,
+        stats
+    };
+
+    // Compute ID based on this initial state
+    const packId = computePackId(initialPackWithoutId, stable_source_hash);
     
     const newPack: LanternPack = {
-      schema: "lantern.extract.pack.v1",
-      pack_id: stable_pack_id, // Use stable ID
-      engine: { name: "heuristic", version: "0.1.4" },
-      source: {
-        ...metadata,
-        retrieved_at: new Date().toISOString()
-      },
+      ...initialPackWithoutId,
+      pack_id: packId,
       hashes: {
         source_text_sha256: stable_source_hash,
-        pack_sha256: "computed_on_save" 
-      },
-      items,
-      stats
+        pack_sha256: packId // Using ID as hash proxy for now
+      }
     };
+    
     setPack(newPack);
     setStep("extract");
   };
@@ -90,16 +99,13 @@ export default function LanternExtract() {
   const handleSave = () => {
     if (pack) {
       savePack(pack);
-      alert(`Pack ${pack.pack_id} saved/updated in local library.`);
+      alert(`Pack ${pack.pack_id} saved to library.`);
     }
   };
 
   const handleLoadPack = (loadedPack: LanternPack) => {
     setPack(loadedPack);
     setMetadata(loadedPack.source);
-    // Note: sourceText isn't in pack source schema (only metadata), 
-    // so we can't fully restore the input text unless we add it to the schema.
-    // For now, we restore the RESULTS.
     setSourceText("[Source text not stored in pack v1]");
     setStep("extract");
     setShowSaved(false);
@@ -107,17 +113,34 @@ export default function LanternExtract() {
 
   const toggleItem = (type: keyof LanternPack["items"], id: string) => {
     if (!pack) return;
-    setPack({
-      ...pack,
-      items: {
+    
+    const updatedItems = {
         ...pack.items,
         [type]: pack.items[type].map((item: any) => 
           item.id === id ? { ...item, included: !item.included } : item
         )
-      }
+    };
+    
+    // Recompute Pack ID because content changed
+    const packForHash: Omit<LanternPack, 'pack_id' | 'hashes'> = {
+        ...pack,
+        items: updatedItems
+    };
+    
+    const newPackId = computePackId(packForHash, pack.hashes.source_text_sha256);
+
+    setPack({
+      ...pack,
+      pack_id: newPackId,
+      hashes: {
+        ...pack.hashes,
+        pack_sha256: newPackId
+      },
+      items: updatedItems
     });
   };
 
+  // ... (Rest of component methods like downloadJSON, reset, render remain similar)
   const downloadJSON = () => {
     if (!pack) return;
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
@@ -132,7 +155,6 @@ export default function LanternExtract() {
 
   const downloadPDF = async () => {
     if (!pack) return;
-    // ... existing PDF logic (omitted for brevity, but functionality remains)
     alert("PDF generation triggered (mock)");
   };
 
@@ -388,6 +410,9 @@ export default function LanternExtract() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <h3 className="font-mono text-sm uppercase font-bold text-muted-foreground">Pack Summary</h3>
+                    <Badge variant="outline" className="font-mono text-[9px] text-muted-foreground">
+                       ID: {pack.pack_id.slice(0, 8)}...
+                    </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-xs font-mono">
                     <div className="flex justify-between p-2 bg-muted/30 rounded">

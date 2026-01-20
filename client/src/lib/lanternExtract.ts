@@ -56,7 +56,7 @@ export type EngineStats = {
 
 export type LanternPack = {
   schema: "lantern.extract.pack.v1";
-  pack_id: string;
+  pack_id: string; // The canonical ID of THIS curated artifact
   engine: {
     name: string;
     version: string;
@@ -71,8 +71,8 @@ export type LanternPack = {
     source_type: string;
   };
   hashes: {
-    source_text_sha256: string;
-    pack_sha256: string;
+    source_text_sha256: string; // Stable Source ID
+    pack_sha256: string; // Hash of the canonical content
   };
   items: {
     entities: EntityItem[];
@@ -118,14 +118,6 @@ const generateFamilyId = (text: string, type: string): string => {
   
   // Family ID combines: Root + Type + Casing
   return mockHash(`${root.toLowerCase()}|${type}|${casingKey}`);
-};
-
-// Stable Pack ID Generation (v0.1.5 Fix for Determinism)
-// Must depend ONLY on source text and engine version, NOT random UUIDs or timestamps.
-const generatePackId = (sourceText: string, engineVersion: string): string => {
-  const contentHash = mockHash(sourceText);
-  const engineHash = mockHash(engineVersion);
-  return `lex_${contentHash.slice(0, 6)}_${engineHash.slice(0, 4)}`;
 };
 
 // Normalize quote
@@ -266,17 +258,51 @@ const splitSentences = (text: string): Sentence[] => {
   return segments;
 };
 
-// Provenance Validator
-const validateItem = (item: BaseItem, fullText: string): boolean => {
+// Provenance Validator with Span Integrity Check
+const validateItem = (item: BaseItem, fullText: string, exactExpectedText?: string): boolean => {
   const { start, end } = item.provenance;
   if (start < 0 || end > fullText.length || start >= end) return false;
+  
+  // Span integrity check: verify extracted text matches source text exactly
+  if (exactExpectedText) {
+    const extractedSpan = fullText.slice(start, end);
+    // Allow minor whitespace diffs? No, strict.
+    if (extractedSpan !== exactExpectedText) {
+      return false; 
+    }
+  }
+  
   return true;
+};
+
+
+// --- PACK IDENTITY LOGIC ---
+
+// Compute Stable Pack ID (Source + Content + Curation)
+export const computePackId = (pack: Omit<LanternPack, 'pack_id' | 'hashes'>, sourceTextSha256: string): string => {
+  // Canonicalize items by ID and inclusion status
+  const signature = {
+    source: sourceTextSha256,
+    engine: pack.engine,
+    items: {
+      entities: pack.items.entities.map(i => ({ id: i.id, included: i.included, tags: i.tags.sort() })),
+      quotes: pack.items.quotes.map(i => ({ id: i.id, included: i.included })),
+      metrics: pack.items.metrics.map(i => ({ id: i.id, included: i.included })),
+      timeline: pack.items.timeline.map(i => ({ id: i.id, included: i.included }))
+    }
+  };
+  
+  // Deterministic stringify (JSON.stringify is acceptable for simple ordered objects or we use a stable sort)
+  // Since we map arrays in order (assuming engine emits deterministic order), this should be stable.
+  const signatureStr = JSON.stringify(signature);
+  const hash = mockHash(signatureStr);
+  return `lex_${hash.slice(0, 16)}`;
 };
 
 
 // --- Main Extraction Function ---
 
-export function extract(text: string, options: ExtractionOptions = { mode: "balanced" }): { items: LanternPack["items"], stats: EngineStats, stable_pack_id: string, stable_source_hash: string } {
+export function extract(text: string, options: ExtractionOptions = { mode: "balanced" }): { items: LanternPack["items"], stats: EngineStats, stable_source_hash: string } {
   const rawEntities: EntityItem[] = [];
   const rawQuotes: QuoteItem[] = [];
   const rawMetrics: MetricItem[] = [];
@@ -406,9 +432,26 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
       const prevSentence = sentIndex > 0 ? sentences[sentIndex - 1].text : "";
       const nextSentence = sentIndex < sentences.length - 1 ? sentences[sentIndex + 1].text : "";
       
-      // Heuristic: check next sentence only if it STARTS with a verb pattern or short connection?
-      // For safety, just checking context presence.
-      const searchContext = prevSentence + " " + sentence + " " + nextSentence;
+      // Forward Scan Guardrails:
+      // 1. Only scan one sentence forward (done, nextSentence)
+      // 2. Only if next sentence has speech verb AND explicit entity
+      
+      let searchContext = prevSentence + " " + sentence; // Default context
+
+      const nextSentenceHasVerb = attributionKeywords.some(kw => nextSentence.includes(kw));
+      if (nextSentenceHasVerb) {
+         // Check for entity presence in next sentence
+         // Simple heuristic: Does it have a Capitalized Word that is likely a name?
+         // We can reuse our entity regex or simplified check
+         const nextSentenceEntities = nextSentence.match(/([A-Z][a-z]+)/g);
+         // Filter stop words
+         const validNextEntities = nextSentenceEntities?.filter(e => !stopEntities.has(e) && e.length > 2) || [];
+         
+         if (validNextEntities.length > 0) {
+            // Safe to include next sentence in search context
+            searchContext += " " + nextSentence;
+         }
+      }
       
       if (attributionKeywords.some(kw => searchContext.includes(kw))) {
         const nearbyCaps = searchContext.match(/([A-Z][a-z]+)/g);
@@ -533,6 +576,8 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
   const entityMap = new Map<string, EntityItem>();
 
   for (const ent of rawEntities) {
+    // Validate Item with Span Integrity check implied by provenance
+    // (Here we just check bounds, but in extraction we took raw directly from match)
     if (!validateItem(ent, text)) {
       stats.invalid_dropped++;
       continue;
@@ -569,9 +614,10 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
     }
   }
 
-  // Metrics: Validation only
+  // Metrics: Validation with Span Integrity
   const validMetrics = rawMetrics.filter(m => {
-    const valid = validateItem(m, text);
+    // Check if the extracted text matches source exactly
+    const valid = validateItem(m, text, m.raw_value_text);
     if (!valid) stats.invalid_dropped++;
     return valid;
   });
@@ -593,10 +639,8 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
     }
   }
 
-  // Compute Stable ID components
-  const engineVersion = "0.1.4"; 
+  // Compute Source Hash (Stable ID for source text)
   const sourceHash = "sha256_" + mockHash(text);
-  const packId = generatePackId(text, engineVersion);
 
   return { 
     items: {
@@ -606,7 +650,6 @@ export function extract(text: string, options: ExtractionOptions = { mode: "bala
       timeline: dedupedTimeline
     },
     stats,
-    stable_pack_id: packId,
     stable_source_hash: sourceHash
   };
 }

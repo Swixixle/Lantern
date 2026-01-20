@@ -1,0 +1,107 @@
+You stabilized several of the right things (edge-case fixtures, span-anchored provenance for ranges, overwrite semantics in the library). The one item I would not accept as “done” is the new pack_id strategy.
+
+The issue
+
+pack_id = sha256(source_text) + sha256(engine_version)
+
+This guarantees same text + same engine → same ID, which is useful for source-level identity, but it is incorrect for pack-level identity.
+
+A “pack” is not just the source text. A pack is:
+	•	the source text plus
+	•	the extracted items produced by a specific engine config/mode plus
+	•	the user’s curation (toggles/tags) plus
+	•	any normalization choices
+
+With your current pack_id, all of these different packs collide into one ID and overwrite each other. That will silently destroy user work.
+
+Concrete example: same article, user curates different subsets for two different purposes → you currently force them to overwrite.
+
+What you actually built
+
+You created a deterministic source_id, not a pack_id.
+
+That’s good. Just name it correctly and use it correctly.
+
+⸻
+
+Correct identity model (minimal, still frontend-only)
+
+1) Stable Source ID
+
+This identifies the raw input text.
+	•	source_hash = sha256(source_text)
+	•	Optionally include stable metadata fields if they are truly stable (URL can be stable; retrieved_at is not).
+
+Store this on every pack. This lets you group packs under one source and dedupe sources.
+
+2) Stable Pack ID
+
+This identifies a specific exported artifact (curated extraction pack).
+
+Two acceptable options:
+
+Option A (best): hash the canonicalized curated pack
+	•	Build a canonical JSON representation (stable key order, no timestamps).
+	•	pack_hash = sha256(canonical_pack_json)
+	•	pack_id = "lex_" + pack_hash.slice(0, 16) (or full hash)
+
+This guarantees: if anything meaningful changes, the pack ID changes.
+
+Option B (acceptable): hash selection signature
+	•	selection_signature = sorted(list_of_item_ids_enabled + tags_normalized + mode + engine_version)
+	•	pack_hash = sha256(source_hash + selection_signature)
+	•	This is lighter than hashing the whole pack but still correct.
+
+3) Library keying (localStorage)
+
+Use:
+	•	Index: lantern.library.index.v1 → array of { pack_id, source_hash, title, saved_at, engine_version, mode }
+	•	Pack blob: lantern.pack.v1.<pack_id> → pack JSON
+	•	Source blob (optional): lantern.source.v1.<source_hash> → raw text + metadata
+
+Overwrite semantics
+
+Overwrite only when the pack_id matches (i.e., the pack is identical).
+Otherwise, create a new entry. If you want “latest wins,” implement it as UI behavior, not identity behavior.
+
+⸻
+
+Provenance + determinism checks: good, but add one more gate
+
+You already validated:
+	•	determinism (0 drifts)
+	•	provenance integrity (0 bounds errors)
+
+Add:
+	•	Span integrity for structured metrics
+	•	For every metric where you parse a range/ratio/rate, assert the raw_value_text equals the exact substring at offsets (you’ve mostly done this; keep it as a hard gate in the harness).
+
+⸻
+
+Quote forward-scan negative test: ensure it’s truly negative
+
+Make sure your fixture includes something like:
+	•	"I disagree." The market is volatile. Johnson later apologized.
+This must not attribute to Johnson via forward scan.
+
+Your rule should still require:
+	•	speech verb pattern + explicit entity in that next sentence.
+
+⸻
+
+Decision on “upgrade to full-stack”
+
+Still PARK. Your localStorage slice is the right move for now, and you should not add backend persistence until:
+	•	pack/source identity is correct
+	•	you have at least ~15–20 fixtures
+	•	you have basic quality scoring (not just invariants)
+
+⸻
+
+Bottom line
+	•	Fixture expansion: solid
+	•	Provenance anchoring for ranges: solid
+	•	Persistence UX: solid
+	•	pack_id logic: needs correction (it is a source ID)
+
+Classification: PROCEED (with mandatory ID-model fix before calling persistence “hardened”).
