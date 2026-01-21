@@ -464,7 +464,7 @@ export default function LanternExtract() {
             <div>
                <h1 className="text-2xl font-mono font-bold">Saved Packs</h1>
                <div className="flex items-center gap-2 mt-1">
-                 <p className="text-xs font-mono text-muted-foreground">IndexedDB Storage v1</p>
+                 <p className="text-xs font-mono text-muted-foreground">{storage.getBackendName()} v1</p>
                  {storageStatus === "saving" && <span className="text-[10px] text-amber-500 font-mono animate-pulse">SAVING...</span>}
                  {storageStatus === "saved" && <span className="text-[10px] text-emerald-500 font-mono">ALL CHANGES SAVED</span>}
                  {storageStatus === "error" && <span className="text-[10px] text-red-500 font-mono">STORAGE ERROR</span>}

@@ -1,6 +1,13 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { LanternPack } from "./lanternExtract";
 
+// --- Configuration ---
+// FEATURE FLAG: Controls persistence backend
+// Options: "localStorage" (M1 Default) | "indexedDB" (M1.75 Experimental)
+export const STORAGE_BACKEND: "localStorage" | "indexedDB" = "localStorage" as "localStorage" | "indexedDB";
+
+const LOCAL_STORAGE_KEY = "lantern_library_v1";
+
 // --- Types ---
 
 export interface LanternSchema extends DBSchema {
@@ -26,7 +33,62 @@ const DB_NAME = "lantern-db";
 const DB_VERSION = 1;
 const SCHEMA_VERSION = 1;
 
-// --- Core Storage Module ---
+// --- LocalStorage Backend (M1) ---
+
+const localStorageImpl = {
+  async loadLibrary(): Promise<LibraryState> {
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (!raw) {
+        return { schemaVersion: SCHEMA_VERSION, updatedAt: new Date().toISOString(), packs: [] };
+      }
+      const data = JSON.parse(raw);
+      // Basic validation
+      if (!data.packs || !Array.isArray(data.packs)) {
+          console.warn("Invalid localStorage format, resetting");
+          return { schemaVersion: SCHEMA_VERSION, updatedAt: new Date().toISOString(), packs: [] };
+      }
+      return data as LibraryState;
+    } catch (e) {
+      console.error("LocalStorage Load Error:", e);
+      return { schemaVersion: SCHEMA_VERSION, updatedAt: new Date().toISOString(), packs: [] };
+    }
+  },
+
+  async saveLibrary(packs: LanternPack[]): Promise<void> {
+    const state: LibraryState = {
+      schemaVersion: SCHEMA_VERSION,
+      updatedAt: new Date().toISOString(),
+      packs
+    };
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
+  },
+
+  async savePack(pack: LanternPack): Promise<void> {
+    const current = await this.loadLibrary();
+    const existingIndex = current.packs.findIndex(p => p.pack_id === pack.pack_id);
+    
+    if (existingIndex >= 0) {
+      current.packs[existingIndex] = pack;
+    } else {
+      current.packs.push(pack);
+    }
+    
+    await this.saveLibrary(current.packs);
+  },
+
+  async deletePacks(packIds: string[]): Promise<void> {
+    const current = await this.loadLibrary();
+    const newPacks = current.packs.filter(p => !packIds.includes(p.pack_id));
+    await this.saveLibrary(newPacks);
+  },
+
+  async clearLibrary(): Promise<void> {
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+  }
+};
+
+// --- IndexedDB Backend (M1.75 Experimental) ---
 
 let dbPromise: Promise<IDBPDatabase<LanternSchema>> | null = null;
 
@@ -46,18 +108,12 @@ function getDB() {
   return dbPromise;
 }
 
-// --- Migrations ---
-
 function migrate(pack: any): LanternPack {
-    // Identity migration for v1
-    // Future: check pack.schema or structure and transform
     if (!pack.schema) pack.schema = "lantern.extract.pack.v1";
     return pack as LanternPack;
 }
 
-// --- API ---
-
-export const storage = {
+const indexedDBImpl = {
   async loadLibrary(): Promise<LibraryState> {
     try {
       const db = await getDB();
@@ -69,7 +125,6 @@ export const storage = {
       
       await tx.done;
 
-      // Migration on Read (Lazy)
       const migratedPacks = packs.map(migrate);
 
       return {
@@ -79,7 +134,6 @@ export const storage = {
       };
     } catch (err) {
       console.error("Storage Load Error:", err);
-      // Fallback or rethrow based on severity. For now return empty.
       return { schemaVersion: SCHEMA_VERSION, updatedAt: new Date().toISOString(), packs: [] };
     }
   },
@@ -88,16 +142,8 @@ export const storage = {
     const db = await getDB();
     const tx = db.transaction(["packs", "meta"], "readwrite");
     
-    // 1. Update Meta
     await tx.objectStore("meta").put(SCHEMA_VERSION, "schemaVersion");
     await tx.objectStore("meta").put(new Date().toISOString(), "updatedAt");
-
-    // 2. Sync Packs (Naive: Clear & Put All for correctness in this MVP phase, 
-    //    Optimization: Diffing logic would go here in M5)
-    //    Actually, lets be smarter: Put all, we rely on IDs. 
-    //    But we need to handle deletions. The React State is authoritative for the "Library" view.
-    //    So we should reconcile.
-    //    Strategy: Clear Store -> Put All (Safe, simple for MVP < 100MB)
     
     await tx.objectStore("packs").clear();
     for (const pack of packs) {
@@ -108,7 +154,6 @@ export const storage = {
   },
   
   async savePack(pack: LanternPack): Promise<void> {
-      // Incremental Save
       const db = await getDB();
       const tx = db.transaction(["packs", "meta"], "readwrite");
       await tx.objectStore("packs").put(pack);
@@ -131,6 +176,34 @@ export const storage = {
     const db = await getDB();
     await db.clear("packs");
     await db.clear("meta");
+  }
+};
+
+// --- Facade ---
+
+export const storage = {
+  getBackendName() {
+      return STORAGE_BACKEND === "indexedDB" ? "IndexedDB (Exp)" : "LocalStorage";
+  },
+
+  async loadLibrary(): Promise<LibraryState> {
+    return STORAGE_BACKEND === "indexedDB" ? indexedDBImpl.loadLibrary() : localStorageImpl.loadLibrary();
+  },
+
+  async saveLibrary(packs: LanternPack[]): Promise<void> {
+    return STORAGE_BACKEND === "indexedDB" ? indexedDBImpl.saveLibrary(packs) : localStorageImpl.saveLibrary(packs);
+  },
+
+  async savePack(pack: LanternPack): Promise<void> {
+    return STORAGE_BACKEND === "indexedDB" ? indexedDBImpl.savePack(pack) : localStorageImpl.savePack(pack);
+  },
+
+  async deletePacks(packIds: string[]): Promise<void> {
+    return STORAGE_BACKEND === "indexedDB" ? indexedDBImpl.deletePacks(packIds) : localStorageImpl.deletePacks(packIds);
+  },
+
+  async clearLibrary(): Promise<void> {
+    return STORAGE_BACKEND === "indexedDB" ? indexedDBImpl.clearLibrary() : localStorageImpl.clearLibrary();
   }
 };
 

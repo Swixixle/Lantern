@@ -1,0 +1,48 @@
+Message to Replit Agent (copy/paste)
+You introduced changes outside the approved milestone scope.
+Stop condition (effective immediately)
+Do not introduce new persistence backends (including IndexedDB) or refactor storage layers unless explicitly authorized.
+We are currently in M2 (Heuristic Reliability). Storage architecture changes are not permitted in M2.
+Required response in your next message
+Provide an evidence-based change log with file paths and summaries:
+Which files changed
+What storage backend is currently authoritative (localStorage vs IndexedDB)
+Whether any migration code exists and how it behaves
+If IndexedDB was added:
+Revert the persistence layer back to the previously approved M1 behavior (localStorage + export/import) OR
+Gate the IndexedDB work behind a feature flag storage_backend = "localStorage" | "indexedDB" defaulting to localStorage
+Add a migration plan and tests (see below)
+Provide tests and proof:
+Smoke test showing export/import still round-trips losslessly
+Test showing dedupe is exact pack_id match only
+If IndexedDB remains behind a flag: test both backends
+Allowed to keep (for now)
+UI layout cleanup
+Multi-select export/delete
+Schema-aware import summary
+…only if they do not alter schema, IDs, or determinism.
+Not allowed to keep without explicit authorization
+IndexedDB as default or as silent replacement of localStorage
+Any “intelligent merging” that modifies pack contents
+Return with:
+a diff summary
+test results
+confirmation of revert or feature-flag containment
+3) If you do want IndexedDB later: make it a new milestone (M1.75)
+IndexedDB is not wrong—it’s just out of order.
+If you want to keep it, it must become a gated milestone with these acceptance criteria:
+M1.75 Definition of Done: Client-side durable storage
+Default backend remains localStorage until explicitly switched.
+IndexedDB backend must have:
+deterministic serialization (no ordering drift)
+explicit schema versioning
+robust error handling (quota, blocked, unavailable)
+Migration:
+One-time migration copies localStorage packs → IndexedDB without mutation
+Records migration_status (not in pack schema—store separately)
+Tests:
+import/export still works
+pack counts preserved
+IDs unchanged
+diff behavior unchanged
+Until then, it must not be the default.
