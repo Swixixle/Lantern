@@ -1,0 +1,79 @@
+Message to Replit Agent (copy/paste)
+You have a Lantern repo (client/server/shared, drizzle config, etc.). The app “does not work at all.” I need you to produce a current-state audit report and fix the minimum critical issues required to restore baseline functionality. Treat this like third-party product due diligence.
+A) Ground-truth audit report (must be evidence-based)
+Create a new file at repo root:
+AUDIT_REPORT.md
+The report must be based on what is actually in the repo right now, not on prior summaries. Include:
+1) Repo map + entrypoints (evidence)
+Provide an updated tree (top + 2 levels).
+Identify actual entrypoints for:
+client (Vite)
+server (Express/Fastify/etc. — determine by code)
+shared (types/contracts)
+Include exact scripts from package.json (copy them into the report).
+2) Runtime architecture (as built, not assumed)
+Confirm whether the app is truly “client-only” or actually full-stack (there is server/, drizzle.config.ts, storage.ts, etc.).
+Explain the actual data flow: UI → API routes → storage → return.
+3) “No network / secrets / telemetry” proof
+Run these searches and paste results into the report (line numbers included):
+Search for network calls in client + server:
+fetch, axios, XMLHttpRequest, WebSocket
+Search for external URLs and environment variables:
+http, https, process.env, import.meta.env, REPLIT_, OPENAI_
+Confirm if secrets are accessed; redact values but list variable names.
+4) Storage/persistence reality
+Identify the storage layer used:
+drizzle + sqlite/postgres? Replit DB? localStorage?
+Show the schema files (or summarize tables/columns if too long).
+Document where the app writes/reads data.
+5) Extraction engine audit (current code)
+List the extraction engine module(s) by path.
+Show:
+determinism approach (hashing, IDs)
+sentence segmentation strategy
+entity linkage rules
+metric normalization rules
+quality scoring + fixtures usage
+6) Known failure modes / risks
+Provide top 10 technical risks with severity and evidence.
+7) “Purchase-grade verdict”
+PROCEED / PARK / DISCARD based on current code health, with clear gating items.
+Commit AUDIT_REPORT.md to the repo.
+B) Restore baseline functionality (minimum viable fix set)
+Do NOT add features yet. First, make the app run.
+1) Reproduce and document failure
+Run the standard dev command(s) from package.json.
+Capture:
+terminal errors
+browser console errors
+server logs if present
+Add a section to AUDIT_REPORT.md: “Current breakage and root cause.”
+2) Fix only what is required to boot and operate the core flow
+Core flow definition:
+App loads without crash
+User can paste text
+Extraction runs
+Results render
+Saving a pack works (either local or DB, whichever the repo actually uses)
+Make the smallest changes possible. For each fix:
+Identify the file
+Explain the bug
+Explain the change
+Add a quick manual test step
+3) Add a smoke test
+Add a minimal script or test that verifies:
+extraction returns non-empty object for a basic text input
+pack save/load works
+If there’s an existing test harness, wire into it; otherwise create a simple script/smoke.ts runnable via npm script.
+Commit the fix(es).
+C) Deliverables checklist (must be present in final response)
+Link to AUDIT_REPORT.md (path)
+Exact commands to run the app locally in Replit
+Exact steps to verify core flow manually
+Summary of what was broken and what you changed
+Important constraints:
+Do not print secret values; redact them.
+Do not refactor broadly.
+Do not “improve” extraction logic until the app is stable.
+Why this is the right next move
+Your repo listing clearly indicates the earlier “client-only mockup mode” description is likely outdated (you have server/, drizzle.config.ts, storage.ts, shared/, etc.). The audit and the “app doesn’t work” complaint will not be resolved until the agent verifies what is actually wired up and restores the boot path.
