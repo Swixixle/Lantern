@@ -115,15 +115,37 @@ export default function LanternExtract() {
     setStep("extract");
   };
 
+import { createDossierFromExtract } from "@/lib/converters/extract_to_dossier";
+import { PackV1 } from "@/lib/schema/pack_v1";
+import { AnyPack } from "@/lib/storage"; // Import AnyPack
+
+// ...
+
+export default function LanternExtract() {
+  const [step, setStep] = useState<"input" | "extract" | "export" | "quality">("input");
+  const [showSaved, setShowSaved] = useState(false);
+  const [savedPacks, setSavedPacks] = useState<AnyPack[]>([]); // Update Type
+  const [filterSourceHash, setFilterSourceHash] = useState<string | null>(null);
+  
+  // Storage State
+  const [storageStatus, setStorageStatus] = useState<StorageStatus>("idle");
+  const [selectedPackIds, setSelectedPackIds] = useState<Set<string>>(new Set());
+
+// ...
+
   const handleSave = async () => {
     if (pack) {
       setStorageStatus("saving");
-      const existing = savedPacks.find(p => p.pack_id === pack.pack_id);
+      // Use type narrowing or casting since savedPacks is AnyPack[]
+      const existing = savedPacks.find(p => "pack_id" in p ? p.pack_id === pack.pack_id : p.packId === pack.pack_id);
       
       try {
           // Optimistic Update
           const newSaved = existing 
-            ? savedPacks.map(p => p.pack_id === pack.pack_id ? pack : p)
+            ? savedPacks.map(p => {
+                const pId = "pack_id" in p ? p.pack_id : p.packId;
+                return pId === pack.pack_id ? pack : p;
+            })
             : [...savedPacks, pack];
             
           setSavedPacks(newSaved);
@@ -144,431 +166,80 @@ export default function LanternExtract() {
     }
   };
 
-  const handleLoadPack = (loadedPack: LanternPack) => {
-    setPack(loadedPack);
-    setMetadata(loadedPack.source);
-    setSourceText("[Source text not stored in pack v1]");
-    setStep("extract");
-    setShowSaved(false);
-    setDiffMode(false);
-    setDiffResult(null);
-  };
-  
-  // Multi-Select Logic
-  const toggleSelectPack = (id: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      const newSet = new Set(selectedPackIds);
-      if (newSet.has(id)) newSet.delete(id);
-      else newSet.add(id);
-      setSelectedPackIds(newSet);
-  };
+  const handlePromoteToDossier = (extractPack: LanternPack) => {
+      const subjectName = prompt("Enter Subject Name for Dossier:", extractPack.source.title || "New Subject");
+      if (!subjectName) return;
 
-  const handleExportSelected = () => {
-      const packsToExport = savedPacks.filter(p => selectedPackIds.has(p.pack_id));
-      if (packsToExport.length === 0) return alert("Select packs to export.");
+      const dossier = createDossierFromExtract(extractPack, { subjectName });
       
-      const blob = new Blob([JSON.stringify(packsToExport, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `lantern_selection_${packsToExport.length}_packs.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-  };
-
-  // --- M2: Schema-Aware Import ---
-  const handleImportLibrary = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const content = e.target?.result as string;
-        const importedPacks = JSON.parse(content);
-        
-        if (!Array.isArray(importedPacks)) throw new Error("Invalid format: Expected array");
-        
-        // Report Counters
-        let added = 0;
-        let skipped = 0;
-        let updated = 0;
-        const errors = [];
-
-        // Current State Map
-        const packMap = new Map(savedPacks.map(p => [p.pack_id, p]));
-        
-        for (const p of importedPacks) {
-            // Minimal Schema Check
-            if (!p.pack_id || !p.items) {
-                errors.push(`Invalid Item: ${JSON.stringify(p).slice(0, 50)}...`);
-                continue;
-            }
-            
-            if (packMap.has(p.pack_id)) {
-                // Conflict: For now, we SKIP unless explicit overwrite (MVP: Skip)
-                // Future: Add toggle.
-                skipped++;
-            } else {
-                packMap.set(p.pack_id, p);
-                added++;
-            }
-        }
-        
-        const merged = Array.from(packMap.values());
-        
-        // Persist
-        debouncedSave({ packs: merged }, setStorageStatus);
-        setSavedPacks(merged);
-        
-        alert(`Import Report:\nAdded: ${added}\nSkipped (Duplicate): ${skipped}\nErrors: ${errors.length}`);
-        
-      } catch (err) {
-        alert("Failed to import: " + (err as Error).message);
-      }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleClearLibrary = async () => {
-    if (confirm("Are you sure? This will delete all saved packs from IndexedDB.")) {
-        await persistence.clearLibrary();
-        setSavedPacks([]);
-    }
-  };
-
-  // ... (Rest of existing logic: handleCompare, runQualityTests, toggleItem, downloadJSON)
-
-  // Compare Logic
-  const handleCompare = (targetPack: LanternPack) => {
-    if (!pack) return;
-    const diff = diffPacks(pack, targetPack); // Compare current (A) vs loaded (B)
-    setDiffResult(diff);
-    setDiffMode(true);
-    setDiffPackId(targetPack.pack_id);
-  };
-
-  // Quality Runner
-  const runQualityTests = () => {
-    setRunningTests(true);
-    setDeterminismStatus("pending");
-    setProvenanceStatus("pending");
-    
-    const reports: QualityReport[] = [];
-    const modeWarnings: string[] = [];
-    let determinismFail = false;
-    let provenanceFail = false;
-
-    // Helper to get stats for a mode
-    const getModeStats = (mode: ExtractionOptions["mode"]) => {
-        let totalCount = 0;
-        fixtures.forEach((fixture: any) => {
-             const { items } = extract(fixture.text, { mode });
-             const totalItems = items.entities.length + items.quotes.length + items.metrics.length;
-             totalCount += totalItems;
-        });
-        return { totalCount };
-    };
-
-    // Cross-Mode Validation
-    const consStats = getModeStats("conservative");
-    const broadStats = getModeStats("broad");
-
-    if (consStats.totalCount > broadStats.totalCount) {
-        modeWarnings.push(`Conservative emitted MORE items (${consStats.totalCount}) than Broad (${broadStats.totalCount}) (Suspicious)`);
-    }
-    setModeValidation({ pass: modeWarnings.length === 0, warnings: modeWarnings });
-
-
-    // Main Test Run (Balanced Mode default)
-    fixtures.forEach((fixture: any) => {
-      // 1. Provenance Integrity Check
-      const result = extract(fixture.text, { mode: "balanced" });
-      if (result.stats.invalid_dropped > 0) {
-          provenanceFail = true;
-      }
-
-      // 2. Determinism Check (Run 5x)
-      const baseHash = computePackId({
-          schema: "lantern.extract.pack.v1",
-          engine: { name: "heuristic", version: "0.1.5" },
-          source: { title: "Test", author: "Test", publisher: "Test", url: "", published_at: "", source_type: "News", retrieved_at: "TIME_IGNORED" },
-          items: result.items,
-          stats: result.stats
-      }, result.stable_source_hash);
-
-      for(let i=0; i<4; i++) {
-          const rerun = extract(fixture.text, { mode: "balanced" });
-          const rerunHash = computePackId({
-              schema: "lantern.extract.pack.v1",
-              engine: { name: "heuristic", version: "0.1.5" },
-              source: { title: "Test", author: "Test", publisher: "Test", url: "", published_at: "", source_type: "News", retrieved_at: "TIME_IGNORED" },
-              items: rerun.items,
-              stats: rerun.stats
-          }, rerun.stable_source_hash);
-          
-          if (rerunHash !== baseHash) determinismFail = true;
-      }
-
-      // 3. Scoring
-      const { items } = result;
-      const failures: string[] = [];
-
-      // Helper: normalize string for fuzzy check
-      // MUST MATCH QUALITY CONTRACT
-      const norm = (s: any) => String(s).trim().replace(/\s+/g, " ").replace(/[–—]/g, "-").replace(/,/g, "").toLowerCase();
-
-      // Metrics Score (Strict-ish)
-      let metricScore = { metrics: { precision: 1, recall: 1, f1: 1 }, matches: 0, expected: 0, actual: 0, false_positives: 0, false_negatives: 0 };
-      if (fixture.expected_metrics) {
-        metricScore = scoreExtraction(items.metrics, fixture.expected_metrics, (actual, expected) => {
-          // STRICT KIND check
-          if (actual.metric_kind !== expected.metric_kind) return false;
-          // STRICT UNIT check
-          if (norm(actual.unit) !== norm(expected.unit)) return false;
-
-          // Flexible Value Match
-          if (expected.metric_kind === "range") {
-             return actual.range_low === expected.range_low && 
-                    actual.range_high === expected.range_high;
-          }
-          return norm(actual.value).includes(norm(expected.value.split(" ")[0]));
-        });
-      }
-
-      // Quotes Score
-      let quoteScore = { metrics: { precision: 1, recall: 1, f1: 1 }, matches: 0, expected: 0, actual: 0, false_positives: 0, false_negatives: 0 };
-      if (fixture.expected_quotes) {
-        quoteScore = scoreExtraction(items.quotes, fixture.expected_quotes, (actual, expected) => {
-          const quoteMatch = norm(actual.quote).includes(norm(expected.quote));
-          if (!quoteMatch) return false;
-          if (expected.speaker && norm(actual.speaker) !== norm(expected.speaker)) return false;
-          return true;
-        });
-      }
-
-      // Entity Score
-      let entityScore = { metrics: { precision: 1, recall: 1, f1: 1 }, matches: 0, expected: 0, actual: 0, false_positives: 0, false_negatives: 0 };
-      if (fixture.expected_entities) {
-        entityScore = scoreExtraction(items.entities, fixture.expected_entities, (actual, expected) => {
-          return norm(actual.text) === norm(expected.text) && actual.type === expected.type;
-        });
-      }
-
-      // Aggregate Score
-      const scores = [];
-      if (fixture.expected_metrics) scores.push(metricScore.metrics.f1);
-      if (fixture.expected_quotes) scores.push(quoteScore.metrics.f1);
-      if (fixture.expected_entities) scores.push(entityScore.metrics.f1);
+      const newSaved = [...savedPacks, dossier];
+      setSavedPacks(newSaved);
+      debouncedSave({ packs: newSaved }, setStorageStatus);
       
-      const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 1;
-
-      reports.push({
-        fixture_id: fixture.id,
-        score: avgScore,
-        metrics: {
-          precision: (metricScore.metrics.precision + quoteScore.metrics.precision + entityScore.metrics.precision) / 3, // rough avg
-          recall: (metricScore.metrics.recall + quoteScore.metrics.recall + entityScore.metrics.recall) / 3,
-          f1: avgScore
-        },
-        details: {
-          expected: (fixture.expected_metrics?.length || 0) + (fixture.expected_quotes?.length || 0) + (fixture.expected_entities?.length || 0),
-          actual: items.metrics.length + items.quotes.length + items.entities.length,
-          matches: metricScore.matches + quoteScore.matches + entityScore.matches,
-          false_positives: metricScore.false_positives + quoteScore.false_positives + entityScore.false_positives,
-          false_negatives: metricScore.false_negatives + quoteScore.false_negatives + entityScore.false_negatives
-        },
-        failures
-      });
-    });
-
-    setQualityReports(reports);
-    setDeterminismStatus(determinismFail ? "fail" : "pass");
-    setProvenanceStatus(provenanceFail ? "fail" : "pass");
-    setRunningTests(false);
+      alert(`Dossier Created: ${dossier.subjectName} (ID: ${dossier.packId.slice(0,8)})`);
   };
 
-  // ... (toggleItem, downloadJSON, downloadPDF, reset - existing)
-  const toggleItem = (type: keyof LanternPack["items"], id: string) => {
-    if (!pack) return;
-    
-    const updatedItems = {
-        ...pack.items,
-        [type]: pack.items[type].map((item: any) => 
-          item.id === id ? { ...item, included: !item.included } : item
-        )
-    };
-    
-    const packForHash: Omit<LanternPack, 'pack_id' | 'hashes'> = {
-        ...pack,
-        items: updatedItems
-    };
-    
-    const newPackId = computePackId(packForHash, pack.hashes.source_text_sha256);
-
-    setPack({
-      ...pack,
-      pack_id: newPackId,
-      hashes: {
-        ...pack.hashes,
-        pack_sha256: newPackId
-      },
-      items: updatedItems
-    });
-  };
-
-  const downloadJSON = () => {
-    if (!pack) return;
-    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `lantern-pack-${pack.pack_id}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const downloadPDF = async () => {
-    if (!pack) return;
-    alert("PDF generation triggered (mock)");
-  };
-
-  const reset = () => {
-    setStep("input");
-    setSourceText("");
-    setMetadata({
-      title: "",
-      author: "",
-      publisher: "",
-      url: "",
-      published_at: "",
-      source_type: "News"
-    });
-    setPack(null);
-    setDiffMode(false);
-    setDiffResult(null);
-  };
+// ... In Render Loop ...
 
   // Filtered Packs for Library
+  // Updated to handle both types safely
   const displayedPacks = filterSourceHash 
-    ? savedPacks.filter(p => p.hashes.source_text_sha256 === filterSourceHash)
+    ? savedPacks.filter(p => {
+        if ("hashes" in p) {
+            return p.hashes.source_text_sha256 === filterSourceHash;
+        }
+        return false; // Hide dossiers when filtering by source hash for now
+    })
     : savedPacks;
 
-  // Render Saved Packs List (Library)
-  if (showSaved) {
-    return (
-      <div className="min-h-screen bg-background text-foreground p-6 md:p-12 font-sans">
-        <div className="max-w-4xl mx-auto space-y-8">
-          <header className="border-b border-border pb-6 flex items-end justify-between">
-            <div>
-               <h1 className="text-2xl font-mono font-bold">Saved Packs</h1>
-               <div className="flex items-center gap-2 mt-1">
-                 <p className="text-xs font-mono text-muted-foreground">IndexedDB v1</p>
-                 {storageStatus === "saving" && <span className="text-[10px] text-amber-500 font-mono animate-pulse">SAVING...</span>}
-                 {storageStatus === "saved" && <span className="text-[10px] text-emerald-500 font-mono">ALL CHANGES SAVED</span>}
-                 {storageStatus === "error" && <span className="text-[10px] text-red-500 font-mono">STORAGE ERROR</span>}
-               </div>
-            </div>
-            <Button variant="ghost" onClick={() => setShowSaved(false)}>Back to Editor</Button>
-          </header>
+// ... Inside Card Loop ...
 
-          <div className="flex items-center gap-4 bg-muted/20 p-2 rounded-md">
-            <Button 
-                variant={filterSourceHash ? "secondary" : "ghost"} 
-                size="sm"
-                onClick={() => setFilterSourceHash(null)}
-                className="text-xs font-mono"
-            >
-                All Sources
-            </Button>
-             {filterSourceHash && (
-                 <Badge variant="outline" className="font-mono text-xs">
-                    Source: {filterSourceHash.slice(0, 8)}...
-                    <Button variant="ghost" size="icon" className="h-3 w-3 ml-2 p-0" onClick={() => setFilterSourceHash(null)}>×</Button>
-                 </Badge>
-             )}
-          </div>
-
-          <div className="flex gap-2 justify-end border-b border-border pb-4">
-             <div className="relative">
-                <input 
-                  type="file" 
-                  accept=".json" 
-                  onChange={handleImportLibrary}
-                  className="absolute inset-0 opacity-0 cursor-pointer"
-                />
-                <Button variant="outline" size="sm" className="font-mono text-xs">
-                   <Upload className="w-3 h-3 mr-2" /> Import JSON
-                </Button>
-             </div>
-             {selectedPackIds.size > 0 ? (
-                 <Button variant="default" size="sm" onClick={handleExportSelected} className="font-mono text-xs bg-cyan-500 text-black hover:bg-cyan-400">
-                    <Download className="w-3 h-3 mr-2" /> Export Selected ({selectedPackIds.size})
-                 </Button>
-             ) : (
-                 <Button variant="outline" size="sm" disabled className="font-mono text-xs opacity-50">
-                    <Download className="w-3 h-3 mr-2" /> Select to Export
-                 </Button>
-             )}
-             <Button variant="destructive" size="sm" onClick={handleClearLibrary} className="font-mono text-xs">
-                <Trash2 className="w-3 h-3 mr-2" /> Clear All
-             </Button>
-          </div>
-
-          <div className="grid gap-4">
-            {displayedPacks.length === 0 && <p className="text-muted-foreground font-mono">No packs found.</p>}
-            {displayedPacks.map(p => (
-              <Card key={p.pack_id} className="hover:border-cyan-500 transition-colors group">
-                <CardContent className="p-4 flex justify-between items-center cursor-default">
-                  <div className="flex items-center gap-2 mr-2">
-                     <Checkbox 
-                        checked={selectedPackIds.has(p.pack_id)}
-                        onCheckedChange={(c) => {
-                            const newSet = new Set(selectedPackIds);
-                            if (c) newSet.add(p.pack_id);
-                            else newSet.delete(p.pack_id);
-                            setSelectedPackIds(newSet);
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                     />
-                  </div>
-                  <div className="flex-1 cursor-pointer" onClick={() => handleLoadPack(p)}>
+                  <div className="flex-1 cursor-pointer" onClick={() => "pack_id" in p ? handleLoadPack(p) : alert("Dossier View Not Implemented Yet")}>
                     <div className="flex items-center gap-2 mb-1">
-                        <p className="font-bold font-mono text-sm">{p.source.title || "Untitled Source"}</p>
-                        <Badge variant="secondary" className="text-[10px] font-mono opacity-50">{p.engine.name} v{p.engine.version}</Badge>
-                        {pack && pack.pack_id !== p.pack_id && pack.hashes.source_text_sha256 === p.hashes.source_text_sha256 && (
+                        <p className="font-bold font-mono text-sm">
+                            {"source" in p ? p.source.title : (p as PackV1).subjectName}
+                        </p>
+                        {"engine" in p ? (
+                            <Badge variant="secondary" className="text-[10px] font-mono opacity-50">{p.engine.name} v{p.engine.version}</Badge>
+                        ) : (
+                            <Badge variant="outline" className="text-[10px] font-mono border-blue-500 text-blue-500">DOSSIER v1</Badge>
+                        )}
+                        
+                        {pack && "pack_id" in p && pack.pack_id !== p.pack_id && pack.hashes.source_text_sha256 === p.hashes.source_text_sha256 && (
                            <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-500">Diff Candidate</Badge>
                         )}
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
-                        <span className="flex items-center gap-1"><Hash className="w-3 h-3"/> {p.pack_id.slice(0, 8)}</span>
-                        <span>{new Date(p.source.retrieved_at).toLocaleDateString()}</span>
-                        <span className="text-cyan-500/70 hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); setFilterSourceHash(p.hashes.source_text_sha256); }}>
-                             Src: {p.hashes.source_text_sha256.slice(0, 6)}
+                        <span className="flex items-center gap-1"><Hash className="w-3 h-3"/> {("pack_id" in p ? p.pack_id : (p as PackV1).packId).slice(0, 8)}</span>
+                        <span>
+                            {"source" in p 
+                                ? new Date(p.source.retrieved_at).toLocaleDateString() 
+                                : new Date((p as PackV1).timestamps.updated).toLocaleDateString()}
                         </span>
+                        {"hashes" in p && (
+                            <span className="text-cyan-500/70 hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); setFilterSourceHash(p.hashes.source_text_sha256); }}>
+                                Src: {p.hashes.source_text_sha256.slice(0, 6)}
+                            </span>
+                        )}
                     </div>
                   </div>
                   
                   <div className="flex items-center gap-2">
-                      {pack && pack.hashes.source_text_sha256 === p.hashes.source_text_sha256 && pack.pack_id !== p.pack_id && (
-                        <Button variant="outline" size="sm" className="h-8 text-xs font-mono" onClick={() => handleCompare(p)}>
+                      {"schema" in p && p.schema === "lantern.extract.pack.v1" && (
+                         <Button variant="outline" size="sm" className="h-8 text-xs font-mono bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/50" onClick={(e) => { e.stopPropagation(); handlePromoteToDossier(p as LanternPack); }}>
+                            Promote
+                         </Button>
+                      )}
+                      {pack && "pack_id" in p && "hashes" in p && pack.hashes.source_text_sha256 === p.hashes.source_text_sha256 && pack.pack_id !== p.pack_id && (
+                        <Button variant="outline" size="sm" className="h-8 text-xs font-mono" onClick={() => handleCompare(p as LanternPack)}>
                            <GitCompare className="w-3 h-3 mr-2" /> Diff
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => handleLoadPack(p)}>
+                      <Button variant="ghost" size="icon" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : alert("Dossier View Not Implemented Yet")}>
                          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-cyan-500" />
                       </Button>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
+
 
   // Quality Dashboard
   if (step === "quality") {
@@ -713,9 +384,9 @@ export default function LanternExtract() {
                    <p className="text-blue-500 font-bold mb-1">~{diffResult.stats.changed_count} Changed</p>
                    {diffResult.changed.slice(0,3).map((d, i) => (
                       <div key={i} className="truncate opacity-70 flex items-center gap-1">
-                         <span>{d.type === 'entities' ? d.from.text : 'Item'}</span>
+                         <span>{d.type === 'entities' ? (d.from as any).text : 'Item'}</span>
                          <ArrowRight className="w-2 h-2" />
-                         <span>{d.type === 'entities' ? d.to.text : 'Item'}</span>
+                         <span>{d.type === 'entities' ? (d.to as any).text : 'Item'}</span>
                       </div>
                    ))}
                 </div>

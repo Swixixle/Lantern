@@ -54,34 +54,27 @@ export type EngineStats = {
   headlines_suppressed: number;
 };
 
-export type LanternPack = {
-  pack_id: string;
-  schema: string;
-  hashes: {
-    source_text_sha256: string;
-    pack_sha256: string;
-  };
-  engine: {
-    name: string;
-    version: string;
-  };
-  source: {
-    title: string;
-    author: string;
-    publisher: string;
-    url: string;
-    published_at: string;
-    retrieved_at: string;
-    source_type: string;
-  };
-  items: {
-    entities: EntityItem[];
-    quotes: QuoteItem[];
-    metrics: MetricItem[];
-    timeline: TimelineItem[];
-  };
-  stats: EngineStats;
-};
+export const LanternPackSchema = z.object({
+  pack_id: z.string(),
+  schema: z.literal("lantern.extract.pack.v1"),
+  // ... (Full validation schema would go here, keeping it minimal for discriminators)
+  hashes: z.object({
+      source_text_sha256: z.string(),
+      pack_sha256: z.string()
+  }),
+  // Allow other props loosely for now or define strictly
+  engine: z.any(),
+  source: z.any(),
+  items: z.any(),
+  stats: z.any()
+});
+
+export const AnyPackSchema = z.discriminatedUnion("schema", [
+  LanternPackSchema,
+  // We need to re-import PackV1Schema here or define a compatible stub if circular deps issue
+  // Ideally, import from schema/pack_v1.ts
+]);
+
 
 export type ExtractionOptions = {
   mode: "conservative" | "balanced" | "broad";

@@ -1,13 +1,17 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { LanternPack } from "./lanternExtract";
+import { PackV1, PackV1Schema } from "./schema/pack_v1";
 
-const DB_NAME = "lantern-db";
-const DB_VERSION = 1;
+// --- Types ---
+
+// The Discriminated Union
+export type AnyPack = LanternPack | PackV1;
+
 export const SCHEMA_VERSION = 1;
 
 // The core data shape
 export type LibraryState = {
-  packs: LanternPack[];
+  packs: AnyPack[];
 };
 
 // The persistent record shape

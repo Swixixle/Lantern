@@ -1,0 +1,155 @@
+Proceed with a union in LibraryState (discriminated by schema), and implement a converter (not a migration) from LanternPack → PackV1 as an explicit user action (“Promote to Dossier” / “Create Dossier from Extract”). Do not hard-migrate existing extracted packs into dossier packs.
+
+Why this is the correct architecture
+	•	LanternPack is machine-extracted, noisy, provenance-heavy. It is an input artifact.
+	•	PackV1 is curated, claim-bearing, relationship-bearing. It is an output artifact.
+	•	Conflating them via a “migration” will either (a) destroy meaning or (b) force you to invent claim/edge semantics you cannot justify.
+
+So: keep both. Convert when the user chooses to turn an extraction into a dossier.
+
+⸻
+
+1) LibraryState design directive
+
+Use a discriminated union by schema
+
+Keep the existing string you already have:
+	•	LanternPack.schema = "lantern.extract.pack.v1"
+	•	PackV1.schema = "lantern.dossier.pack.v1" (or similar—pick a stable name)
+
+Then:
+
+type AnyPack = LanternPack | PackV1;
+
+type LibraryState = {
+  packs: AnyPack[];
+  // ... other library fields
+};
+
+Enforce via Zod discriminated union
+
+In your library schema validation:
+
+const AnyPackSchema = z.discriminatedUnion("schema", [
+  LanternPackSchema,
+  PackV1Schema.extend({ schema: z.literal("lantern.dossier.pack.v1") }),
+]);
+
+Result: export/import, persistence, merge logic, and schema validation all remain straightforward.
+
+⸻
+
+2) Do you need a migration now?
+
+No. Implement a converter now.
+
+Migration is for: “same conceptual object, new schema version.”
+Converter is for: “different conceptual objects, different intent.”
+
+You are in converter territory.
+
+⸻
+
+3) Converter: LanternPack → PackV1 mapping (practical, non-fictional)
+
+Create client/src/lib/converters/extract_to_dossier.ts:
+
+export function createDossierFromExtract(extract: LanternPack, opts?: {
+  subjectName?: string;
+  packType?: "public_figure" | "topic_ecosystem";
+}): PackV1
+
+Mapping rules (v1, conservative)
+
+A) Pack metadata
+	•	packId = new UUID (do not reuse pack_id to avoid semantic collision)
+	•	Add sourceExtractPackId = extract.pack_id in a dossier metadata block (recommended)
+	•	packType:
+	•	default "public_figure" if opts.subjectName provided, else "topic_ecosystem"
+	•	schemaVersion = 1
+
+B) Entities
+Map extract.items.entities → PackV1.entities:
+	•	id = preserve if already UUID-like; otherwise generate stable IDs (e.g., hash of type:text)
+	•	name = text
+	•	type = map your extract entity types into dossier types (define a mapping table)
+	•	aliases/tags start empty unless your extract has them
+
+Important: Don’t fabricate edges from entities alone.
+
+C) Evidence
+This is where you must be disciplined.
+	•	quotes[] becomes Evidence entries (sourceType: "quote"), not “Claims.”
+	•	Evidence title: Quote: "<first 50 chars>..."
+	•	publisher/speaker goes into notes or a speaker field if your schema has it
+	•	If your extract has source metadata (URL, doc title, etc.), create an Evidence item for that too (sourceType: "source_document")
+
+D) Claims
+Create claims only when you can do so without inventing semantics.
+
+Recommended v1 behavior:
+	•	For each quote:
+	•	create a Claim with claimType: "fact"? No.
+	•	create a Claim with claimType: "opinion" if it’s clearly opinionated, otherwise default to “allegation” or “inference”? Also risky.
+	•	The safest default: create no claims automatically, and instead add “Quote evidence items” ready to be attached to human-authored claims.
+
+If you want a minimally helpful default without defamation risk:
+	•	Create a claim for each quote with:
+	•	text = "Quote attributed to {speaker}: {quote}"
+	•	claimType = "fact" only in the narrow sense “this quote exists,” not “its content is true”
+	•	Add an internal flag like claimScope: "existence_of_statement" (or store it in notes)
+	•	evidenceIds = [thatQuoteEvidenceId]
+
+This keeps claims “truth-minimal.”
+
+E) Timeline
+Timeline entries can map to:
+	•	Evidence (sourceType: "timeline_event") and/or
+	•	A “Fact of record” claim only if you treat it as “timeline entry exists” unless you have primary sourcing.
+
+Again: do not assert the event occurred unless sourced.
+
+⸻
+
+4) How to expose this in UI (so it becomes a workflow, not hidden code)
+
+On an extracted pack page:
+	•	Button: “Create Dossier from Extract”
+	•	asks for: subject name (optional), packType
+	•	creates PackV1
+	•	adds it to LibraryState
+	•	links back to the source extract pack
+
+This supports your actual use case:
+	•	Extract = raw intake
+	•	Dossier = curated, publishable, claim-bearing object
+
+⸻
+
+5) Merge/import implications (important)
+
+Update your merge logic to be schema-aware:
+	•	If schema differs, treat as different pack types; no cross-merging.
+	•	For PackV1 ID conflicts:
+	•	default: skip (preserve existing)
+	•	optional: overwrite
+
+This avoids “extract pack accidentally overwrites dossier pack.”
+
+⸻
+
+6) Immediate next step (directive)
+
+Implement the converter + UI action now, then add tests:
+	1.	createDossierFromExtract() produces valid PackV1 (Zod parse passes)
+	2.	Evidence count matches inputs (quotes → evidence)
+	3.	Dossier stores sourceExtractPackId
+	4.	Round-trip export/import retains both pack types in the same library
+
+⸻
+
+Final answer to your question
+
+Make LibraryState.packs a discriminated union (LanternPack | PackV1)[] and implement a converter now. Do not migrate. This preserves epistemic integrity and matches the real workflow: extraction → curation → heuristics.
+
+If you paste your current LanternPackSchema (or the Zod) and your existing entity type enum, I will provide an exact mapping table and a concrete converter implementation skeleton consistent with your codebase conventions.
