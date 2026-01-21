@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { v4 as uuidv4 } from "uuid";
 import { 
   PackV1Schema, 
   PackV1, 
@@ -22,19 +23,20 @@ export function createDossierFromExtract(
 ): PackV1 {
   
   // 1. Metadata
-  const packId = crypto.randomUUID(); // New ID for the dossier
+  const packId = uuidv4();
   const created = new Date().toISOString();
   
   const dossier: PackV1 = {
     packId,
     packType: opts.packType || (opts.subjectName ? "public_figure" : "topic_ecosystem"),
     schemaVersion: 1,
-    subjectName: opts.subjectName || extract.source.title || "Untitled Subject",
+    subjectName: opts.subjectName || extract.source?.title || "Untitled Subject",
     timestamps: { created, updated: created },
     entities: [],
     edges: [],
     evidence: [],
-    claims: []
+    claims: [],
+    sourceExtractPackId: extract.pack_id
   };
 
   // 2. Convert Entities
@@ -43,7 +45,7 @@ export function createDossierFromExtract(
     const norm = t.toLowerCase();
     if (norm === "person") return "person";
     if (norm === "organization") return "org";
-    if (norm === "location") return "asset"; // Treat locations as assets for now
+    if (norm === "location") return "asset"; // Tagged later
     if (norm === "event") return "event";
     if (norm === "product") return "asset";
     return "org"; // Default fallback
@@ -54,30 +56,44 @@ export function createDossierFromExtract(
   extract.items.entities.forEach((e: EntityItem) => {
     if (!e.included) return;
     
-    // Generate stable ID for dossier entity to allow merging duplicates later if needed
-    // But for now, just map 1:1 using new UUIDs to decouple
-    const newId = crypto.randomUUID();
+    const newId = uuidv4();
     entityMap.set(e.id, newId);
+
+    const mappedType = mapEntityType(e.type);
+    const tags = ["imported_from_extract"];
+    
+    // Explicitly tag remapped types
+    if (e.type.toLowerCase() === "location" && mappedType === "asset") {
+        tags.push("source_entity_type:location");
+    }
 
     dossier.entities.push({
       id: newId,
-      type: mapEntityType(e.type),
+      type: mappedType,
       name: e.text,
       aliases: [],
-      tags: ["imported_from_extract"]
+      tags
     });
   });
 
   // 3. Convert Evidence (Source Document)
-  // Create a master evidence item for the source text itself
-  const sourceEvidenceId = crypto.randomUUID();
+  const sourceEvidenceId = uuidv4();
+  
+  const normalizeSourceType = (s?: string) => {
+    const v = (s || "").toLowerCase();
+    if (v.includes("news")) return "News";
+    if (v.includes("filing")) return "Filing";
+    if (v.includes("transcript")) return "Transcript";
+    return "Unknown";
+  };
+
   dossier.evidence.push({
     id: sourceEvidenceId,
-    sourceType: extract.source.source_type || "News",
-    publisher: extract.source.publisher,
-    title: extract.source.title,
-    url: extract.source.url,
-    date: extract.source.published_at || created,
+    sourceType: normalizeSourceType(extract.source?.source_type),
+    publisher: extract.source?.publisher || "Unknown",
+    title: extract.source?.title || "Untitled Source",
+    url: extract.source?.url,
+    date: extract.source?.published_at || created,
     excerpt: "Full source text extract.",
     notes: `Original Extract ID: ${extract.pack_id}`
   });
@@ -86,27 +102,29 @@ export function createDossierFromExtract(
   extract.items.quotes.forEach((q: QuoteItem) => {
     if (!q.included) return;
 
-    const evidenceId = crypto.randomUUID();
+    const evidenceId = uuidv4();
     
     // Quote as Evidence
     dossier.evidence.push({
       id: evidenceId,
-      sourceType: "quote",
+      sourceType: "quote", // Allowed as loose string in schema for now, or tighten later
       publisher: q.speaker || "Unknown Speaker",
       title: `Quote: "${q.quote.slice(0, 50)}..."`,
-      date: extract.source.published_at || created,
+      date: extract.source?.published_at || created,
       excerpt: q.quote,
       notes: q.speaker ? `Attributed to ${q.speaker}` : "Unattributed"
     });
 
     // "Existence of Statement" Claim (Safe Default)
-    // We do NOT assert the content is true, only that the speaker said it.
-    const claimId = crypto.randomUUID();
+    const claimId = uuidv4();
+    const speaker = q.speaker?.trim() || "Unknown speaker";
+    const claimText = `This source attributes the following statement to ${speaker}: "${q.quote}"`;
+
     dossier.claims.push({
       id: claimId,
-      text: `Statement by ${q.speaker || "Unknown"}: "${q.quote}"`,
-      claimType: "fact", // Fact: "They said this"
-      confidence: 1.0,
+      text: claimText,
+      claimType: "fact", // Fact of utterance
+      confidence: speaker === "Unknown speaker" ? 0.7 : 0.9,
       evidenceIds: [evidenceId, sourceEvidenceId], // Link to quote + source doc
       counterEvidenceIds: [],
       createdAt: created
@@ -117,23 +135,22 @@ export function createDossierFromExtract(
   extract.items.timeline.forEach((t: TimelineItem) => {
     if (!t.included) return;
 
-    const evidenceId = crypto.randomUUID();
+    const evidenceId = uuidv4();
     dossier.evidence.push({
       id: evidenceId,
       sourceType: "timeline_event",
       title: `Event: ${t.event} (${t.date})`,
-      date: created, // We don't have a reliable ISO date from timeline yet, just string
+      date: created, // Keep created as the strict ISO date
       excerpt: t.event,
-      notes: `Extracted date string: ${t.date}`
+      notes: `Extracted date string: ${t.date}` // Preserve original string here
     });
   });
 
   // 6. Metrics -> Claims (Fact)
-  // Metrics are usually factual claims about numbers
   extract.items.metrics.forEach((m: any) => {
      if (!m.included) return;
      
-     const claimId = crypto.randomUUID();
+     const claimId = uuidv4();
      dossier.claims.push({
         id: claimId,
         text: `Metric: ${m.value} ${m.unit} (${m.metric_kind})`,
@@ -144,6 +161,9 @@ export function createDossierFromExtract(
         createdAt: created
      });
   });
-
-  return dossier;
+  
+  // Final Validation
+  dossier.timestamps.updated = new Date().toISOString();
+  return PackV1Schema.parse(dossier);
 }
+

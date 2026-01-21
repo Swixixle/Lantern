@@ -91,7 +91,8 @@ export const PackV1Schema = z.object({
   entities: z.array(EntitySchema).default([]),
   edges: z.array(EdgeSchema).default([]),
   evidence: z.array(EvidenceSchema).default([]),
-  claims: z.array(ClaimSchema).default([])
+  claims: z.array(ClaimSchema).default([]),
+  sourceExtractPackId: z.string().optional()
 });
 
 // --- Types (inferred) ---

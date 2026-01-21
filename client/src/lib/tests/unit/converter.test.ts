@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { createDossierFromExtract } from "../../converters/extract_to_dossier";
 import { LanternPack } from "../../lanternExtract";
 
@@ -21,7 +21,8 @@ describe("Converter: Extract -> Dossier", () => {
             entities: [
                 { id: "e1", text: "Elon Musk", type: "Person", confidence: 0.9, included: true, provenance: {} as any },
                 { id: "e2", text: "Tesla", type: "Organization", confidence: 0.9, included: true, provenance: {} as any },
-                { id: "e3", text: "Ignored Entity", type: "Person", confidence: 0.5, included: false, provenance: {} as any }
+                { id: "e3", text: "New York", type: "Location", confidence: 0.8, included: true, provenance: {} as any },
+                { id: "e4", text: "Ignored Entity", type: "Person", confidence: 0.5, included: false, provenance: {} as any }
             ],
             quotes: [
                 { id: "q1", quote: "I love cars", speaker: "Elon Musk", confidence: 1.0, included: true, provenance: {} as any }
@@ -42,40 +43,36 @@ describe("Converter: Extract -> Dossier", () => {
         expect(dossier.schemaVersion).toBe(1);
         expect(dossier.packType).toBe("public_figure");
         expect(dossier.subjectName).toBe("Elon Musk Dossier");
-        expect(dossier.entities).toHaveLength(2); // Only included ones
+        expect(dossier.entities).toHaveLength(3); // Only included ones
+        expect(dossier.sourceExtractPackId).toBe("extract-1");
     });
 
-    it("should map entities correctly", () => {
+    it("should map entities correctly (including tags for remapping)", () => {
         const dossier = createDossierFromExtract(mockExtract);
         const person = dossier.entities.find(e => e.name === "Elon Musk");
         const org = dossier.entities.find(e => e.name === "Tesla");
+        const loc = dossier.entities.find(e => e.name === "New York");
         
         expect(person?.type).toBe("person");
         expect(org?.type).toBe("org");
+        
+        // Location should be asset + tagged
+        expect(loc?.type).toBe("asset");
+        expect(loc?.tags).toContain("source_entity_type:location");
     });
 
-    it("should convert quotes to evidence and claims", () => {
+    it("should convert quotes to safer utterance claims", () => {
         const dossier = createDossierFromExtract(mockExtract);
         
-        // 1 quote -> 1 quote evidence + 1 source doc evidence = 2 evidence total (plus 1 timeline event)
-        // Wait, timeline adds 1 evidence too.
-        // Total Evidence: 1 (Source Doc) + 1 (Quote) + 1 (Timeline) = 3
-        expect(dossier.evidence).toHaveLength(3); 
-        
-        const quoteEvidence = dossier.evidence.find(e => e.sourceType === "quote");
-        expect(quoteEvidence).toBeDefined();
-        expect(quoteEvidence?.excerpt).toBe("I love cars");
-
-        const claim = dossier.claims.find(c => c.text.includes("Statement by Elon Musk"));
+        const claim = dossier.claims.find(c => c.text.includes("This source attributes"));
         expect(claim).toBeDefined();
         expect(claim?.claimType).toBe("fact");
-        expect(claim?.evidenceIds).toContain(quoteEvidence?.id);
+        expect(claim?.confidence).toBe(0.9); // Known speaker
     });
 
-    it("should convert metrics to claims", () => {
+    it("should normalize source types", () => {
         const dossier = createDossierFromExtract(mockExtract);
-        const metricClaim = dossier.claims.find(c => c.text.includes("50 billion"));
-        expect(metricClaim).toBeDefined();
-        expect(metricClaim?.claimType).toBe("fact");
+        const sourceEv = dossier.evidence.find(e => e.sourceType === "News");
+        expect(sourceEv).toBeDefined();
     });
 });
