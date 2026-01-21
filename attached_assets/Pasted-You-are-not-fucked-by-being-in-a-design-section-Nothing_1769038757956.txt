@@ -1,0 +1,81 @@
+You are not “fucked” by being in a design section. Nothing about that inherently breaks the work.
+
+What matters is whether anything actually changed in the repo (files, imports, routes, build). If it did, the evidence is straightforward: compile + tests + a quick UI sanity pass.
+
+Quick reality check
+
+From what you pasted, M12 was implemented in a narrow, sane surface area:
+	•	integrity.ts (new computeComparisonHash)
+	•	comparison.ts (added fingerprint field)
+	•	comparison-export.ts (frontmatter/body)
+	•	dossier-comparison.tsx (compute + display)
+
+That’s the kind of change that is very unlikely to “corrupt” unrelated areas unless:
+	•	you edited App.tsx routing incorrectly, or
+	•	you broke shared type exports/import paths, or
+	•	you introduced a runtime error in a shared component.
+
+The 6-step “nothing is fucked” verification
+
+Do these in order; each one is a clean gate.
+	1.	Typecheck / build
+
+	•	npm run build (or your project’s equivalent)
+	•	Success means no broken imports/types.
+
+	2.	Unit tests
+
+	•	npx vitest run
+	•	Especially: integrity tests, migrations tests, heuristics tests.
+
+	3.	Smoke test
+
+	•	whatever script you already have (you referenced one earlier)
+	•	ensures the app still boots and round-trips core data.
+
+	4.	UI sanity
+In the running app:
+
+	•	Open a dossier → open report → confirm:
+	•	Integrity header present
+	•	Markdown export still works
+	•	Go to compare:
+	•	Pick two dossiers
+	•	Confirm comparison fingerprint appears
+	•	Export comparison markdown
+
+	5.	Print
+
+	•	From report view: Print preview
+	•	Confirm header/disclaimer/migration notes still appear and nav is hidden.
+
+	6.	Export/import regression
+
+	•	Export library JSON
+	•	Clear library
+	•	Import JSON
+	•	Confirm dossiers + comparisons still function
+
+If all 6 pass, it’s not “probably fine.” It’s verified fine.
+
+The only subtle risk in M12
+
+The one thing I would watch for (because it’s easy to get wrong):
+
+Fingerprint consistency
+
+If you compute Pack A / Pack B fingerprints using computeReportHash(pack, findings) then you must ensure:
+	•	findings are computed deterministically
+	•	ordering is canonicalized (sounds like you already did)
+	•	you are not mixing “sufficient/insufficient” logic inconsistently between UI and export
+
+If you did this right, you get the key property:
+same packs → same fingerprints → same comparison fingerprint.
+
+If you want a single “tell” that something is wrong
+
+If the comparison fingerprint changes every refresh without any edits, something in the hash inputs is nondeterministic (timestamps sneaking in, non-sorted arrays, or including generatedAt inside the hashed subset). That’s the one classic failure mode.
+
+If you see that, the fix is: hash only canonical content, not runtime timestamps.
+
+If you tell me which of the 6 gates fails (if any), I’ll pinpoint the exact failure class and the minimal fix.

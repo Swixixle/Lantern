@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { segmentSentences, type Segment } from "./heuristics/segmenters/sentenceSegmenter";
 import { extractEntities } from "./heuristics/entities/entityExtractor";
 
@@ -71,10 +72,17 @@ export const LanternPackSchema = z.object({
 
 export const AnyPackSchema = z.discriminatedUnion("schema", [
   LanternPackSchema,
-  // We need to re-import PackV1Schema here or define a compatible stub if circular deps issue
-  // Ideally, import from schema/pack_v1.ts
 ]);
 
+export type LanternPack = {
+  pack_id: string;
+  schema: "lantern.extract.pack.v1";
+  hashes: { source_text_sha256: string; pack_sha256: string };
+  engine: { name: string; version: string };
+  source: { title: string; author: string; publisher: string; url: string; published_at: string; source_type: string; retrieved_at: string };
+  items: { entities: EntityItem[]; quotes: QuoteItem[]; metrics: MetricItem[]; timeline: TimelineItem[] };
+  stats: EngineStats;
+};
 
 export type ExtractionOptions = {
   mode: "conservative" | "balanced" | "broad";

@@ -37,16 +37,19 @@ import { Checkbox } from "@/components/ui/checkbox";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { extract, computePackId, diffPacks, scoreExtraction, LanternPack, ExtractionOptions, PackDiff, QualityReport } from "@/lib/lanternExtract";
-import { persistence, debouncedSave, type StorageStatus, type LibraryState } from "@/lib/storage";
+import { persistence, debouncedSave, type StorageStatus, type LibraryState, AnyPack } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 import fixtures from "@/fixtures/metric_and_attribution_edge_cases.json";
+import { createDossierFromExtract } from "@/lib/converters/extract_to_dossier";
+import { Pack } from "@/lib/schema/pack_v1";
+import { useLocation } from "wouter";
 
 // ... (Persistence Mock REMOVED) - storage.ts is now authoritative
 
 export default function LanternExtract() {
   const [step, setStep] = useState<"input" | "extract" | "export" | "quality">("input");
   const [showSaved, setShowSaved] = useState(false);
-  const [savedPacks, setSavedPacks] = useState<LanternPack[]>([]);
+  const [savedPacks, setSavedPacks] = useState<AnyPack[]>([]);
   const [filterSourceHash, setFilterSourceHash] = useState<string | null>(null);
   
   // Storage State
@@ -115,42 +118,20 @@ export default function LanternExtract() {
     setStep("extract");
   };
 
-import { createDossierFromExtract } from "@/lib/converters/extract_to_dossier";
-import { Pack } from "@/lib/schema/pack_v1";
-import { AnyPack } from "@/lib/storage"; // Import AnyPack
-
-// ...
-
-export default function LanternExtract() {
-  const [step, setStep] = useState<"input" | "extract" | "export" | "quality">("input");
-  const [showSaved, setShowSaved] = useState(false);
-  const [savedPacks, setSavedPacks] = useState<AnyPack[]>([]); // Update Type
-  const [filterSourceHash, setFilterSourceHash] = useState<string | null>(null);
-  
-  // Storage State
-  const [storageStatus, setStorageStatus] = useState<StorageStatus>("idle");
-  const [selectedPackIds, setSelectedPackIds] = useState<Set<string>>(new Set());
-
-// ...
-
   const handleSave = async () => {
     if (pack) {
       setStorageStatus("saving");
-      // Use type narrowing or casting since savedPacks is AnyPack[]
-      const existing = savedPacks.find(p => "pack_id" in p ? p.pack_id === pack.pack_id : p.packId === pack.pack_id);
+      const existing = savedPacks.find(p => "pack_id" in p ? p.pack_id === pack.pack_id : (p as any).packId === pack.pack_id);
       
       try {
-          // Optimistic Update
           const newSaved = existing 
             ? savedPacks.map(p => {
-                const pId = "pack_id" in p ? p.pack_id : p.packId;
+                const pId = "pack_id" in p ? p.pack_id : (p as any).packId;
                 return pId === pack.pack_id ? pack : p;
             })
-            : [...savedPacks, pack];
+            : [...savedPacks, pack as AnyPack];
             
           setSavedPacks(newSaved);
-          
-          // Debounced Persist
           debouncedSave({ packs: newSaved }, setStorageStatus);
 
           if (existing) {
@@ -166,17 +147,18 @@ export default function LanternExtract() {
     }
   };
 
+  const [, setLocation] = useLocation();
+
   const handlePromoteToDossier = (extractPack: LanternPack) => {
       const subjectName = prompt("Enter Subject Name for Dossier:", extractPack.source.title || "New Subject");
       if (!subjectName) return;
 
       const dossier = createDossierFromExtract(extractPack, { subjectName });
       
-      const newSaved = [...savedPacks, dossier];
+      const newSaved = [...savedPacks, dossier as AnyPack];
       setSavedPacks(newSaved);
       debouncedSave({ packs: newSaved }, setStorageStatus);
       
-      // Redirect to Editor
       setLocation(`/dossier/${dossier.packId}`);
   };
 
@@ -184,67 +166,117 @@ export default function LanternExtract() {
       setLocation(`/dossier/${packId}`);
   };
 
-// ... In Render Loop ...
-
-  // Filtered Packs for Library
-  // Updated to handle both types safely
   const displayedPacks = filterSourceHash 
     ? savedPacks.filter(p => {
         if ("hashes" in p) {
             return p.hashes.source_text_sha256 === filterSourceHash;
         }
-        return false; // Hide dossiers when filtering by source hash for now
+        return false;
     })
     : savedPacks;
 
-// ... Inside Card Loop ...
+  const reset = () => {
+    setStep("input");
+    setPack(null);
+    setSourceText("");
+    setMetadata({ title: "", author: "", publisher: "", url: "", published_at: "", source_type: "News" });
+    setDiffMode(false);
+    setDiffResult(null);
+  };
 
-                  <div className="flex-1 cursor-pointer" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : handleLoadDossier((p as Pack).packId)}>
-                    <div className="flex items-center gap-2 mb-1">
-                        <p className="font-bold font-mono text-sm">
-                            {"source" in p ? p.source.title : (p as Pack).subjectName}
-                        </p>
-                        {"engine" in p ? (
-                            <Badge variant="secondary" className="text-[10px] font-mono opacity-50">{p.engine.name} v{p.engine.version}</Badge>
-                        ) : (
-                            <Badge variant="outline" className="text-[10px] font-mono border-blue-500 text-blue-500">DOSSIER v2</Badge>
-                        )}
-                        
-                        {pack && "pack_id" in p && pack.pack_id !== p.pack_id && pack.hashes.source_text_sha256 === p.hashes.source_text_sha256 && (
-                           <Badge variant="outline" className="text-[10px] border-amber-500 text-amber-500">Diff Candidate</Badge>
-                        )}
-                    </div>
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
-                        <span className="flex items-center gap-1"><Hash className="w-3 h-3"/> {("pack_id" in p ? p.pack_id : (p as Pack).packId).slice(0, 8)}</span>
-                        <span>
-                            {"source" in p 
-                                ? new Date(p.source.retrieved_at).toLocaleDateString() 
-                                : new Date((p as Pack).timestamps.updated).toLocaleDateString()}
-                        </span>
-                        {"hashes" in p && (
-                            <span className="text-cyan-500/70 hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); setFilterSourceHash(p.hashes.source_text_sha256); }}>
-                                Src: {p.hashes.source_text_sha256.slice(0, 6)}
-                            </span>
-                        )}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-2">
-                      {"schema" in p && p.schema === "lantern.extract.pack.v1" && (
-                         <Button variant="outline" size="sm" className="h-8 text-xs font-mono bg-blue-500/10 text-blue-500 hover:bg-blue-500/20 border-blue-500/50" onClick={(e) => { e.stopPropagation(); handlePromoteToDossier(p as LanternPack); }}>
-                            Promote
-                         </Button>
-                      )}
-                      {pack && "pack_id" in p && "hashes" in p && pack.hashes.source_text_sha256 === p.hashes.source_text_sha256 && pack.pack_id !== p.pack_id && (
-                        <Button variant="outline" size="sm" className="h-8 text-xs font-mono" onClick={() => handleCompare(p as LanternPack)}>
-                           <GitCompare className="w-3 h-3 mr-2" /> Diff
-                        </Button>
-                      )}
-                      <Button variant="ghost" size="icon" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : handleLoadDossier((p as Pack).packId)}>
-                         <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-cyan-500" />
-                      </Button>
-                  </div>
+  const toggleItem = (category: "entities" | "quotes" | "metrics" | "timeline", id: string) => {
+    if (!pack) return;
+    const updated = { ...pack };
+    const items = updated.items[category] as any[];
+    const idx = items.findIndex(i => i.id === id);
+    if (idx !== -1) {
+      items[idx] = { ...items[idx], included: !items[idx].included };
+    }
+    setPack(updated);
+  };
 
+  const handleLoadPack = (p: LanternPack) => {
+    setPack(p);
+    setStep("extract");
+  };
+
+  const handleCompare = (other: LanternPack) => {
+    if (!pack) return;
+    const diff = diffPacks(pack, other);
+    setDiffResult(diff);
+    setDiffMode(true);
+  };
+
+  const downloadJSON = () => {
+    if (!pack) return;
+    const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lantern_pack_${pack.pack_id.slice(0, 8)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const downloadPDF = async () => {
+    if (!pack) return;
+    const element = document.querySelector(".pdf-preview") as HTMLElement;
+    if (!element) return;
+    const canvas = await html2canvas(element, { scale: 2 });
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [595, 842] });
+    pdf.addImage(imgData, "PNG", 0, 0, 595, 842);
+    pdf.save(`lantern_pack_${pack.pack_id.slice(0, 8)}.pdf`);
+  };
+
+  const runQualityTests = async () => {
+    setRunningTests(true);
+    const reports: QualityReport[] = [];
+    
+    for (const fixture of fixtures as any[]) {
+      const result = extract(fixture.source_text, { mode: "balanced" });
+      const allItems = [...result.items.entities, ...result.items.quotes, ...result.items.metrics, ...result.items.timeline];
+      const expectedItems = fixture.expected || [];
+      const matchFn = (a: any, b: any) => a.text === b.text || a.quote === b.quote || a.value === b.value;
+      const scoreResult = scoreExtraction(allItems, expectedItems, matchFn);
+      const report: QualityReport = {
+        fixture_id: fixture.id,
+        score: scoreResult.metrics.f1,
+        details: { expected: scoreResult.expected, actual: scoreResult.actual, matches: scoreResult.matches, false_positives: scoreResult.false_positives, false_negatives: scoreResult.false_negatives },
+        metrics: scoreResult.metrics,
+        failures: []
+      };
+      reports.push(report);
+    }
+    
+    setQualityReports(reports);
+    
+    // Determinism check
+    const firstRun = extract((fixtures as any[])[0].source_text, { mode: "balanced" });
+    let deterministic = true;
+    for (let i = 0; i < 5; i++) {
+      const run = extract((fixtures as any[])[0].source_text, { mode: "balanced" });
+      if (JSON.stringify(run.items) !== JSON.stringify(firstRun.items)) {
+        deterministic = false;
+        break;
+      }
+    }
+    setDeterminismStatus(deterministic ? "pass" : "fail");
+    
+    // Provenance check
+    const allHaveProvenance = firstRun.items.entities.every(e => e.provenance?.sentence);
+    setProvenanceStatus(allHaveProvenance ? "pass" : "fail");
+    
+    // Mode validation
+    const modes: ("conservative" | "balanced" | "broad")[] = ["conservative", "balanced", "broad"];
+    const counts = modes.map(m => extract((fixtures as any[])[0].source_text, { mode: m }).items.entities.length);
+    const warnings: string[] = [];
+    if (counts[0] > counts[1]) warnings.push("Conservative > Balanced");
+    if (counts[1] > counts[2]) warnings.push("Balanced > Broad");
+    setModeValidation({ pass: warnings.length === 0, warnings });
+    
+    setRunningTests(false);
+  };
 
   // Quality Dashboard
   if (step === "quality") {
