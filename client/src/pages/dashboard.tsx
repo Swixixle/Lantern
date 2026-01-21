@@ -1,4 +1,6 @@
 import { useState, useMemo } from "react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 import { FlightPlanTable } from "@/components/FlightPlanTable";
 import { SavingsChart } from "@/components/SavingsChart";
 import { CashflowChart } from "@/components/CashflowChart";
@@ -7,7 +9,7 @@ import { Stage1Checklist } from "@/components/Stage1Checklist";
 import { AssumptionsForm } from "@/components/AssumptionsForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowUpRight, ShieldCheck, Target, TrendingUp, Settings2, LayoutDashboard } from "lucide-react";
+import { ArrowUpRight, ShieldCheck, Target, TrendingUp, Settings2, LayoutDashboard, GitCompare } from "lucide-react";
 import generatedTexture from "@assets/generated_images/subtle_dark_technical_grid_pattern_texture.png";
 import { runSovereigntyPlan, PlanInputs } from "@/lib/sovereigntyEngine";
 import { buildColdStartRevenueRamp, buildDrawRamp } from "@/lib/defaultRamps";
@@ -65,6 +67,11 @@ export default function Dashboard() {
               <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
               COLD BUILD (Y1)
             </div>
+            <Link href="/compare">
+                <Button variant="secondary" size="sm" className="mt-2 text-xs font-mono uppercase">
+                    <GitCompare className="w-3 h-3 mr-2" /> Compare Dossiers
+                </Button>
+            </Link>
           </div>
         </header>
 

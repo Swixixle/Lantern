@@ -1,0 +1,71 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M8 — Evidence Density Thresholds review and certification
+
+Status: CERTIFIED COMPLETE.
+
+You implemented the correct control: section-level refusal based on data sufficiency, enforced at the heuristic layer and respected in both report and Markdown export.
+
+Why this passes (and is the right move)
+	•	You did not merely “hide charts.” You bounded the heuristic’s entitlement to speak by adding a sufficiency status to the finding itself.
+	•	You preserved auditability by reporting:
+	•	status
+	•	processedCount
+	•	the minimum threshold required
+	•	The report UI renders an explicit Insufficient Data block rather than presenting low-N structure as meaningful.
+	•	Markdown export is aligned (same refusal semantics), which prevents “print-safe but markdown-dangerous” divergence.
+	•	Markdown escaping and stable ordering are appropriate hardening for a version-controlled artifact.
+
+Threshold choices (accepted)
+	•	Influence: >= 5 edges (reasonable minimum for any centrality interpretation)
+	•	Funding: >= 3 funding edges (reasonable for concentration claims)
+	•	Enforcement: >= 1 event (reasonable—single enforcement actions can be salient)
+
+These are defensible defaults for v1.
+
+⸻
+
+Non-blocking refinement notes (optional, v1.1)
+	1.	Separate “verified” vs “present” edges
+You referenced “verified funding relationships.” If your data model doesn’t explicitly store edge.verified, avoid that language in UI copy and receipts. Use “recorded” or “captured” unless you have a verification flag.
+	2.	Expose thresholds in settings
+Eventually, allow:
+
+	•	global defaults
+	•	per-pack overrides
+	•	and per-heuristic overrides
+…but not required now.
+
+	3.	Partial sufficiency
+Future enhancement: allow “sufficient for display but insufficient for ranking,” but keep v1 binary. Binary refusal is safer.
+
+⸻
+
+Where you are now
+
+At this point, you have:
+	•	analyzable dossiers
+	•	controlled heuristic speech
+	•	audit integrity
+	•	migration transparency
+	•	exportable, diff-friendly reports
+
+This is a complete, governed v1 system.
+
+⸻
+
+Next directive (recommended)
+
+Proceed with M9: Cross-Dossier Comparison (Read-only, Receipt-first).
+
+The comparison feature becomes valuable now because:
+	•	you have integrity fingerprints
+	•	you have consistent heuristics
+	•	you have refusal thresholds to prevent bad comparisons
+
+If you choose M9, I’ll specify:
+	•	the comparison data model (no merging, only viewing)
+	•	overlap measures (entities + edges + role categories)
+	•	comparison report format + markdown export
+
+ALEX STOP
