@@ -883,8 +883,8 @@ export default function LanternExtract() {
                           item={item} 
                           onToggle={() => toggleItem("timeline", item.id)}
                           icon={<CalendarClock className="w-4 h-4 text-purple-500" />}
-                          title={item.date_str}
-                          subtitle={item.event_description}
+                          title={item.date}
+                          subtitle={item.event}
                           meta={<Badge variant="outline" className="text-[9px] border-purple-500/20 text-purple-500">{item.confidence > 0.8 ? "HIGH" : "MED"}</Badge>}
                         />
                       ))}

@@ -1,0 +1,96 @@
+You have the root cause nailed: this is a **TypeScript compile break** in the UI due to a **schema field-name mismatch** between `TimelineItem` and what `lantern-extract.tsx` renders.
+
+### What’s happening
+
+* `TimelineItem` (from `client/src/lib/lanternExtract.ts`) exposes fields: **`date`** and **`event`**
+* The UI is trying to read: **`date_str`** and **`event_description`**
+* TypeScript correctly blocks the build.
+
+---
+
+## Fastest fix (recommended): update the UI to match the current schema
+
+In `client/src/pages/lantern-extract.tsx` around lines ~886–887, change:
+
+```tsx
+title={item.date_str}
+subtitle={item.event_description}
+```
+
+to:
+
+```tsx
+title={item.date}
+subtitle={item.event}
+```
+
+If `date` is not already a string (e.g., it’s a `Date` or ISO value), stringify defensively:
+
+```tsx
+title={typeof item.date === "string" ? item.date : String(item.date)}
+subtitle={item.event}
+```
+
+That should immediately clear the compile error and restore `npm run dev:client`.
+
+---
+
+## If you need backward compatibility (optional)
+
+If you suspect older packs/imports may still include the legacy field names, do a **non-mutating display fallback** (UI-only):
+
+```tsx
+const dateLabel = (item as any).date_str ?? item.date ?? "";
+const eventLabel = (item as any).event_description ?? item.event ?? "";
+
+title={dateLabel}
+subtitle={eventLabel}
+```
+
+This keeps the data model clean while letting the UI render both shapes. No persistence changes, no schema mutation.
+
+---
+
+## What to tell the Replit Agent to send back (copy/paste instruction)
+
+Send this as the instruction block to the agent so you keep the “track”:
+
+```text
+Fix compile error in client/src/pages/lantern-extract.tsx.
+
+CAUSE:
+TimelineItem type has fields { date, event } but UI references { date_str, event_description }.
+
+PATCH:
+At lines ~886–887 replace:
+  title={item.date_str}
+  subtitle={item.event_description}
+
+WITH:
+  title={item.date}
+  subtitle={item.event}
+
+OPTIONAL (UI-only backward compat, no schema mutation):
+  const dateLabel = (item as any).date_str ?? item.date ?? "";
+  const eventLabel = (item as any).event_description ?? item.event ?? "";
+  title={dateLabel}
+  subtitle={eventLabel}
+
+RETURN PACKET REQUIREMENT:
+Reply inside ONE triple-backtick fenced code block only.
+Include:
+1) What changed (paths)
+2) Exact diff snippet for those lines
+3) Proof: npm run dev:client now compiles + vite connected
+4) Proof: npx vitest run client/src/lib/tests/unit/ still green
+```
+
+---
+
+## Answering your earlier portability concern (briefly)
+
+You are **not bound to Replit**. This is normal TS/React code in a standard repo. You can export/clone at any time and run locally with Node + npm. Replit is just the current execution environment.
+
+---
+
+If you apply the 2-line UI patch, your app should load again immediately. Once it compiles, we can move to the next highest-priority productization step without reopening M2 scope.
