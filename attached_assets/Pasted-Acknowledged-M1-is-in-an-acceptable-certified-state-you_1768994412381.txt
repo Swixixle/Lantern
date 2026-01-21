@@ -1,0 +1,146 @@
+Acknowledged. M1 is in an acceptable “certified” state: you have (a) user-facing Export/Import, (b) schema validation + merge semantics, (c) a destructive Clear utility for test hygiene, and (d) an automated round-trip smoke test proving lossless serialization.
+
+M2 directive: Do Persistence first, then Heuristics
+
+Even though the original plan labels M2 as “Heuristic Reliability,” the correct sequencing for Lantern is:
+	1.	Persistence (data durability + versioned schema + migration discipline)
+	2.	Heuristic Reliability (because you need stable, real-world data to evaluate and regress heuristics)
+
+Rationale: heuristic work without durable storage produces misleading results (you tune against ephemeral state and test fixtures). Persistence creates the substrate that makes heuristic improvements measurable, repeatable, and debuggable.
+
+Call this M2: Persistence & Schema Evolution. Heuristics becomes M3.
+
+⸻
+
+M2 scope: Persistence & Schema Evolution (authoritative library state)
+
+Goals (non-negotiable)
+	•	Library survives refresh/browser restart.
+	•	Library survives common failure modes (partial writes, schema changes).
+	•	Import/export remains compatible via schema versioning + migrations.
+	•	State is observable and testable (deterministic load/save behavior).
+
+Storage choice
+
+Use IndexedDB (via idb or Dexie) if packs can grow beyond trivial size or you anticipate binary assets / large receipts later. If you are certain packs remain small (a few hundred KB), localStorage is acceptable, but it is a trap long-term.
+
+My directive: IndexedDB now. It prevents the “we have to migrate off localStorage” tax.
+
+⸻
+
+M2 deliverables (concrete)
+
+1) Persistence Engine
+	•	Create a small storage module:
+	•	loadLibrary(): Promise<LibraryState>
+	•	saveLibrary(next: LibraryState): Promise<void>
+	•	clearLibrary(): Promise<void>
+	•	Add write coalescing (debounce or “last write wins” queue) to avoid rapid successive writes.
+	•	Add atomicity guard:
+	•	Store as one record {schemaVersion, updatedAt, library} or a transactional multi-store write.
+	•	Ensure you never load half-written state.
+
+2) Schema Versioning + Migrations
+	•	Current export/import already validates schema; now formalize:
+	•	schemaVersion: number at root
+	•	migrate(input): latestSchema
+	•	Import path becomes:
+	1.	validate minimal shape
+	2.	migrate to latest
+	3.	merge using your existing intelligent merge rules
+	4.	persist
+
+3) UI/UX updates (minimal but correct)
+	•	On Library tab:
+	•	Add status indicator: “Saved” / “Saving…” / “Save failed (retry)”
+	•	On load failure: show a non-blocking banner with “Reset storage” and “Export recovery” if possible.
+
+4) Tests
+
+Add automated coverage beyond the smoke test:
+
+Unit tests
+	•	Migration tests:
+	•	fixture v0 → migrates to vLatest
+	•	fixture v1 → migrates to vLatest
+	•	Merge tests:
+	•	non-conflicting import merges
+	•	ID conflict behavior matches spec (preserve existing packs unless ID conflict; define whether conflict = overwrite/skip/duplicate-with-new-id)
+
+Integration tests
+	•	persistence round-trip:
+	•	set library → save → reload → equality
+	•	failure mode:
+	•	simulate save error → UI reports and does not corrupt existing data
+
+Smoke test update
+	•	Expand smoke test to include:
+	•	persist → reload from storage → export → import → equality
+
+⸻
+
+Clarify and complete the “Data Pack” export/import requirement
+
+You wrote “Add ability to export and import saved data packs.” You have export/import for the library. To fully satisfy “data packs” as a first-class concept, extend to:
+	1.	Export selected packs (multi-select → export JSON containing only selected IDs)
+	2.	Import packs into existing library (your merge logic already aligns)
+	3.	Pack-level schema (ensure each pack includes packVersion or inherits root schemaVersion)
+	4.	Conflict policy (must be explicit in UI):
+	•	If pack ID exists: default Skip (preserve existing) + optional “Overwrite” toggle.
+	•	If schema mismatch: migrate.
+	•	If invalid: reject with a report listing pack IDs rejected and why.
+
+Acceptance criteria for “pack portability”:
+	•	User can export only chosen packs and import them into another environment without bringing the entire library.
+	•	Import produces a clear report: added / skipped / overwritten / rejected counts.
+
+⸻
+
+What you build next (ordered task list)
+	1.	Add schemaVersion root + migration skeleton (even if v1→v1 is identity).
+	2.	Implement IndexedDB persistence module + coalesced save queue.
+	3.	Wire persistence into app lifecycle:
+	•	on app start: load → hydrate store
+	•	on library change: save → update save status
+	4.	Extend export UI:
+	•	Export all (existing)
+	•	Export selected packs (new)
+	5.	Expand tests (unit + integration + smoke)
+	6.	Final certification checklist (below)
+
+⸻
+
+M2 certification checklist (use this as the “PASS/FAIL” gate)
+
+Durability
+	•	Refresh + restart retains exact library state.
+
+Integrity
+	•	Storage failure does not delete or corrupt prior saved state.
+
+Compatibility
+	•	Import of older schema fixtures succeeds via migrations.
+
+Portability
+	•	Export selected packs → import into clean library → exact equality for those packs.
+
+Observability
+	•	UI displays saving/saved/error with deterministic behavior.
+
+⸻
+
+After M2: M3 Heuristic Reliability (what changes once persistence exists)
+
+Once persistence is in place, heuristic work becomes meaningful because you can:
+	•	replay real saved packs,
+	•	snapshot libraries as regression fixtures,
+	•	compare heuristic outputs across versions,
+	•	ship a “heuristic audit log” per pack if needed.
+
+⸻
+
+If you proceed under this directive, label the plan update as:
+	•	M2: Persistence & Schema Evolution (IndexedDB + migrations + pack-level portability)
+	•	M3: Heuristic Reliability (metrics, failure taxonomy, regression fixtures, tuning loop)
+
+Execute M2 to certification before touching heuristics. This will reduce rework and make subsequent heuristic iteration empirically grounded.

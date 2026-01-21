@@ -60,7 +60,16 @@ Lantern is a structured knowledge extraction tool that converts unstructured tex
     *   [x] `Clear Library` utility.
 *   **Tests**: Verify import restores exact hash ID.
 
-### M2: Heuristic Reliability
+### M2: Persistence & Schema Evolution (IN PROGRESS)
+*   **Goal**: Durable, versioned storage (IndexedDB) with pack portability.
+*   **Deliverables**:
+    *   [ ] Persistence Engine (IndexedDB + Coalescing).
+    *   [ ] Schema Migrations (v1 baseline).
+    *   [ ] Pack Portability (Export Selected / Import with Conflict Resolution).
+    *   [ ] UI Status (Saved/Saving).
+*   **Tests**: Migration unit tests, Persistence round-trip smoke test.
+
+### M3: Heuristic Reliability (QUEUED)
 *   **Goal**: Reduce noise in extraction.
 *   **Deliverables**:
     *   [ ] Improved Metric regex (handle currency symbols like €, £).

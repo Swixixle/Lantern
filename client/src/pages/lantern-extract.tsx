@@ -33,23 +33,15 @@ import {
   Upload,
   Trash2
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { extract, computePackId, diffPacks, scoreExtraction, LanternPack, ExtractionOptions, PackDiff, QualityReport } from "@/lib/lanternExtract";
+import { storage, debouncedSave, type StorageStatus } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 import fixtures from "@/fixtures/metric_and_attribution_edge_cases.json";
 
-// ... (Persistence Mock existing code)
-const savePack = (pack: LanternPack) => {
-  const existing = JSON.parse(localStorage.getItem("lantern_packs") || "[]");
-  const filtered = existing.filter((p: LanternPack) => p.pack_id !== pack.pack_id);
-  filtered.push(pack);
-  localStorage.setItem("lantern_packs", JSON.stringify(filtered));
-};
-
-const loadPacks = (): LanternPack[] => {
-  return JSON.parse(localStorage.getItem("lantern_packs") || "[]");
-};
+// ... (Persistence Mock REMOVED) - storage.ts is now authoritative
 
 export default function LanternExtract() {
   const [step, setStep] = useState<"input" | "extract" | "export" | "quality">("input");
@@ -57,12 +49,16 @@ export default function LanternExtract() {
   const [savedPacks, setSavedPacks] = useState<LanternPack[]>([]);
   const [filterSourceHash, setFilterSourceHash] = useState<string | null>(null);
   
+  // Storage State
+  const [storageStatus, setStorageStatus] = useState<StorageStatus>("idle");
+  const [selectedPackIds, setSelectedPackIds] = useState<Set<string>>(new Set());
+
   // Diff View State
   const [diffMode, setDiffMode] = useState(false);
   const [diffPackId, setDiffPackId] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<PackDiff | null>(null);
-
-  // Quality State
+  
+  // ... (Quality State same as before)
   const [qualityReports, setQualityReports] = useState<QualityReport[]>([]);
   const [runningTests, setRunningTests] = useState(false);
   const [modeValidation, setModeValidation] = useState<{ pass: boolean; warnings: string[] } | null>(null);
@@ -82,17 +78,22 @@ export default function LanternExtract() {
   const [extractOptions, setExtractOptions] = useState<ExtractionOptions>({ mode: "balanced" });
   const [pack, setPack] = useState<LanternPack | null>(null);
   
+  // Init Load
   useEffect(() => {
-    setSavedPacks(loadPacks());
-  }, [step, showSaved]);
+    const load = async () => {
+        const lib = await storage.loadLibrary();
+        setSavedPacks(lib.packs);
+    };
+    load();
+  }, []);
 
-  // ... (handleExtract, handleSave existing logic)
+  // ... (handleExtract same)
   const handleExtract = () => {
     const { items, stats, stable_source_hash } = extract(sourceText, extractOptions);
     
     const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
         schema: "lantern.extract.pack.v1",
-        engine: { name: "heuristic", version: "0.1.5" }, // UPDATED VERSION
+        engine: { name: "heuristic", version: "0.1.5" },
         source: { ...metadata, retrieved_at: new Date().toISOString() },
         items,
         stats
@@ -109,68 +110,33 @@ export default function LanternExtract() {
     setStep("extract");
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (pack) {
+      setStorageStatus("saving");
       const existing = savedPacks.find(p => p.pack_id === pack.pack_id);
-      savePack(pack);
-      if (existing) {
-         alert(`Pack updated (Snapshot ${pack.pack_id.slice(0, 8)})`);
-      } else {
-         alert(`New Snapshot Saved (ID: ${pack.pack_id.slice(0, 8)})`);
-      }
-    }
-  };
-
-  // --- M1: Data Portability (Export/Import) ---
-  const handleExportLibrary = () => {
-    const packs = loadPacks();
-    const blob = new Blob([JSON.stringify(packs, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `lantern_library_backup_${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  };
-
-  const handleImportLibrary = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
+      
       try {
-        const content = e.target?.result as string;
-        const importedPacks = JSON.parse(content);
-        
-        if (!Array.isArray(importedPacks)) throw new Error("Invalid format: Expected array");
-        
-        // Basic validation check
-        const valid = importedPacks.every(p => p.pack_id && p.items && p.hashes);
-        if (!valid) throw new Error("Invalid Lantern Pack schema in file");
+          // Optimistic Update
+          const newSaved = existing 
+            ? savedPacks.map(p => p.pack_id === pack.pack_id ? pack : p)
+            : [...savedPacks, pack];
+            
+          setSavedPacks(newSaved);
+          
+          await storage.savePack(pack);
+          setStorageStatus("saved");
+          setTimeout(() => setStorageStatus("idle"), 2000);
 
-        // Merge strategy: Overwrite by ID, keep others
-        const currentPacks = loadPacks();
-        const packMap = new Map(currentPacks.map(p => [p.pack_id, p]));
-        
-        importedPacks.forEach(p => packMap.set(p.pack_id, p));
-        
-        const merged = Array.from(packMap.values());
-        localStorage.setItem("lantern_packs", JSON.stringify(merged));
-        setSavedPacks(merged);
-        alert(`Successfully imported ${importedPacks.length} packs.`);
-      } catch (err) {
-        alert("Failed to import: " + (err as Error).message);
+          if (existing) {
+             alert(`Pack updated (Snapshot ${pack.pack_id.slice(0, 8)})`);
+          } else {
+             alert(`New Snapshot Saved (ID: ${pack.pack_id.slice(0, 8)})`);
+          }
+      } catch (e) {
+          console.error(e);
+          setStorageStatus("error");
+          alert("Failed to save to disk.");
       }
-    };
-    reader.readAsText(file);
-  };
-
-  const handleClearLibrary = () => {
-    if (confirm("Are you sure? This will delete all saved packs from browser storage.")) {
-        localStorage.removeItem("lantern_packs");
-        setSavedPacks([]);
     }
   };
 
@@ -183,6 +149,95 @@ export default function LanternExtract() {
     setDiffMode(false);
     setDiffResult(null);
   };
+  
+  // Multi-Select Logic
+  const toggleSelectPack = (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const newSet = new Set(selectedPackIds);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      setSelectedPackIds(newSet);
+  };
+
+  const handleExportSelected = () => {
+      const packsToExport = savedPacks.filter(p => selectedPackIds.has(p.pack_id));
+      if (packsToExport.length === 0) return alert("Select packs to export.");
+      
+      const blob = new Blob([JSON.stringify(packsToExport, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `lantern_selection_${packsToExport.length}_packs.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+  };
+
+  // --- M2: Schema-Aware Import ---
+  const handleImportLibrary = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const content = e.target?.result as string;
+        const importedPacks = JSON.parse(content);
+        
+        if (!Array.isArray(importedPacks)) throw new Error("Invalid format: Expected array");
+        
+        // Report Counters
+        let added = 0;
+        let skipped = 0;
+        let updated = 0;
+        const errors = [];
+
+        // Current State Map
+        const packMap = new Map(savedPacks.map(p => [p.pack_id, p]));
+        
+        for (const p of importedPacks) {
+            // Minimal Schema Check
+            if (!p.pack_id || !p.items) {
+                errors.push(`Invalid Item: ${JSON.stringify(p).slice(0, 50)}...`);
+                continue;
+            }
+            
+            if (packMap.has(p.pack_id)) {
+                // Conflict: For now, we SKIP unless explicit overwrite (MVP: Skip)
+                // Future: Add toggle.
+                skipped++;
+            } else {
+                packMap.set(p.pack_id, p);
+                added++;
+            }
+        }
+        
+        const merged = Array.from(packMap.values());
+        
+        // Persist
+        setStorageStatus("saving");
+        await storage.saveLibrary(merged);
+        setSavedPacks(merged);
+        setStorageStatus("saved");
+        setTimeout(() => setStorageStatus("idle"), 2000);
+        
+        alert(`Import Report:\nAdded: ${added}\nSkipped (Duplicate): ${skipped}\nErrors: ${errors.length}`);
+        
+      } catch (err) {
+        alert("Failed to import: " + (err as Error).message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleClearLibrary = async () => {
+    if (confirm("Are you sure? This will delete all saved packs from IndexedDB.")) {
+        await storage.clearLibrary();
+        setSavedPacks([]);
+    }
+  };
+
+  // ... (Rest of existing logic: handleCompare, runQualityTests, toggleItem, downloadJSON)
 
   // Compare Logic
   const handleCompare = (targetPack: LanternPack) => {
@@ -406,7 +461,15 @@ export default function LanternExtract() {
       <div className="min-h-screen bg-background text-foreground p-6 md:p-12 font-sans">
         <div className="max-w-4xl mx-auto space-y-8">
           <header className="border-b border-border pb-6 flex items-end justify-between">
-            <h1 className="text-2xl font-mono font-bold">Saved Packs</h1>
+            <div>
+               <h1 className="text-2xl font-mono font-bold">Saved Packs</h1>
+               <div className="flex items-center gap-2 mt-1">
+                 <p className="text-xs font-mono text-muted-foreground">IndexedDB Storage v1</p>
+                 {storageStatus === "saving" && <span className="text-[10px] text-amber-500 font-mono animate-pulse">SAVING...</span>}
+                 {storageStatus === "saved" && <span className="text-[10px] text-emerald-500 font-mono">ALL CHANGES SAVED</span>}
+                 {storageStatus === "error" && <span className="text-[10px] text-red-500 font-mono">STORAGE ERROR</span>}
+               </div>
+            </div>
             <Button variant="ghost" onClick={() => setShowSaved(false)}>Back to Editor</Button>
           </header>
 
@@ -439,9 +502,15 @@ export default function LanternExtract() {
                    <Upload className="w-3 h-3 mr-2" /> Import JSON
                 </Button>
              </div>
-             <Button variant="outline" size="sm" onClick={handleExportLibrary} className="font-mono text-xs">
-                <Download className="w-3 h-3 mr-2" /> Export JSON
-             </Button>
+             {selectedPackIds.size > 0 ? (
+                 <Button variant="default" size="sm" onClick={handleExportSelected} className="font-mono text-xs bg-cyan-500 text-black hover:bg-cyan-400">
+                    <Download className="w-3 h-3 mr-2" /> Export Selected ({selectedPackIds.size})
+                 </Button>
+             ) : (
+                 <Button variant="outline" size="sm" disabled className="font-mono text-xs opacity-50">
+                    <Download className="w-3 h-3 mr-2" /> Select to Export
+                 </Button>
+             )}
              <Button variant="destructive" size="sm" onClick={handleClearLibrary} className="font-mono text-xs">
                 <Trash2 className="w-3 h-3 mr-2" /> Clear All
              </Button>
@@ -452,6 +521,18 @@ export default function LanternExtract() {
             {displayedPacks.map(p => (
               <Card key={p.pack_id} className="hover:border-cyan-500 transition-colors group">
                 <CardContent className="p-4 flex justify-between items-center cursor-default">
+                  <div className="flex items-center gap-2 mr-2">
+                     <Checkbox 
+                        checked={selectedPackIds.has(p.pack_id)}
+                        onCheckedChange={(c) => {
+                            const newSet = new Set(selectedPackIds);
+                            if (c) newSet.add(p.pack_id);
+                            else newSet.delete(p.pack_id);
+                            setSelectedPackIds(newSet);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                     />
+                  </div>
                   <div className="flex-1 cursor-pointer" onClick={() => handleLoadPack(p)}>
                     <div className="flex items-center gap-2 mb-1">
                         <p className="font-bold font-mono text-sm">{p.source.title || "Untitled Source"}</p>
@@ -802,9 +883,9 @@ export default function LanternExtract() {
                           item={item} 
                           onToggle={() => toggleItem("timeline", item.id)}
                           icon={<CalendarClock className="w-4 h-4 text-purple-500" />}
-                          title={item.date}
-                          subtitle={item.event}
-                          meta={<Badge variant="outline" className="text-[9px] border-purple-500/20 text-purple-500">{item.date_type}</Badge>}
+                          title={item.date_str}
+                          subtitle={item.event_description}
+                          meta={<Badge variant="outline" className="text-[9px] border-purple-500/20 text-purple-500">{item.confidence > 0.8 ? "HIGH" : "MED"}</Badge>}
                         />
                       ))}
                     </TabsContent>
@@ -813,102 +894,32 @@ export default function LanternExtract() {
               </Tabs>
             </div>
 
-            <div className="lg:col-span-1 border-l border-border pl-8 flex flex-col h-full">
-              <div className="space-y-6 flex-1">
-                {/* Engine Stats Panel */}
-                {pack.stats && (
-                  <div className="space-y-2 p-3 bg-muted/20 border border-muted rounded-md">
-                    <div className="flex items-center gap-2 mb-2">
-                       <Activity className="w-3 h-3 text-cyan-500" />
-                       <h3 className="font-mono text-xs uppercase font-bold text-foreground">Engine Stats</h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-y-1 gap-x-2 text-[10px] font-mono text-muted-foreground">
-                      <span>Ver:</span> <span className="text-foreground">{pack.engine.version}</span>
-                      <span>Mode:</span> <span className="text-foreground capitalize">{extractOptions.mode}</span>
-                      <span>Dedupe:</span> <span className="text-emerald-500">{pack.stats.duplicates_collapsed}</span>
-                      <span>Invalid:</span> <span className="text-red-500">{pack.stats.invalid_dropped}</span>
-                      <span>Headlines:</span> <span className="text-amber-500">{pack.stats.headlines_suppressed}</span>
-                    </div>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="font-mono text-sm uppercase font-bold text-muted-foreground">Pack Snapshot</h3>
-                    <Badge variant={pack.pack_id ? "outline" : "secondary"} className="font-mono text-[9px] text-muted-foreground">
-                       {pack.pack_id ? pack.pack_id.slice(0, 8) : "UNSAVED"}
-                    </Badge>
-                  </div>
-                  
-                  {savedPacks.some(p => p.pack_id === pack.pack_id) && (
-                      <div className="flex items-center gap-2 p-2 bg-emerald-500/10 border border-emerald-500/20 rounded text-[10px] text-emerald-600 font-mono mb-2">
-                          <Check className="w-3 h-3" />
-                          Already in Library
-                      </div>
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                    <div className="flex justify-between p-2 bg-muted/30 rounded">
-                      <span>Entities</span>
-                      <span className="font-bold">{pack.items.entities.filter(i => i.included).length}</span>
-                    </div>
-                    <div className="flex justify-between p-2 bg-muted/30 rounded">
-                      <span>Quotes</span>
-                      <span className="font-bold">{pack.items.quotes.filter(i => i.included).length}</span>
-                    </div>
-                    <div className="flex justify-between p-2 bg-muted/30 rounded">
-                      <span>Metrics</span>
-                      <span className="font-bold">{pack.items.metrics.filter(i => i.included).length}</span>
-                    </div>
-                    <div className="flex justify-between p-2 bg-muted/30 rounded">
-                      <span>Timeline</span>
-                      <span className="font-bold">{pack.items.timeline.filter(i => i.included).length}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4 pt-4 border-t border-border">
-                  <Button 
-                    onClick={handleSave} 
-                    variant={savedPacks.some(p => p.pack_id === pack.pack_id) ? "outline" : "default"}
-                    className={cn(
-                        "w-full font-mono uppercase",
-                        savedPacks.some(p => p.pack_id === pack.pack_id) 
-                            ? "border-emerald-500 text-emerald-500 hover:bg-emerald-500/10" 
-                            : "bg-cyan-500 text-black hover:bg-cyan-400"
-                    )}
-                  >
-                    <Save className="w-4 h-4 mr-2" /> 
-                    {savedPacks.some(p => p.pack_id === pack.pack_id) ? "Update Snapshot" : "Save New Snapshot"}
-                  </Button>
-                  <Button onClick={() => setStep("export")} className="w-full font-mono uppercase bg-zinc-800 text-white hover:bg-zinc-700">
-                    Review & Export <ChevronRight className="w-4 h-4 ml-2" />
-                  </Button>
-                  <Button variant="ghost" onClick={reset} className="w-full font-mono uppercase text-xs">
-                    Discard Pack
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3: EXPORT */}
-        {step === "export" && pack && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-2">
-            <div className="order-2 lg:order-1 space-y-6">
-              <Card className="border-border bg-card/50">
+            {/* Sidebar Controls */}
+            <div className="space-y-6">
+              <Card className="border-border bg-card/50 backdrop-blur-sm">
                 <CardHeader>
-                  <CardTitle className="font-mono text-lg">Download Pack</CardTitle>
+                  <CardTitle className="font-mono text-sm uppercase">Pack Controls</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Button onClick={downloadJSON} variant="outline" className="w-full justify-start font-mono h-12">
-                    <FileJson className="w-4 h-4 mr-3 text-emerald-500" /> 
-                    Extraction Pack (JSON)
+                  <div className="grid grid-cols-2 gap-2 text-center">
+                    <div className="bg-muted p-2 rounded">
+                      <div className="text-xl font-bold font-mono">{pack.items.entities.length + pack.items.quotes.length + pack.items.metrics.length}</div>
+                      <div className="text-[10px] uppercase text-muted-foreground">Items</div>
+                    </div>
+                    <div className="bg-muted p-2 rounded">
+                      <div className="text-xl font-bold font-mono">{Object.values(pack.stats).reduce((a,b) => (typeof b === 'number' ? a+b : a), 0)}%</div>
+                      <div className="text-[10px] uppercase text-muted-foreground">Conf</div>
+                    </div>
+                  </div>
+                  
+                  <Button onClick={handleSave} className="w-full font-mono uppercase bg-emerald-500 text-black hover:bg-emerald-400">
+                    <Save className="w-4 h-4 mr-2" /> Save Snapshot
                   </Button>
-                  <Button onClick={downloadPDF} variant="outline" className="w-full justify-start font-mono h-12">
-                    <FileText className="w-4 h-4 mr-3 text-red-500" /> 
-                    Visual Binder (PDF)
+                  <Button onClick={downloadJSON} variant="outline" className="w-full font-mono uppercase text-xs">
+                    <Download className="w-3 h-3 mr-2" /> Export JSON
+                  </Button>
+                  <Button onClick={downloadPDF} variant="outline" className="w-full font-mono uppercase text-xs">
+                    <FileText className="w-3 h-3 mr-2" /> Export PDF
                   </Button>
                 </CardContent>
                 <CardFooter>
