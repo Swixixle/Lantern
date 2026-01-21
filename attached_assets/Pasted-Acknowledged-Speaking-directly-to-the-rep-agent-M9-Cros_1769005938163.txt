@@ -1,0 +1,80 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M9 — Cross-Dossier Comparison (Read-only) review and certification
+
+Status: CERTIFIED COMPLETE.
+
+You delivered the required M9 capability with the correct constraints (read-only, no merging/corruption of packs) and you implemented a comparison surface that is structural rather than narrative.
+
+What you shipped (and why it passes)
+
+1) Comparison logic (client/src/lib/comparison.ts)
+	•	comparePacks(packA, packB) returns a structured ComparisonResult.
+	•	Entity matching supports:
+	•	Exact ID match (high confidence)
+	•	Case-insensitive name match (lower confidence)
+	•	Overlap quantified via Jaccard index, which is the correct baseline for set overlap.
+	•	“Heuristic alignment” surfaces common actors across top lists (funders/hubs/enforcers).
+
+This is consistent with your epistemic posture: it measures overlap and role co-occurrence, not causality or intent.
+
+2) UI (client/src/pages/dossier-comparison.tsx)
+	•	Two selectors (Pack A / Pack B)
+	•	High-level stats: overlap count + Jaccard + alignment count
+	•	Shared entities table with match confidence
+	•	Separate alignment sections (funders, hubs, etc.)
+
+The surface is “receipt-like” enough to be usable without drifting into story.
+
+3) Integration
+	•	/compare route added
+	•	“Compare Dossiers” entry added to dashboard header
+
+⸻
+
+Non-blocking hardening notes (recommended)
+
+1) Name matching must be explicitly labeled as probabilistic
+
+You already mention “match confidence.” Good. Ensure the UI copy is unambiguous:
+	•	“Name match (case-insensitive)” ≠ same actor
+	•	require the user to confirm identity for any serious use
+
+Strong recommendation: in the Shared Entities table, show:
+	•	matchType: "id" | "name"
+	•	and a short warning badge for name
+
+2) Apply Evidence Density thresholds to comparison alignment
+
+If either dossier has a heuristic in status: insufficient, then:
+	•	do not compute “alignment” for that heuristic
+	•	show: “Alignment unavailable due to insufficient data in Pack X.”
+
+This prevents false “shared power players” conclusions from low-N packs.
+
+3) Ordering + reproducibility
+
+If you later export comparison reports, keep:
+	•	stable sorting
+	•	integrity fingerprints for both packs
+	•	and a comparison hash (optional)
+
+⸻
+
+Next directive (recommended)
+
+Proceed to M10: Comparison Report + Markdown Export (read-only artifact).
+
+Goal: let users generate a portable, auditable “Comparison Report” that includes:
+	•	pack fingerprints + generatedAt
+	•	overlap metrics (Jaccard)
+	•	shared entities with matchType and confidence
+	•	heuristic alignment sections with sufficiency gating
+	•	explicit “Interpretation Limits” block (comparison-specific)
+
+This is the natural extension of M7c/M8 into the comparison plane.
+
+If you’d rather stabilize before export, an alternate M10 is:
+Entity Identity Resolution v1 (manual alias linking between packs), but that’s more complex.
+
+ALEX STOP

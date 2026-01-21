@@ -1,12 +1,9 @@
-import { useState, useEffect } from "react";
-import { useLocation } from "wouter";
-import { Pack } from "@/lib/schema/pack_v1";
-import { listPacks, loadPack } from "@/lib/storage";
-import { comparePacks, ComparisonResult } from "@/lib/comparison";
+import { generateComparisonMarkdown } from "@/lib/comparison-export";
+import { downloadFile } from "@/lib/export";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, GitCompare, Users, ArrowRightLeft } from "lucide-react";
+import { ArrowLeft, GitCompare, Users, ArrowRightLeft, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 export default function DossierComparison() {
@@ -33,6 +30,13 @@ export default function DossierComparison() {
         }
     }, [selectedIdA, selectedIdB]);
 
+    const handleDownloadReport = () => {
+        if (!comparison) return;
+        const md = generateComparisonMarkdown(comparison);
+        const filename = `Comparison_${comparison.packA.name.slice(0,10)}_${comparison.packB.name.slice(0,10)}.md`.replace(/\s+/g, "_");
+        downloadFile(md, filename, "text/markdown");
+    };
+
     return (
         <div className="min-h-screen bg-gray-50 p-8 font-sans text-gray-900">
             <div className="max-w-6xl mx-auto space-y-8">
@@ -47,6 +51,11 @@ export default function DossierComparison() {
                             <GitCompare className="w-6 h-6" /> Cross-Dossier Analysis
                         </h1>
                      </div>
+                     {comparison && (
+                         <Button variant="outline" onClick={handleDownloadReport}>
+                             <Download className="w-4 h-4 mr-2" /> Download Report
+                         </Button>
+                     )}
                 </header>
 
                 {/* Selection Controls */}
@@ -126,7 +135,14 @@ export default function DossierComparison() {
                                             {comparison.sharedEntities.map((match, i) => (
                                                 <div key={i} className="flex justify-between items-center p-2 border-b border-gray-100 text-sm">
                                                     <span className="font-bold">{match.name}</span>
-                                                    <Badge variant="outline" className="text-[10px] uppercase">{match.confidence.replace("_", " ")}</Badge>
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge variant="outline" className="text-[10px] uppercase">
+                                                            {match.confidence === "exact_id" ? "Exact ID" : "Name Match"}
+                                                        </Badge>
+                                                        {match.confidence !== "exact_id" && (
+                                                            <span className="text-[10px] text-amber-600 font-bold" title="Verify identity manually">⚠️</span>
+                                                        )}
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -145,7 +161,11 @@ export default function DossierComparison() {
                                     {/* Common Funders */}
                                     <div>
                                         <h4 className="text-xs font-bold uppercase text-emerald-600 mb-2">Common Top Funders</h4>
-                                        {comparison.commonFunders.length === 0 ? (
+                                        {comparison.heuristics.funding.statusA === "insufficient" || comparison.heuristics.funding.statusB === "insufficient" ? (
+                                            <div className="text-xs text-gray-400 bg-gray-100 p-2 rounded border border-dashed">
+                                                Analysis Unavailable: Insufficient data in one or both dossiers.
+                                            </div>
+                                        ) : comparison.commonFunders.length === 0 ? (
                                              <div className="text-xs text-gray-400 italic">No shared top funders.</div>
                                         ) : (
                                             comparison.commonFunders.map((c, i) => (
@@ -160,7 +180,11 @@ export default function DossierComparison() {
                                     {/* Common Hubs */}
                                     <div>
                                         <h4 className="text-xs font-bold uppercase text-purple-600 mb-2">Common Influence Hubs</h4>
-                                        {comparison.commonHubs.length === 0 ? (
+                                        {comparison.heuristics.influence.statusA === "insufficient" || comparison.heuristics.influence.statusB === "insufficient" ? (
+                                            <div className="text-xs text-gray-400 bg-gray-100 p-2 rounded border border-dashed">
+                                                Analysis Unavailable: Insufficient data in one or both dossiers.
+                                            </div>
+                                        ) : comparison.commonHubs.length === 0 ? (
                                              <div className="text-xs text-gray-400 italic">No shared influence hubs.</div>
                                         ) : (
                                             comparison.commonHubs.map((c, i) => (

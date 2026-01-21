@@ -2,6 +2,7 @@ import { Pack, Entity } from "./schema/pack_v1";
 import { computeFundingGravity } from "./heuristics/fundingGravity";
 import { computeEnforcementMap } from "./heuristics/enforcementMap";
 import { computeInfluenceHubs } from "./heuristics/influenceHubs";
+import { FindingStatus } from "./heuristics/types";
 
 export interface EntityMatch {
     name: string;
@@ -20,6 +21,12 @@ export interface ComparisonResult {
     overlapScore: number; // 0..1 (Jaccard index of entities)
 
     // Structural Alignment
+    heuristics: {
+        funding: { statusA: FindingStatus, statusB: FindingStatus },
+        enforcement: { statusA: FindingStatus, statusB: FindingStatus },
+        influence: { statusA: FindingStatus, statusB: FindingStatus }
+    };
+
     commonFunders: { name: string; rankA: number; rankB: number }[];
     commonEnforcers: { name: string; rankA: number; rankB: number }[];
     commonHubs: { name: string; rankA: number; rankB: number }[];
@@ -53,9 +60,6 @@ export function comparePacks(packA: Pack, packB: Pack): ComparisonResult {
 
         // Try Name match
         if (mapA.has(nameKey)) {
-            // Check if we already matched this ID (to avoid double counting if ID and Name match independently - rare but possible)
-            // Ideally we tracked matched IDs. 
-            // For v1, let's just push.
             sharedEntities.push({
                 name: eB.name,
                 entityA: mapA.get(nameKey)!,
@@ -88,8 +92,15 @@ export function comparePacks(packA: Pack, packB: Pack): ComparisonResult {
     const findCommonRanked = (
         listA: { entityId: string }[], 
         listB: { entityId: string }[],
+        statusA: FindingStatus,
+        statusB: FindingStatus,
         getRank: (index: number) => number
     ) => {
+        // GATING: If either pack is insufficient, return empty alignment (safety)
+        if (statusA === "insufficient" || statusB === "insufficient") {
+            return [];
+        }
+
         const common: { name: string; rankA: number; rankB: number }[] = [];
         
         listA.forEach((itemA, indexA) => {
@@ -114,9 +125,29 @@ export function comparePacks(packA: Pack, packB: Pack): ComparisonResult {
         return common;
     };
 
-    const commonFunders = findCommonRanked(heuristicsA.funding.funders, heuristicsB.funding.funders, i => i + 1);
-    const commonEnforcers = findCommonRanked(heuristicsA.enforcement.enforcers, heuristicsB.enforcement.enforcers, i => i + 1);
-    const commonHubs = findCommonRanked(heuristicsA.influence.results, heuristicsB.influence.results, i => i + 1);
+    const commonFunders = findCommonRanked(
+        heuristicsA.funding.funders, 
+        heuristicsB.funding.funders, 
+        heuristicsA.funding.status,
+        heuristicsB.funding.status,
+        i => i + 1
+    );
+
+    const commonEnforcers = findCommonRanked(
+        heuristicsA.enforcement.enforcers, 
+        heuristicsB.enforcement.enforcers, 
+        heuristicsA.enforcement.status,
+        heuristicsB.enforcement.status,
+        i => i + 1
+    );
+
+    const commonHubs = findCommonRanked(
+        heuristicsA.influence.results, 
+        heuristicsB.influence.results, 
+        heuristicsA.influence.status,
+        heuristicsB.influence.status,
+        i => i + 1
+    );
 
     return {
         packA: { id: packA.packId, name: packA.subjectName, date: packA.createdAt },
@@ -124,6 +155,11 @@ export function comparePacks(packA: Pack, packB: Pack): ComparisonResult {
         generatedAt: new Date().toISOString(),
         sharedEntities,
         overlapScore,
+        heuristics: {
+            funding: { statusA: heuristicsA.funding.status, statusB: heuristicsB.funding.status },
+            enforcement: { statusA: heuristicsA.enforcement.status, statusB: heuristicsB.enforcement.status },
+            influence: { statusA: heuristicsA.influence.status, statusB: heuristicsB.influence.status }
+        },
         commonFunders,
         commonEnforcers,
         commonHubs
