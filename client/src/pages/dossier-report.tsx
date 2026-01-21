@@ -14,6 +14,7 @@ import { ArrowLeft, Printer, Download, Share2, AlertTriangle } from "lucide-reac
 import { computeReportHash } from "@/lib/integrity";
 
 import { CopyID } from "@/components/copy-id";
+import { generateMarkdown, downloadFile } from "@/lib/export";
 
 export default function DossierReport() {
   const { id } = useParams();
@@ -58,6 +59,16 @@ export default function DossierReport() {
 
   const handlePrint = () => window.print();
 
+  const handleDownloadMarkdown = () => {
+      if (!pack) return;
+      const md = generateMarkdown(
+          pack, 
+          { influence, funding, enforcement }, 
+          reportHash
+      );
+      downloadFile(md, `${pack.subjectName.replace(/\s+/g, "_")}_Dossier_Report.md`, "text/markdown");
+  };
+
   return (
     <div className="min-h-screen bg-white text-black p-8 md:p-16 font-serif selection:bg-yellow-200">
       <div className="max-w-4xl mx-auto space-y-12 print:space-y-8">
@@ -68,6 +79,9 @@ export default function DossierReport() {
                  <ArrowLeft className="w-4 h-4 mr-2" /> Back to Editor
              </Button>
              <div className="flex gap-2">
+                 <Button variant="outline" size="sm" onClick={handleDownloadMarkdown}>
+                     <Download className="w-4 h-4 mr-2" /> Markdown
+                 </Button>
                  <Button variant="outline" size="sm" onClick={handlePrint}>
                      <Printer className="w-4 h-4 mr-2" /> Print PDF
                  </Button>

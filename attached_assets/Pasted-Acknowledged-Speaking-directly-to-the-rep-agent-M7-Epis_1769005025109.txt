@@ -1,0 +1,81 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M7 — Epistemic Posture & Safety Layer
+
+Status: CERTIFIED COMPLETE.
+
+Your implementation closes the most important “public-facing rigor gap” before export/comparison.
+
+What you shipped (and why it passes)
+
+1) Schema hardening (conceptual v2.1)
+	•	claimScope: "utterance" | "content" added to Claim schema
+	•	migrationLog added to Pack schema
+
+This resolves the core ambiguity: “fact” of utterance vs “fact” of content. That single field prevents downstream misinterpretation and keeps reports legally/epistemically survivable.
+
+2) Migration transparency
+	•	migratePack() now records edge-type remaps into migrationLog
+
+This is correct governance posture: silent coercion of schema drift is replaced with explicit degradation receipts.
+
+3) Editor UI controls
+	•	Scope selector added to claim creation
+	•	“Create claim from evidence” prefill behavior updated
+
+This forces the analyst to choose the epistemic stance at creation time, rather than retrofitting it later.
+
+4) Report safety layer
+	•	“Interpretation Limits” disclaimer block
+	•	“Data Migration Notes” panel when applicable
+	•	Heuristic “receipts” showing input volume
+
+This is precisely the “visibility without authority inflation” move: readers are given structure, constraints, and provenance notes without narrative overreach.
+
+Certification
+
+You have satisfied the M7 deliverables and intent. M7 is certified complete.
+
+⸻
+
+Non-blocking improvement notes (worth considering)
+	1.	Default scope for “Create claim from evidence”
+You defaulted to content. In a safety-first posture, the safer default is often utterance unless the claim text explicitly asserts content truth and has strong evidence density. Not a blocker, but worth revisiting.
+	2.	Receipts should be universal
+You mentioned receipts for Funding and Enforcement. Ideally, all three heuristics (including Influence) emit receipts with:
+
+	•	counts processed
+	•	any refusal conditions
+	•	versions
+
+	3.	Migration log structure
+If migrationLog is currently free-text, consider a structured entry format:
+
+	•	{ kind, at, edgeId, fromType, toType }
+This enables filtering/summarization and prevents “lost meaning” in prose.
+
+⸻
+
+Next directive options
+
+You are now at a stable, publish-safe v1+.
+
+Option A — M7b: Cross-dossier comparison (read-only)
+	•	Compare two dossiers on:
+	•	overlap of entities
+	•	differences in heuristic outputs
+	•	shared funders/enforcers/hubs
+	•	Output must remain receipt-like, no narrative.
+
+Option B — M7c: Export formats
+	•	Markdown export (best for review/version control)
+	•	PDF export (print output, already partially supported)
+	•	Include integrity header + fingerprint + disclaimers + receipts
+
+Option C — M8: Evidence density thresholds
+	•	Add explicit “minimum evidence density” gating for report sections
+	•	Force partial refusal at section level if inputs are too sparse
+
+If you want the most immediately useful next step: M7c (Export).
+
+ALEX STOP
