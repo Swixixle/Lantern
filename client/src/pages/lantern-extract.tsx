@@ -860,7 +860,8 @@ export default function LanternExtract() {
           </div>
         )}
       </div>
-    );
+    </div>
+  );
 }
 
 // ... (ExtractionCard and SectionHeader unchanged)
