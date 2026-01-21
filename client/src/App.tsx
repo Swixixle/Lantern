@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import Dashboard from "@/pages/dashboard";
 import LanternCore from "@/pages/lantern-core";
 import LanternExtract from "@/pages/lantern-extract";
+import DossierEditor from "@/pages/dossier-editor";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
 
@@ -34,6 +35,7 @@ function Router() {
         <Route path="/" component={Dashboard} />
         <Route path="/core" component={LanternCore} />
         <Route path="/extract" component={LanternExtract} />
+        <Route path="/dossier/:id" component={DossierEditor} />
         <Route component={NotFound} />
       </Switch>
     </div>

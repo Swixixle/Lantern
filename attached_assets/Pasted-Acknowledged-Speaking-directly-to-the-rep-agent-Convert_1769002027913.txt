@@ -1,0 +1,106 @@
+Acknowledged. Speaking directly to the rep agent.
+
+Converter (M3.2) review
+
+Your changes satisfy the critical requirements:
+	•	UUID safety: uuid/v4 resolves Node+browser parity and CI fragility.
+	•	Schema enforcement: adding sourceExtractPackId and terminating with PackV1Schema.parse() is the correct hard gate.
+	•	Semantic safety: “This source attributes…” plus reduced confidence is the right evidentiary posture for public-figure dossiers.
+	•	Resilience: optional chaining across source metadata prevents converter crashes.
+	•	Tests: converter-specific suite covering validity, entity tagging, utterance semantics, and source type normalization is an appropriate baseline.
+
+Status
+
+M3.2 (Extract → Dossier Converter): CERTIFIED COMPLETE
+
+⸻
+
+Next instructions: M3.3 Capture UI (Minimal, Workflow-Complete)
+
+Your next step is to make the dossier editable by a human. Keep this minimal. The goal is workflow completeness, not beauty.
+
+M3.3 objectives
+	1.	A user can create a PackV1 dossier manually.
+	2.	A user can promote an extract to a dossier (you already have converter) and then edit it.
+	3.	A user can add:
+	•	an Entity
+	•	an Edge
+	•	an Evidence item
+	•	a Claim linked to Evidence
+	4.	Guardrails prevent “fact without evidence.”
+
+⸻
+
+M3.3 deliverables (exact)
+
+1) Dossier editor view
+
+Add a route or panel that loads a PackV1 by packId and supports CRUD for:
+	•	Entities
+	•	Add / rename / delete
+	•	Edit type, aliases, tags
+	•	Edges
+	•	Create edge by selecting from/to entities + type
+	•	Optional notes/date range
+	•	Delete
+	•	Evidence
+	•	Add evidence: sourceType, title, url, date, excerpt, publisher
+	•	Delete
+	•	Claims
+	•	Add claim: text, claimType, confidence
+	•	Attach evidence via multi-select
+	•	Delete
+
+2) Guardrails (must ship in v1)
+	•	If claimType === "fact" then require evidenceIds.length >= 1.
+	•	If missing evidence, disable Save/Add and show a clear inline message.
+	•	If claimType === "allegation" or "inference", show a label badge (non-dismissable).
+
+3) “Promote to dossier” workflow
+
+From an extracted pack:
+	•	Button: Create dossier from extract
+	•	After creation, redirect to dossier editor.
+
+4) Persistence integration
+
+All edits must flow through your existing persisted LibraryState (IndexedDB v1).
+No separate storage.
+
+5) Tests (minimum)
+	•	Unit: claim validation rule (“fact requires evidence”).
+	•	Integration-ish: create dossier → add entity/evidence/claim → reload → state persists.
+
+⸻
+
+Engineering constraints (to prevent drift)
+	•	Do not add graphs yet.
+	•	Do not add heuristic lenses yet.
+	•	Do not add search, tagging systems, or report generation yet.
+	•	Keep UI primitive: forms + lists is enough.
+
+⸻
+
+Acceptance criteria for M3.3 (PASS/FAIL)
+
+PASS only if:
+	1.	You can create a dossier and fully populate it (entity, edge, evidence, claim).
+	2.	You cannot create a “fact” claim without evidence.
+	3.	Reload restores the dossier exactly.
+	4.	Export/import remains lossless with dossiers + extracts together.
+
+⸻
+
+After M3.3 (next step preview)
+
+Once Capture UI is certified, the next phase is M4: Shadow-Caste Heuristic Lens v1:
+	•	influence hubs (degree)
+	•	revolving door (role transitions, if you represent roles)
+	•	funding gravity (donor/asset concentration)
+All outputs must cite IDs.
+
+⸻
+
+Proceed with M3.3 Capture UI now.
+
+ALEX STOP

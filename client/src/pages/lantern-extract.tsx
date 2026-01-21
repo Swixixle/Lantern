@@ -176,7 +176,12 @@ export default function LanternExtract() {
       setSavedPacks(newSaved);
       debouncedSave({ packs: newSaved }, setStorageStatus);
       
-      alert(`Dossier Created: ${dossier.subjectName} (ID: ${dossier.packId.slice(0,8)})`);
+      // Redirect to Editor
+      setLocation(`/dossier/${dossier.packId}`);
+  };
+
+  const handleLoadDossier = (packId: string) => {
+      setLocation(`/dossier/${packId}`);
   };
 
 // ... In Render Loop ...
@@ -194,7 +199,7 @@ export default function LanternExtract() {
 
 // ... Inside Card Loop ...
 
-                  <div className="flex-1 cursor-pointer" onClick={() => "pack_id" in p ? handleLoadPack(p) : alert("Dossier View Not Implemented Yet")}>
+                  <div className="flex-1 cursor-pointer" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : handleLoadDossier((p as PackV1).packId)}>
                     <div className="flex items-center gap-2 mb-1">
                         <p className="font-bold font-mono text-sm">
                             {"source" in p ? p.source.title : (p as PackV1).subjectName}
@@ -235,7 +240,7 @@ export default function LanternExtract() {
                            <GitCompare className="w-3 h-3 mr-2" /> Diff
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : alert("Dossier View Not Implemented Yet")}>
+                      <Button variant="ghost" size="icon" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : handleLoadDossier((p as PackV1).packId)}>
                          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-cyan-500" />
                       </Button>
                   </div>
