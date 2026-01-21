@@ -130,10 +130,16 @@ export function computeFundingGravity(pack: Pack): FundingGravityFinding {
   const topFunderEdges = sortedFunders.length > 0 ? sortedFunders[0].outgoingFundingEdges : 0;
   const topRecipientEdges = sortedRecipients.length > 0 ? sortedRecipients[0].incomingFundingEdges : 0;
 
+  const THRESHOLD = 3; // Need at least 3 funding edges
+
   return {
       kind: "funding_gravity_v1",
       packId: pack.packId,
       generatedAt: new Date().toISOString(),
+      status: totalFundingEdges >= THRESHOLD ? "sufficient" : "insufficient",
+      threshold: THRESHOLD,
+      processedCount: totalFundingEdges,
+      results: [], // Base interface compat
       funders: sortedFunders,
       recipients: sortedRecipients,
       concentration: totalFundingEdges > 0 ? {

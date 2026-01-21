@@ -164,117 +164,147 @@ export default function DossierReport() {
         </section>
 
         {/* 2. Structural Analysis (Influence) */}
-        {influence && influence.results.length > 0 && (
+        {influence && (
             <section className="break-inside-avoid">
                 <h2 className="text-xl font-bold uppercase border-b border-gray-400 mb-4 text-purple-900">
                     02. Structural Influence (Hubs)
                 </h2>
-                <div className="space-y-4">
-                    {influence.results.slice(0, 5).map((res, i) => {
-                        const entity = pack.entities.find(e => e.id === res.entityId);
-                        return (
-                            <div key={res.entityId} className="flex items-baseline justify-between border-b border-dotted border-gray-300 pb-2">
-                                <div className="flex gap-4">
-                                    <span className="font-mono font-bold text-gray-400">#{i+1}</span>
-                                    <span className="font-bold text-lg flex items-center gap-2">
-                                        {entity?.name}
-                                        <CopyID id={res.entityId} className="h-3 w-3 opacity-50 hover:opacity-100" />
-                                    </span>
+                
+                {influence.status === "insufficient" ? (
+                    <div className="bg-gray-100 p-6 text-center text-gray-500 font-mono text-xs uppercase border border-dashed border-gray-300">
+                        Insufficient Data<br/>
+                        <span className="opacity-50">Requires {influence.threshold} verified relationships. (Current: {influence.processedCount})</span>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {influence.results.slice(0, 5).map((res, i) => {
+                            const entity = pack.entities.find(e => e.id === res.entityId);
+                            return (
+                                <div key={res.entityId} className="flex items-baseline justify-between border-b border-dotted border-gray-300 pb-2">
+                                    <div className="flex gap-4">
+                                        <span className="font-mono font-bold text-gray-400">#{i+1}</span>
+                                        <span className="font-bold text-lg flex items-center gap-2">
+                                            {entity?.name}
+                                            <CopyID id={res.entityId} className="h-3 w-3 opacity-50 hover:opacity-100" />
+                                        </span>
+                                    </div>
+                                    <div className="text-sm font-mono">
+                                        <span className="mr-4">Degree: {res.degree}</span>
+                                        <span className="text-gray-500">({res.supportingEdgeIds.length} citations)</span>
+                                    </div>
                                 </div>
-                                <div className="text-sm font-mono">
-                                    <span className="mr-4">Degree: {res.degree}</span>
-                                    <span className="text-gray-500">({res.supportingEdgeIds.length} citations)</span>
-                                </div>
-                            </div>
-                        )
-                    })}
-                </div>
+                            )
+                        })}
+                    </div>
+                )}
             </section>
         )}
 
         {/* 3. Financial Analysis (Funding) */}
-        {funding && funding.concentration && (
+        {funding && (
             <section className="break-inside-avoid">
                 <h2 className="text-xl font-bold uppercase border-b border-gray-400 mb-4 text-emerald-900">
                     03. Financial Flows (Gravity)
                 </h2>
-                <div className="grid md:grid-cols-2 gap-8">
-                    <div>
-                        <h3 className="font-mono text-sm uppercase font-bold mb-2 text-gray-500">Top Funders</h3>
-                         {funding.funders.slice(0, 5).map((f, i) => {
-                            const entity = pack.entities.find(e => e.id === f.entityId);
-                            return (
-                                <div key={f.entityId} className="flex justify-between border-b border-gray-100 py-1">
-                                    <span>{i+1}. {entity?.name}</span>
-                                    <span className="font-mono font-bold">{f.outgoingFundingEdges} Out</span>
+                
+                {funding.status === "insufficient" ? (
+                    <div className="bg-gray-100 p-6 text-center text-gray-500 font-mono text-xs uppercase border border-dashed border-gray-300">
+                        Insufficient Data<br/>
+                        <span className="opacity-50">Requires {funding.threshold} funding relationships. (Current: {funding.processedCount})</span>
+                    </div>
+                ) : (
+                    <>
+                        <div className="grid md:grid-cols-2 gap-8">
+                            <div>
+                                <h3 className="font-mono text-sm uppercase font-bold mb-2 text-gray-500">Top Funders</h3>
+                                {funding.funders.slice(0, 5).map((f, i) => {
+                                    const entity = pack.entities.find(e => e.id === f.entityId);
+                                    return (
+                                        <div key={f.entityId} className="flex justify-between border-b border-gray-100 py-1">
+                                            <span>{i+1}. {entity?.name}</span>
+                                            <span className="font-mono font-bold">{f.outgoingFundingEdges} Out</span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                            <div>
+                                <h3 className="font-mono text-sm uppercase font-bold mb-2 text-gray-500">Top Recipients</h3>
+                                {funding.recipients.slice(0, 5).map((r, i) => {
+                                    const entity = pack.entities.find(e => e.id === r.entityId);
+                                    return (
+                                        <div key={r.entityId} className="flex justify-between border-b border-gray-100 py-1">
+                                            <span>{i+1}. {entity?.name}</span>
+                                            <span className="font-mono font-bold">{r.incomingFundingEdges} In</span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                        {funding.concentration && (
+                            <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 text-sm font-mono text-emerald-800">
+                                <strong>Concentration:</strong> The top funder controls {(funding.concentration.topFundersShare * 100).toFixed(1)}% of all mapped flows.
+                                <div className="mt-2 text-[10px] text-emerald-600 border-t border-emerald-200 pt-1 uppercase">
+                                    Receipt: Processed {funding.processedCount} funding edges.
                                 </div>
-                            )
-                        })}
-                    </div>
-                    <div>
-                        <h3 className="font-mono text-sm uppercase font-bold mb-2 text-gray-500">Top Recipients</h3>
-                         {funding.recipients.slice(0, 5).map((r, i) => {
-                            const entity = pack.entities.find(e => e.id === r.entityId);
-                            return (
-                                <div key={r.entityId} className="flex justify-between border-b border-gray-100 py-1">
-                                    <span>{i+1}. {entity?.name}</span>
-                                    <span className="font-mono font-bold">{r.incomingFundingEdges} In</span>
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-                <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 text-sm font-mono text-emerald-800">
-                    <strong>Concentration:</strong> The top funder controls {(funding.concentration.topFundersShare * 100).toFixed(1)}% of all mapped flows.
-                    <div className="mt-2 text-[10px] text-emerald-600 border-t border-emerald-200 pt-1 uppercase">
-                        Receipt: Processed {pack.edges.filter(e => e.type.includes("funded") || e.type.includes("donated")).length} funding edges.
-                    </div>
-                </div>
+                            </div>
+                        )}
+                    </>
+                )}
             </section>
         )}
 
         {/* 4. Gatekeeping Analysis (Enforcement) */}
-        {enforcement && enforcement.enforcers.length > 0 && (
+        {enforcement && (
             <section className="break-inside-avoid">
                  <h2 className="text-xl font-bold uppercase border-b border-gray-400 mb-4 text-red-900">
                     04. Gatekeeping & Enforcement
                 </h2>
-                <div className="grid md:grid-cols-2 gap-8 mb-4">
-                    <div>
-                         <h3 className="font-mono text-sm uppercase font-bold mb-2 text-red-700">Enforcers (Active)</h3>
-                         {enforcement.enforcers.slice(0, 5).map((e, i) => {
-                            const entity = pack.entities.find(ent => ent.id === e.entityId);
-                            return (
-                                <div key={e.entityId} className="flex justify-between border-b border-gray-100 py-1">
-                                    <span className="font-bold">{entity?.name}</span>
-                                    <span className="font-mono text-red-600">{e.enforcementActions} Actions</span>
-                                </div>
-                            )
-                        })}
+                
+                {enforcement.status === "insufficient" ? (
+                    <div className="bg-gray-100 p-6 text-center text-gray-500 font-mono text-xs uppercase border border-dashed border-gray-300">
+                        Insufficient Data<br/>
+                        <span className="opacity-50">Requires {enforcement.threshold} enforcement events. (Current: {enforcement.processedCount})</span>
                     </div>
-                     <div>
-                         <h3 className="font-mono text-sm uppercase font-bold mb-2 text-orange-700">Targets (Passive)</h3>
-                         {enforcement.targets.slice(0, 5).map((t, i) => {
-                            const entity = pack.entities.find(ent => ent.id === t.entityId);
-                            return (
-                                <div key={t.entityId} className="flex justify-between border-b border-gray-100 py-1">
-                                    <span className="font-bold">{entity?.name}</span>
-                                    <span className="font-mono text-orange-600">{t.targetedActions} In</span>
-                                </div>
-                            )
-                        })}
-                    </div>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    {Object.entries(enforcement.breakdownByType).map(([type, count]) => (
-                        <span key={type} className="px-2 py-1 bg-red-100 text-red-800 text-xs font-mono uppercase rounded border border-red-200">
-                            {type.replace("_by", "")}: {count}
-                        </span>
-                    ))}
-                </div>
-                 <div className="mt-4 text-[10px] font-mono text-gray-500 uppercase border-t border-gray-100 pt-2">
-                    Receipt: Identified {enforcement.enforcers.length} active enforcers and {enforcement.targets.length} targets.
-                </div>
+                ) : (
+                    <>
+                        <div className="grid md:grid-cols-2 gap-8 mb-4">
+                            <div>
+                                 <h3 className="font-mono text-sm uppercase font-bold mb-2 text-red-700">Enforcers (Active)</h3>
+                                 {enforcement.enforcers.slice(0, 5).map((e, i) => {
+                                    const entity = pack.entities.find(ent => ent.id === e.entityId);
+                                    return (
+                                        <div key={e.entityId} className="flex justify-between border-b border-gray-100 py-1">
+                                            <span className="font-bold">{entity?.name}</span>
+                                            <span className="font-mono text-red-600">{e.enforcementActions} Actions</span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                             <div>
+                                 <h3 className="font-mono text-sm uppercase font-bold mb-2 text-orange-700">Targets (Passive)</h3>
+                                 {enforcement.targets.slice(0, 5).map((t, i) => {
+                                    const entity = pack.entities.find(ent => ent.id === t.entityId);
+                                    return (
+                                        <div key={t.entityId} className="flex justify-between border-b border-gray-100 py-1">
+                                            <span className="font-bold">{entity?.name}</span>
+                                            <span className="font-mono text-orange-600">{t.targetedActions} In</span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {Object.entries(enforcement.breakdownByType).map(([type, count]) => (
+                                <span key={type} className="px-2 py-1 bg-red-100 text-red-800 text-xs font-mono uppercase rounded border border-red-200">
+                                    {type.replace("_by", "")}: {count}
+                                </span>
+                            ))}
+                        </div>
+                         <div className="mt-4 text-[10px] font-mono text-gray-500 uppercase border-t border-gray-100 pt-2">
+                            Receipt: Identified {enforcement.enforcers.length} active enforcers and {enforcement.targets.length} targets.
+                        </div>
+                    </>
+                )}
             </section>
         )}
 

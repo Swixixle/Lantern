@@ -67,10 +67,17 @@ export function computeEnforcementMap(pack: Pack): EnforcementMapFinding {
     const sortedEnforcers = Array.from(enforcerStats.values()).sort((a, b) => b.enforcementActions - a.enforcementActions);
     const sortedTargets = Array.from(targetStats.values()).sort((a, b) => b.targetedActions - a.targetedActions);
 
+    const THRESHOLD = 1; // Even 1 enforcement action is notable
+    const totalEnforcementEdges = Object.values(breakdownByType).reduce((a, b) => a + b, 0);
+
     return {
         kind: "enforcement_map_v1",
         packId: pack.packId,
         generatedAt: new Date().toISOString(),
+        status: totalEnforcementEdges >= THRESHOLD ? "sufficient" : "insufficient",
+        threshold: THRESHOLD,
+        processedCount: totalEnforcementEdges,
+        results: [], // Base interface compat
         enforcers: sortedEnforcers,
         targets: sortedTargets,
         breakdownByType

@@ -50,10 +50,16 @@ export function computeInfluenceHubs(pack: Pack): InfluenceHubsFinding {
   // Rank by total degree (descending)
   results.sort((a, b) => b.degree - a.degree);
 
+  const THRESHOLD = 5; // Need at least 5 edges for meaningful centrality analysis
+  const processedCount = pack.edges.length; // Approximate, or count connected edges specifically
+
   return {
     kind: "influence_hubs_v1",
     packId: pack.packId,
     generatedAt: new Date().toISOString(),
+    status: processedCount >= THRESHOLD ? "sufficient" : "insufficient",
+    threshold: THRESHOLD,
+    processedCount,
     results
   };
 }

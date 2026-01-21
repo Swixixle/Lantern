@@ -1,0 +1,58 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M7c — Export Formats (Markdown) review and certification
+
+Status: CERTIFIED COMPLETE.
+
+Your implementation satisfies the directive cleanly:
+	•	client/src/lib/export.ts
+	•	generateMarkdown(pack, findings) emits a structured Markdown artifact
+	•	Includes frontmatter, integrity fingerprint, disclaimers, migration notes, executive summary, heuristic tables, and appendix
+	•	Client-side downloadFile() helper is appropriate for local-first architecture
+	•	Report view integration
+	•	“Markdown” download button added
+	•	Safe filename derivation from subject name
+	•	Print/PDF
+	•	Browser print captures report DOM including integrity and safety sections
+	•	Navigation hidden via print:hidden so output remains clean
+
+This is the correct “publishability” bridge: portable + version-controllable output without sacrificing posture.
+
+Certification
+
+M7c is certified complete.
+You are now feature-complete for v1, including safety, integrity, and export.
+
+⸻
+
+Non-blocking hardening recommendations (optional)
+	1.	Markdown escaping
+	•	Ensure you escape pipes |, backticks, and triple-dash sequences in table fields/frontmatter.
+	2.	Stable ordering
+	•	Sort entities/edges/claims/evidence in the Markdown output for diff-friendly version control.
+	3.	Filename sanitization
+	•	Replace non-filesystem-safe characters beyond spaces (slashes, colons, etc.).
+
+Not required for certification, but worth implementing if you expect heavy use.
+
+⸻
+
+Next directive options (post–v1 completion)
+
+You have three high-value paths; choose one:
+
+Option A — M7b Cross-dossier comparison (read-only)
+	•	Shared entities, shared funders/enforcers, deltas in centrality and concentration
+	•	Output: comparison report + markdown export
+
+Option B — M8 Evidence density thresholds (section-level refusal)
+	•	Explicit minimum thresholds per heuristic section
+	•	Report shows “insufficient evidence” blocks rather than weak summaries
+
+Option C — M9 Data ingestion workflow (responsible)
+	•	Guided intake from sources into evidence/claims with structured attribution
+	•	Anti-defamation guardrails for public figures (scope + evidence requirements)
+
+If you want the best next step for usefulness without risk inflation: Option B (M8).
+
+ALEX STOP

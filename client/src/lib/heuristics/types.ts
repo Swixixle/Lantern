@@ -1,10 +1,15 @@
 
 // Heuristic Finding Types
 
+export type FindingStatus = "sufficient" | "insufficient";
+
 export interface HeuristicFinding {
   kind: string;
   packId: string;
   generatedAt: string;
+  status: FindingStatus;
+  threshold: number;
+  processedCount: number;
   results: any[];
 }
 
@@ -37,7 +42,7 @@ export interface RecipientStat {
     supportingEdgeIds: string[];
 }
 
-export interface FundingGravityFinding {
+export interface FundingGravityFinding extends HeuristicFinding {
   kind: "funding_gravity_v1";
   packId: string;
   generatedAt: string;
@@ -64,7 +69,7 @@ export interface TargetStat {
   supportingEdgeIds: string[];
 }
 
-export interface EnforcementMapFinding {
+export interface EnforcementMapFinding extends HeuristicFinding {
   kind: "enforcement_map_v1";
   packId: string;
   generatedAt: string;

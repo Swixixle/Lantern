@@ -1,5 +1,8 @@
-import { Pack } from "./schema/pack_v1";
-import { InfluenceHubsFinding, FundingGravityFinding, EnforcementMapFinding } from "./heuristics/types";
+// Hardening Helper
+const safeStr = (str: string) => {
+    // Escape pipes, backticks, etc.
+    return str.replace(/\|/g, "\\|").replace(/`/g, "\\`");
+};
 
 export function generateMarkdown(
     pack: Pack,
@@ -14,7 +17,7 @@ export function generateMarkdown(
     
     // --- Header & Frontmatter ---
     let md = `---
-title: "${pack.subjectName} - Dossier Report"
+title: "${safeStr(pack.subjectName)} - Dossier Report"
 date: ${date}
 packId: ${pack.packId}
 schemaVersion: ${pack.schemaVersion}
@@ -22,7 +25,7 @@ fingerprint: ${reportHash}
 generatedBy: Lantern Protocol
 ---
 
-# ${pack.subjectName}
+# ${safeStr(pack.subjectName)}
 **Dossier ID:** \`${pack.packId}\`
 **Date:** ${date}
 **Fingerprint (SHA-256):** \`${reportHash}\`
@@ -38,7 +41,7 @@ generatedBy: Lantern Protocol
     if (pack.migrationLog && pack.migrationLog.length > 0) {
         md += `### ⚠️ Data Migration Notes\n`;
         pack.migrationLog.forEach(log => {
-            md += `- ${log}\n`;
+            md += `- ${safeStr(log)}\n`;
         });
         md += `\n`;
     }
@@ -50,74 +53,94 @@ generatedBy: Lantern Protocol
     md += `* **Evidence Items:** ${pack.evidence.length}\n`;
     md += `* **Relationships:** ${pack.edges.length}\n\n`;
     
-    md += `This dossier compiles intelligence regarding **${pack.subjectName}**, identifying key structural influence, financial flows, and enforcement actions. Analysis generated via Lantern Shadow-Caste heuristics (v1).\n\n`;
+    md += `This dossier compiles intelligence regarding **${safeStr(pack.subjectName)}**, identifying key structural influence, financial flows, and enforcement actions. Analysis generated via Lantern Shadow-Caste heuristics (v1).\n\n`;
 
     // --- Structural Influence ---
-    if (findings.influence && findings.influence.results.length > 0) {
+    if (findings.influence) {
         md += `## 02. Structural Influence (Hubs)\n\n`;
-        md += `| Rank | Entity | Degree | Citations |\n`;
-        md += `|------|--------|--------|-----------|\n`;
-        findings.influence.results.slice(0, 10).forEach((res, i) => {
-            const entity = pack.entities.find(e => e.id === res.entityId);
-            md += `| ${i+1} | ${entity?.name || "Unknown"} | ${res.degree} | ${res.supportingEdgeIds.length} |\n`;
-        });
-        md += `\n`;
+        
+        if (findings.influence.status === "insufficient") {
+             md += `> **Insufficient Data:** This section requires at least ${findings.influence.threshold} relationships to generate a structural analysis. Current count: ${findings.influence.processedCount}.\n\n`;
+        } else if (findings.influence.results.length > 0) {
+            md += `| Rank | Entity | Degree | Citations |\n`;
+            md += `|------|--------|--------|-----------|\n`;
+            findings.influence.results.slice(0, 10).forEach((res, i) => {
+                const entity = pack.entities.find(e => e.id === res.entityId);
+                md += `| ${i+1} | ${safeStr(entity?.name || "Unknown")} | ${res.degree} | ${res.supportingEdgeIds.length} |\n`;
+            });
+            md += `\n`;
+        }
     }
 
     // --- Financial Flows ---
-    if (findings.funding && findings.funding.concentration) {
+    if (findings.funding) {
         md += `## 03. Financial Flows (Gravity)\n\n`;
         
-        md += `### Top Funders\n`;
-        findings.funding.funders.slice(0, 5).forEach((f, i) => {
-            const entity = pack.entities.find(e => e.id === f.entityId);
-            md += `${i+1}. **${entity?.name || "Unknown"}** (${f.outgoingFundingEdges} Out)\n`;
-        });
-        md += `\n`;
+        if (findings.funding.status === "insufficient") {
+             md += `> **Insufficient Data:** This section requires at least ${findings.funding.threshold} verified funding relationships. Current count: ${findings.funding.processedCount}.\n\n`;
+        } else if (findings.funding.concentration) {
+            md += `### Top Funders\n`;
+            findings.funding.funders.slice(0, 5).forEach((f, i) => {
+                const entity = pack.entities.find(e => e.id === f.entityId);
+                md += `${i+1}. **${safeStr(entity?.name || "Unknown")}** (${f.outgoingFundingEdges} Out)\n`;
+            });
+            md += `\n`;
 
-        md += `### Top Recipients\n`;
-        findings.funding.recipients.slice(0, 5).forEach((r, i) => {
-            const entity = pack.entities.find(e => e.id === r.entityId);
-            md += `${i+1}. **${entity?.name || "Unknown"}** (${r.incomingFundingEdges} In)\n`;
-        });
-        md += `\n`;
-        
-        md += `> **Concentration:** The top funder controls ${(findings.funding.concentration.topFundersShare * 100).toFixed(1)}% of all mapped flows.\n\n`;
-        md += `*Receipt: Processed ${pack.edges.filter(e => e.type.includes("funded") || e.type.includes("donated")).length} funding edges.*\n\n`;
+            md += `### Top Recipients\n`;
+            findings.funding.recipients.slice(0, 5).forEach((r, i) => {
+                const entity = pack.entities.find(e => e.id === r.entityId);
+                md += `${i+1}. **${safeStr(entity?.name || "Unknown")}** (${r.incomingFundingEdges} In)\n`;
+            });
+            md += `\n`;
+            
+            md += `> **Concentration:** The top funder controls ${(findings.funding.concentration.topFundersShare * 100).toFixed(1)}% of all mapped flows.\n\n`;
+            md += `*Receipt: Processed ${findings.funding.processedCount} funding edges.*\n\n`;
+        }
     }
 
     // --- Enforcement ---
-    if (findings.enforcement && findings.enforcement.enforcers.length > 0) {
+    if (findings.enforcement) {
         md += `## 04. Gatekeeping & Enforcement\n\n`;
         
-        md += `### Enforcers (Active)\n`;
-        findings.enforcement.enforcers.slice(0, 5).forEach((e, i) => {
-            const entity = pack.entities.find(ent => ent.id === e.entityId);
-            md += `- **${entity?.name}**: ${e.enforcementActions} Actions\n`;
-        });
-        md += `\n`;
+        if (findings.enforcement.status === "insufficient") {
+             md += `> **Insufficient Data:** This section requires at least ${findings.enforcement.threshold} verified enforcement events. Current count: ${findings.enforcement.processedCount}.\n\n`;
+        } else if (findings.enforcement.enforcers.length > 0) {
+            md += `### Enforcers (Active)\n`;
+            findings.enforcement.enforcers.slice(0, 5).forEach((e, i) => {
+                const entity = pack.entities.find(ent => ent.id === e.entityId);
+                md += `- **${safeStr(entity?.name || "Unknown")}**: ${e.enforcementActions} Actions\n`;
+            });
+            md += `\n`;
 
-        md += `### Targets (Passive)\n`;
-        findings.enforcement.targets.slice(0, 5).forEach((t, i) => {
-            const entity = pack.entities.find(ent => ent.id === t.entityId);
-            md += `- **${entity?.name}**: ${t.targetedActions} In\n`;
-        });
-        md += `\n`;
+            md += `### Targets (Passive)\n`;
+            findings.enforcement.targets.slice(0, 5).forEach((t, i) => {
+                const entity = pack.entities.find(ent => ent.id === t.entityId);
+                md += `- **${safeStr(entity?.name || "Unknown")}**: ${t.targetedActions} In\n`;
+            });
+            md += `\n`;
 
-        md += `**Breakdown:** `;
-        md += Object.entries(findings.enforcement.breakdownByType)
-            .map(([type, count]) => `${type.replace("_by", "")}: ${count}`)
-            .join(", ");
-        md += `\n\n`;
-        
-        md += `*Receipt: Identified ${findings.enforcement.enforcers.length} active enforcers and ${findings.enforcement.targets.length} targets.*\n\n`;
+            md += `**Breakdown:** `;
+            md += Object.entries(findings.enforcement.breakdownByType)
+                .map(([type, count]) => `${type.replace("_by", "")}: ${count}`)
+                .join(", ");
+            md += `\n\n`;
+            
+            md += `*Receipt: Identified ${findings.enforcement.enforcers.length} active enforcers and ${findings.enforcement.targets.length} targets.*\n\n`;
+        }
     }
 
     // --- Appendix ---
     md += `## Appendix: Verified Claims\n\n`;
-    pack.claims.forEach((claim, i) => {
+    
+    // Sort claims by confidence (desc) then date (asc)
+    const sortedClaims = [...pack.claims].sort((a, b) => {
+        if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+        return a.createdAt.localeCompare(b.createdAt);
+    });
+
+    sortedClaims.forEach((claim, i) => {
         md += `### C-${i+1} (${claim.claimType.toUpperCase()})\n`;
-        md += `> ${claim.text}\n\n`;
+        md += `> ${safeStr(claim.text)}\n\n`;
         md += `**Scope:** ${claim.claimScope || "content"} | **Confidence:** ${claim.confidence}\n\n`;
         
         if (claim.evidenceIds.length > 0) {
@@ -125,7 +148,7 @@ generatedBy: Lantern Protocol
             claim.evidenceIds.forEach(eid => {
                 const ev = pack.evidence.find(e => e.id === eid);
                 if (ev) {
-                    md += `- [${ev.sourceType}] ${ev.title} (${ev.date}) ${ev.url ? `[Link](${ev.url})` : ''}\n`;
+                    md += `- [${ev.sourceType}] ${safeStr(ev.title)} (${ev.date}) ${ev.url ? `[Link](${ev.url})` : ''}\n`;
                 }
             });
             md += `\n`;
