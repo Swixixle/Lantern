@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeFundingGravity } from "@/lib/heuristics/fundingGravity";
-import { PackV1 } from "@/lib/schema/pack_v1";
+import { Pack } from "@/lib/schema/pack_v1";
 
 describe("Heuristic: Funding Gravity (M4.2)", () => {
     
@@ -10,9 +10,10 @@ describe("Heuristic: Funding Gravity (M4.2)", () => {
     // R1 -> Donated_to -> Funder A (Loop / Kickback check? Or just circular)
     // R1 is also funded_by Funder B (Cross funding)
     
-    const fixture: PackV1 = {
-        schema: "lantern.dossier.pack.v1",
+    const fixture: Pack = {
         packId: "funding-fixture",
+        packType: "topic_ecosystem",
+        schemaVersion: 2,
         subjectName: "Funding Test",
         entities: [
             { id: "F1", name: "Funder A", type: "org" },

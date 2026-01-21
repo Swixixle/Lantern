@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import "fake-indexeddb/auto"; // Use fake-indexeddb
 import { persistence, LibraryState } from "@/lib/storage";
-import { PackV1 } from "@/lib/schema/pack_v1";
+import { Pack, PackSchema } from "@/lib/schema/pack_v1";
 import { LanternPack } from "@/lib/lanternExtract";
 
 describe("M3.3 Certification Proof", () => {
@@ -13,9 +13,17 @@ describe("M3.3 Certification Proof", () => {
 
     it("Proof 1: Persistence after reload", async () => {
         // 1. Create Dossier
-        const dossier: PackV1 = {
-            schema: "lantern.dossier.pack.v1",
+        const dossier: Pack = {
+            schema: "lantern.dossier.pack.v1", // Will be removed/ignored by PackSchema usually, or we update it? 
+            // Wait, schemaVersion is the new discriminator. But 'schema' string was used in 'AnyPack' before.
+            // Let's check Pack definition. PackSchema does NOT have 'schema' string field.
+            // But LanternPack DOES. 'AnyPack' is discriminated by schema vs schemaVersion?
+            // LanternPack has `schema: "lantern.extract.pack.v1"`.
+            // Pack (V2) has `schemaVersion: 2` and `packType`.
+            // We need to ensure discriminator works.
             packId: "dossier-123",
+            packType: "public_figure",
+            schemaVersion: 2,
             subjectName: "Test Subject",
             entities: [{ id: "e1", name: "E1", type: "person", aliases: [], tags: [] }],
             edges: [],
@@ -34,7 +42,7 @@ describe("M3.3 Certification Proof", () => {
         // 4. Verify
         expect(loaded).toBeDefined();
         expect(loaded?.packs.length).toBe(1);
-        const loadedDossier = loaded?.packs[0] as PackV1;
+        const loadedDossier = loaded?.packs[0] as Pack;
         expect(loadedDossier.packId).toBe("dossier-123");
         expect(loadedDossier.entities[0].name).toBe("E1");
         expect(loadedDossier.claims[0].text).toBe("Test Claim");
@@ -52,9 +60,10 @@ describe("M3.3 Certification Proof", () => {
             stats: { total_extracts: 0, confidence_avg: 0 }
         };
 
-        const dossierPack: PackV1 = {
-             schema: "lantern.dossier.pack.v1",
+        const dossierPack: Pack = {
              packId: "dossier-1",
+             packType: "public_figure",
+             schemaVersion: 2,
              subjectName: "Subject 1",
              entities: [],
              edges: [],
@@ -84,7 +93,7 @@ describe("M3.3 Certification Proof", () => {
         expect(restored?.packs.length).toBe(2);
         
         const restoredExtract = restored?.packs.find(p => "schema" in p && p.schema === "lantern.extract.pack.v1");
-        const restoredDossier = restored?.packs.find(p => "schema" in p && p.schema === "lantern.dossier.pack.v1");
+        const restoredDossier = restored?.packs.find(p => "packId" in p); // Use packId as discriminator for Dossier
 
         expect(restoredExtract).toBeDefined();
         // @ts-ignore

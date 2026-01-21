@@ -1,4 +1,4 @@
-import { PackV1 } from "@/lib/schema/pack_v1";
+import { Pack } from "@/lib/schema/pack_v1";
 import { FundingGravityFinding, FunderStat, RecipientStat } from "./types";
 
 /**
@@ -8,7 +8,7 @@ import { FundingGravityFinding, FunderStat, RecipientStat } from "./types";
  * 
  * Canonical Direction: Funder -> Recipient
  */
-export function computeFundingGravity(pack: PackV1): FundingGravityFinding {
+export function computeFundingGravity(pack: Pack): FundingGravityFinding {
   
   // 1. Definition of Funding Edges & Direction
   // canonical: 'from' is funder, 'to' is recipient.

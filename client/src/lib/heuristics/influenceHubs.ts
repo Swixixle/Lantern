@@ -1,4 +1,4 @@
-import { PackV1 } from "@/lib/schema/pack_v1";
+import { Pack } from "@/lib/schema/pack_v1";
 import { InfluenceHubsFinding, InfluenceHubResult } from "./types";
 
 /**
@@ -7,7 +7,7 @@ import { InfluenceHubsFinding, InfluenceHubResult } from "./types";
  * Computes degree centrality (in, out, total) for all entities in a dossier.
  * Returns a ranked list of entities.
  */
-export function computeInfluenceHubs(pack: PackV1): InfluenceHubsFinding {
+export function computeInfluenceHubs(pack: Pack): InfluenceHubsFinding {
   const entityStats = new Map<string, { in: number; out: number; edges: Set<string> }>();
 
   // Initialize stats for all entities

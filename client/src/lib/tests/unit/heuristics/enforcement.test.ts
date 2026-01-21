@@ -1,12 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { computeEnforcementMap } from "@/lib/heuristics/enforcementMap";
-import { PackV1 } from "@/lib/schema/pack_v1";
+import { Pack } from "@/lib/schema/pack_v1";
 
 describe("Heuristic: Enforcement Map (M4.3)", () => {
 
-    const fixture: PackV1 = {
-        schema: "lantern.dossier.pack.v1",
+    const fixture: Pack = {
         packId: "enforcement-fixture",
+        packType: "public_figure",
+        schemaVersion: 2,
         subjectName: "Censorship Case",
         entities: [
             { id: "E1", name: "Big Tech Platform", type: "org" },

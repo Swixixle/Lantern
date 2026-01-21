@@ -1,4 +1,4 @@
-import { PackV1 } from "@/lib/schema/pack_v1";
+import { Pack } from "@/lib/schema/pack_v1";
 import { EnforcementMapFinding, EnforcerStat, TargetStat } from "./types";
 
 /**
@@ -10,7 +10,7 @@ import { EnforcementMapFinding, EnforcerStat, TargetStat } from "./types";
  * A censored_by B -> A is Target, B is Enforcer.
  * A regulated_by B -> A is Target, B is Enforcer.
  */
-export function computeEnforcementMap(pack: PackV1): EnforcementMapFinding {
+export function computeEnforcementMap(pack: Pack): EnforcementMapFinding {
     
     const enforcementTypes = new Set([
         "censored_by",

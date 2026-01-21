@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { v4 as uuidv4 } from "uuid";
 import { 
-  PackV1Schema, 
-  PackV1, 
+  PackSchema, 
+  Pack, 
   EntityTypeEnum, 
   Entity, 
   Evidence, 
@@ -11,7 +11,7 @@ import {
 import { LanternPack, EntityItem, QuoteItem, TimelineItem } from "../lanternExtract";
 
 /**
- * Creates a curated PackV1 (Dossier) from a raw LanternPack (Extract).
+ * Creates a curated Pack (Dossier) from a raw LanternPack (Extract).
  * This is a conversion process, not a migration, preserving the original extract.
  */
 export function createDossierFromExtract(
@@ -19,17 +19,18 @@ export function createDossierFromExtract(
   opts: { 
     subjectName?: string; 
     packType?: "public_figure" | "topic_ecosystem" 
+    schemaVersion?: 2
   } = {}
-): PackV1 {
+): Pack {
   
   // 1. Metadata
   const packId = uuidv4();
   const created = new Date().toISOString();
   
-  const dossier: PackV1 = {
+  const dossier: Pack = {
     packId,
     packType: opts.packType || (opts.subjectName ? "public_figure" : "topic_ecosystem"),
-    schemaVersion: 1,
+    schemaVersion: 2,
     subjectName: opts.subjectName || extract.source?.title || "Untitled Subject",
     timestamps: { created, updated: created },
     entities: [],
@@ -164,6 +165,6 @@ export function createDossierFromExtract(
   
   // Final Validation
   dossier.timestamps.updated = new Date().toISOString();
-  return PackV1Schema.parse(dossier);
+  return PackSchema.parse(dossier);
 }
 

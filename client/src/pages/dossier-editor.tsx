@@ -43,7 +43,7 @@ import { InfluenceHubsFinding, FundingGravityFinding, EnforcementMapFinding } fr
 export default function DossierEditor() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
-  const [pack, setPack] = useState<PackV1 | null>(null);
+  const [pack, setPack] = useState<Pack | null>(null);
   const [storageStatus, setStorageStatus] = useState<StorageStatus>("idle");
   const [activeTab, setActiveTab] = useState("entities");
   const [influenceResult, setInfluenceResult] = useState<InfluenceHubsFinding | null>(null);
@@ -66,7 +66,7 @@ export default function DossierEditor() {
       
       const found = lib.packs.find(p => "packId" in p && p.packId === id);
       if (found && "packId" in found) { // Type guard
-         setPack(found as PackV1);
+         setPack(found as Pack);
       } else {
          alert("Dossier not found");
          setLocation("/extract");
@@ -76,7 +76,7 @@ export default function DossierEditor() {
   }, [id, setLocation]);
 
   // Persist Helper
-  const saveDossier = (updatedPack: PackV1) => {
+  const saveDossier = (updatedPack: Pack) => {
     setPack(updatedPack);
     setStorageStatus("saving");
     

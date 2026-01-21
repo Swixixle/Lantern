@@ -116,7 +116,7 @@ export default function LanternExtract() {
   };
 
 import { createDossierFromExtract } from "@/lib/converters/extract_to_dossier";
-import { PackV1 } from "@/lib/schema/pack_v1";
+import { Pack } from "@/lib/schema/pack_v1";
 import { AnyPack } from "@/lib/storage"; // Import AnyPack
 
 // ...
@@ -199,15 +199,15 @@ export default function LanternExtract() {
 
 // ... Inside Card Loop ...
 
-                  <div className="flex-1 cursor-pointer" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : handleLoadDossier((p as PackV1).packId)}>
+                  <div className="flex-1 cursor-pointer" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : handleLoadDossier((p as Pack).packId)}>
                     <div className="flex items-center gap-2 mb-1">
                         <p className="font-bold font-mono text-sm">
-                            {"source" in p ? p.source.title : (p as PackV1).subjectName}
+                            {"source" in p ? p.source.title : (p as Pack).subjectName}
                         </p>
                         {"engine" in p ? (
                             <Badge variant="secondary" className="text-[10px] font-mono opacity-50">{p.engine.name} v{p.engine.version}</Badge>
                         ) : (
-                            <Badge variant="outline" className="text-[10px] font-mono border-blue-500 text-blue-500">DOSSIER v1</Badge>
+                            <Badge variant="outline" className="text-[10px] font-mono border-blue-500 text-blue-500">DOSSIER v2</Badge>
                         )}
                         
                         {pack && "pack_id" in p && pack.pack_id !== p.pack_id && pack.hashes.source_text_sha256 === p.hashes.source_text_sha256 && (
@@ -215,11 +215,11 @@ export default function LanternExtract() {
                         )}
                     </div>
                     <div className="flex items-center gap-4 text-xs text-muted-foreground font-mono">
-                        <span className="flex items-center gap-1"><Hash className="w-3 h-3"/> {("pack_id" in p ? p.pack_id : (p as PackV1).packId).slice(0, 8)}</span>
+                        <span className="flex items-center gap-1"><Hash className="w-3 h-3"/> {("pack_id" in p ? p.pack_id : (p as Pack).packId).slice(0, 8)}</span>
                         <span>
                             {"source" in p 
                                 ? new Date(p.source.retrieved_at).toLocaleDateString() 
-                                : new Date((p as PackV1).timestamps.updated).toLocaleDateString()}
+                                : new Date((p as Pack).timestamps.updated).toLocaleDateString()}
                         </span>
                         {"hashes" in p && (
                             <span className="text-cyan-500/70 hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); setFilterSourceHash(p.hashes.source_text_sha256); }}>
@@ -240,7 +240,7 @@ export default function LanternExtract() {
                            <GitCompare className="w-3 h-3 mr-2" /> Diff
                         </Button>
                       )}
-                      <Button variant="ghost" size="icon" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : handleLoadDossier((p as PackV1).packId)}>
+                      <Button variant="ghost" size="icon" onClick={() => "pack_id" in p ? handleLoadPack(p as LanternPack) : handleLoadDossier((p as Pack).packId)}>
                          <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-cyan-500" />
                       </Button>
                   </div>

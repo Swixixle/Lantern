@@ -1,15 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
-import { PackV1 } from "@/lib/schema/pack_v1";
+import { Pack } from "@/lib/schema/pack_v1";
 
 describe("Heuristic: Influence Hubs (M4.1)", () => {
   // Fixture: A star graph where Center (E1) is connected to 3 leaves.
   // E1 -> E2
   // E3 -> E1
   // E1 -> E4
-  const fixturePack: PackV1 = {
-    schema: "lantern.dossier.pack.v1",
+  const fixturePack: Pack = {
     packId: "fixture-1",
+    packType: "public_figure",
+    schemaVersion: 2,
     subjectName: "Star Graph",
     entities: [
       { id: "e1", name: "Center", type: "person", aliases: [], tags: [] },

@@ -96,10 +96,10 @@ export const ClaimSchema = z.object({
 
 // --- Pack Root ---
 
-export const PackV1Schema = z.object({
+export const PackSchema = z.object({
   packId: z.string(),
   packType: PackTypeEnum,
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
   subjectName: z.string(),
   timestamps: z.object({
     created: z.string(),
@@ -118,4 +118,8 @@ export type Entity = z.infer<typeof EntitySchema>;
 export type Edge = z.infer<typeof EdgeSchema>;
 export type Evidence = z.infer<typeof EvidenceSchema>;
 export type Claim = z.infer<typeof ClaimSchema>;
-export type PackV1 = z.infer<typeof PackV1Schema>;
+export type Pack = z.infer<typeof PackSchema>;
+
+// Legacy alias for migration compatibility (if needed)
+export type PackV1 = Pack; 
+export const PackV1Schema = PackSchema;

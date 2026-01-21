@@ -1,11 +1,12 @@
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 import { LanternPack } from "./lanternExtract";
-import { PackV1, PackV1Schema } from "./schema/pack_v1";
+import { Pack, PackSchema } from "./schema/pack_v1";
+import { migratePack } from "./migrations";
 
 // --- Types ---
 
 // The Discriminated Union
-export type AnyPack = LanternPack | PackV1;
+export type AnyPack = LanternPack | Pack;
 
 const DB_NAME = "lantern-db";
 const DB_VERSION = 1;
@@ -67,8 +68,19 @@ export const persistence = {
       
       if (!record) return null;
       
-      const migrated = migrate(record);
-      return migrated.library;
+      // Migrate Persistence Record
+      const migratedRecord = migrate(record);
+      
+      // Migrate Packs Content (V1 -> V2)
+      const migratedPacks = migratedRecord.library.packs.map(p => {
+          if ("packId" in p) {
+              // It's a Dossier Pack (PackV1/V2), run migration
+              return migratePack(p);
+          }
+          return p; // LanternPack (Extract) doesn't need migration yet
+      });
+
+      return { packs: migratedPacks };
     } catch (e) {
       console.error("Failed to load library:", e);
       return null;
