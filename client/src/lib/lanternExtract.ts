@@ -1,5 +1,4 @@
-import { type ClassValue, clsx } from "clsx";
-import { twMerge } from "tailwind-merge";
+import { segmentSentences, type Segment } from "./heuristics/segmenters/sentenceSegmenter";
 
 // --- TYPES ---
 
@@ -155,6 +154,29 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
 
   if (!text) return { items, stats, stable_source_hash };
 
+  // 1. Segment Sentences (M2 Priority #1)
+  const segments = segmentSentences(text);
+  
+  const getContext = (start: number, end: number): string => {
+      // Find segment that covers the match
+      // Naive linear search is fine for mockup MVP (text < 1MB)
+      // Optimization: Binary search or Interval Tree if needed.
+      const segment = segments.find(s => s.start <= start && s.end >= end);
+      if (segment) return segment.text;
+      
+      // Fallback: Cross-sentence match? (Shouldn't happen with valid segmentation unless entity spans sentences)
+      // Return the slice covering matched segments
+      const covering = segments.filter(s => s.end > start && s.start < end);
+      if (covering.length > 0) {
+          // Join them? Or just take the first/largest?
+          // Let's just join them for context.
+          return covering.map(s => s.text).join(" ");
+      }
+      
+      // Ultimate Fallback
+      return text.slice(Math.max(0, start - 20), Math.min(text.length, end + 20));
+  };
+
   // Simple Regex Heuristics for Mockup
   
   // Entities (Capitalized Words)
@@ -166,7 +188,7 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
     if (word.length > 3 && !["The", "This", "That"].includes(word)) {
          items.entities.push({
             id: mockHash(`entity-${word}-${match.index}`),
-            provenance: { start: match.index, end: match.index + word.length, sentence: text.slice(Math.max(0, match.index - 20), Math.min(text.length, match.index + word.length + 20)) },
+            provenance: { start: match.index, end: match.index + word.length, sentence: getContext(match.index, match.index + word.length) },
             confidence: 0.9,
             included: true,
             text: word,
@@ -180,7 +202,7 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
   while ((match = quoteRegex.exec(text)) !== null) {
       items.quotes.push({
           id: mockHash(`quote-${match.index}`),
-          provenance: { start: match.index, end: match.index + match[0].length, sentence: text.slice(Math.max(0, match.index - 20), Math.min(text.length, match.index + match[0].length + 20)) },
+          provenance: { start: match.index, end: match.index + match[0].length, sentence: getContext(match.index, match.index + match[0].length) },
           confidence: 0.85,
           included: true,
           quote: match[1],
@@ -193,7 +215,7 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
   while ((match = metricRegex.exec(text)) !== null) {
       items.metrics.push({
           id: mockHash(`metric-${match.index}`),
-          provenance: { start: match.index, end: match.index + match[0].length, sentence: text.slice(Math.max(0, match.index - 20), Math.min(text.length, match.index + match[0].length + 20)) },
+          provenance: { start: match.index, end: match.index + match[0].length, sentence: getContext(match.index, match.index + match[0].length) },
           confidence: 0.95,
           included: true,
           value: match[1],
@@ -208,7 +230,7 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
   while ((match = dateRegex.exec(text)) !== null) {
       items.timeline.push({
           id: mockHash(`time-${match.index}`),
-          provenance: { start: match.index, end: match.index + match[0].length, sentence: text.slice(Math.max(0, match.index - 20), Math.min(text.length, match.index + match[0].length + 20)) },
+          provenance: { start: match.index, end: match.index + match[0].length, sentence: getContext(match.index, match.index + match[0].length) },
           confidence: 0.9,
           included: true,
           date: match[0],

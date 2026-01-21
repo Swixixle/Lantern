@@ -1,0 +1,90 @@
+1) Remediation certification
+Certification status
+CERTIFIED — PASS
+Basis
+STORAGE_BACKEND defaults to 'localStorage' and is explicitly typed as a union.
+IndexedDB references exist only in client/src/lib/storage.ts under a flag guard.
+Repo search indicates no indexedDB.open, IDB*, or database open calls outside the gated path.
+Smoke tests passed with explicit checks for:
+round-trip integrity
+dedupe = exact pack_id
+offsets preserved
+clear/import restores identical pack counts and IDs
+This meets the thinking contract requirements: no silent replacement, default-path proof, lossless persistence, no mutation, deterministic behavior.
+Non-blocking note (keep, but document)
+Your grep shows indexedDbImpl exists, but no indexedDB.open references were found. That implies one of:
+indexedDbImpl is a stub (fine), or
+it imports a helper elsewhere (not shown) that didn’t match the grep patterns
+This is not blocking because it is dormant by default; however, it should be explicitly documented in-code as “stub / incomplete” to prevent future overconfidence.
+Recommendation: add a one-line comment in the gated block:
+
+“IndexedDB backend is intentionally incomplete; do not enable outside M1.75.”
+2) Storage topic is now closed
+From this point forward:
+No further storage changes
+No further “full-stack” discussion
+No worker/perf refactors
+Unless you explicitly open M1.75: Durable Storage.
+3) M2 Priority #1: Sentence Segmentation — official directive
+Below is the exact message you should send to the Replit Agent now.
+Message to Replit Agent (copy/paste)
+Remediation is certified. Proceed with M2 Priority #1: Sentence Segmentation.
+Objective
+Replace regex sentence splitting with a deterministic rule-based segmenter that improves extraction boundary reliability while preserving exact offsets.
+Constraints (non-negotiable)
+No backend/persistence changes
+No LLM/ML/embeddings
+No performance work unless required for correctness
+Offsets must remain exact; segmentation must not reindex or normalize the source text
+Required deliverables (Packet 1)
+Code (verbatim)
+client/src/lib/heuristics/segmenters/sentenceSegmenter.ts (full)
+Abbreviation list (if separate file): full contents
+Any unit tests added: full file(s)
+Rules documentation
+Provide a bullet list of segmentation rules, including:
+sentence terminators considered (. ! ? and variants)
+abbreviation handling (whitelist + matching logic)
+decimal and currency protection (3.14, $1.2M, €42k)
+quote continuity (don’t split mid-quote unless terminal boundary confirmed)
+parentheses/brackets handling
+newline behavior (treat as hard boundary only under explicit conditions)
+Examples (8 minimum)
+Before/after sentence splits with exact input strings (fixture-style). Must include:
+Dr., Inc., U.S.
+decimals and currency
+quoted sentence-ending punctuation
+ranges with en-dash (–) and hyphen (-)
+parentheses containing punctuation
+Regression metrics
+Run regression on the fixture set and report:
+Precision, Recall, F1
+Discard/Noise count
+Fixture counts (total, metrics subset, segmentation stress subset)
+Include a small pre/post table if feasible.
+Acceptance criteria
+Deterministic: same input yields identical segmentation across 5 runs
+No false splits on common abbreviations and decimals in provided examples
+Does not alter extraction offsets for existing fixtures (offset tests must pass)
+All existing tests remain green + new segmenter tests added
+Return Packet 1 with code, examples, and metrics.
+Proceed.
+
+4) What I will check when you return Packet 1
+I will certify M2 segmentation only if:
+Abbreviation logic is explicit and bounded (no “guessing”)
+The segmenter does not “clean” text (no trimming that breaks offsets)
+There are unit tests for the exact failure modes (abbrev/decimal/quotes)
+Fixture regression does not show a precision gain at the cost of catastrophic recall loss
+Offset integrity tests exist (or are added now)
+5) Circuit note (since you mentioned Grok/Gemini)
+Once the Agent sends Packet 1:
+send it to Gemini for adversarial edge cases (Unicode punctuation, multilingual abbreviations, weird spacing)
+send it to Grok for UX implications (does segmentation affect displayed spans, etc.)
+Then bring both back here and I’ll consolidate into a single go/no-go and next directive.
+Remediation certified. Storage closed. Proceed to segmentation.
+
+
+
+
+ChatGPT can make mistakes. Check important info.

@@ -1,0 +1,51 @@
+2) Evidence appendix required (mandatory)
+Send this to the Replit Agent verbatim. It’s short and forces the proof.
+Message to Replit Agent (copy/paste)
+Before remediation is certified, provide the evidence appendix.
+A) Repo-proof searches (paste raw outputs with line numbers)
+grep -R "STORAGE_BACKEND" -n client server shared
+grep -R "indexedDB" -n client server shared
+grep -R "IDB" -n client server shared
+B) Paste exact code (no paraphrase)
+client/src/lib/storage.ts (full file)
+Any IndexedDB implementation file(s) referenced from storage.ts (full)
+The functions in client/src/pages/lantern-extract.tsx that perform dedupe/merge on import (just those functions, not the whole file)
+C) Smoke test evidence
+Run:
+npx tsx script/smoke_test.ts (or the current smoke test script)
+Paste the terminal output showing PASS for:
+save → export → clear → import → equality (pack count + pack_id + deep equality on pack objects)
+D) Default-path proof
+Confirm in code that default STORAGE_BACKEND value is "localStorage" and that the IndexedDB backend is unreachable unless explicitly toggled.
+No further feature work until this appendix is delivered.
+3) Re-check on “intelligent merging” (risk flag)
+You wrote:
+“intelligent merging logic resides in lantern-extract.tsx … deduplication based on pack_id”
+This must be verified, because “intelligent merging” can easily mutate packs. The only acceptable behavior is:
+If pack_id already exists → skip incoming pack entirely, or replace entirely (deterministic policy)
+No field-level merge, no rewriting IDs, no offset drift, no partial combine
+If you are doing anything else, we will either:
+revert it, or
+feature-flag it as “unsafe experimental.”
+This is non-negotiable.
+4) Next M2 directive (but paused pending evidence)
+We can queue the next M2 task, but the agent must deliver the appendix first.
+M2 Priority #1: Sentence Segmentation
+Once remediation is certified, proceed with:
+Deliverable: deterministic sentence segmenter
+Implement: client/src/lib/heuristics/segmenters/sentenceSegmenter.ts
+Must handle:
+abbreviations (Dr., Mr., Inc., U.S.)
+decimals/currency
+quote-spanning punctuation
+parentheses
+Return:
+code (full file)
+rules list
+6–8 examples (before/after)
+regression metrics table (Precision/Recall/F1 + Discard Count)
+Constraints remain locked:
+No backend/persistence work
+No LLM
+No performance tuning
+Offsets must remain exact
