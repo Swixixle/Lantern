@@ -47,6 +47,27 @@ describe('M2 Priority #4: Provenance Tightening', () => {
         });
     });
 
+    it('Should include expanded sentence provenance', () => {
+        const text = "First. Apple Inc. Last.";
+        const result = extract(text, { mode: 'balanced' });
+        const apple = result.items.entities.find(e => e.text.includes("Apple"));
+        
+        expect(apple).toBeDefined();
+        if (apple) {
+            expect(apple.provenance.sentence_text).toBeDefined();
+            expect(apple.provenance.sentence_start).toBeDefined();
+            expect(apple.provenance.sentence_end).toBeDefined();
+            
+            // Verify sentence span covers the entity
+            expect(apple.provenance.start).toBeGreaterThanOrEqual(apple.provenance.sentence_start);
+            expect(apple.provenance.end).toBeLessThanOrEqual(apple.provenance.sentence_end);
+            
+            // Verify sentence content
+            const extractedSentence = text.slice(apple.provenance.sentence_start, apple.provenance.sentence_end);
+            expect(apple.provenance.sentence_text).toBe(extractedSentence);
+        }
+    });
+
     it('Should discard items if offsets are missing (Simulation)', () => {
         // Since our extractors are typed to return offsets, we simulate a "broken" extractor result
         // by manually invoking the ID generation or filtering logic if exposed, 

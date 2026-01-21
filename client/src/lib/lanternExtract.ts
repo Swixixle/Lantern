@@ -6,7 +6,10 @@ import { extractEntities } from "./heuristics/entities/entityExtractor";
 export type Provenance = {
   start: number;
   end: number;
-  sentence: string;
+  sentence: string; // Legacy/Display
+  sentence_text: string;
+  sentence_start: number;
+  sentence_end: number;
 };
 
 export type BaseItem = {
@@ -158,17 +161,51 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
   // 1. Segment Sentences (M2 Priority #1)
   const segments = segmentSentences(text);
   
-  const getContext = (start: number, end: number): string => {
-      // Find segment that covers the match
+  // Validation Helper (M2.4 Provenance Tightening)
+  const validateProvenance = (start: number, end: number, matchText: string): Provenance | null => {
+      // 1. Finite Number Check
+      if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+
+      // 2. Bounds Check
+      if (start < 0 || end > text.length) return null;
+
+      // 3. Logical Order Check
+      if (start >= end) return null;
+
+      // 4. Content Integrity Check (No Repair)
+      if (text.slice(start, end) !== matchText) return null;
+
+      // 5. Sentence Context
       const segment = segments.find(s => s.start <= start && s.end >= end);
-      if (segment) return segment.text;
       
-      const covering = segments.filter(s => s.end > start && s.start < end);
-      if (covering.length > 0) {
-          return covering.map(s => s.text).join(" ");
+      if (segment) {
+          return {
+              start,
+              end,
+              sentence: segment.text,
+              sentence_text: segment.text,
+              sentence_start: segment.start,
+              sentence_end: segment.end
+          };
       }
       
-      return text.slice(Math.max(0, start - 20), Math.min(text.length, end + 20));
+      // Fallback: Cross-sentence match
+      const covering = segments.filter(s => s.end > start && s.start < end);
+      if (covering.length > 0) {
+           const first = covering[0];
+           const last = covering[covering.length - 1];
+           const combinedText = text.slice(first.start, last.end); 
+           return {
+               start,
+               end,
+               sentence: combinedText,
+               sentence_text: combinedText,
+               sentence_start: first.start,
+               sentence_end: last.end
+           };
+      }
+
+      return null;
   };
 
   // --- ENTITIES (Integrated M2.2 & M2.4) ---
@@ -181,8 +218,8 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
           const absStart = segment.start + e.start;
           const absEnd = segment.start + e.end;
 
-          // Enforce Provenance: NO OFFSET, NO ITEM
-          if (absStart < 0 || absEnd > text.length) {
+          const provenance = validateProvenance(absStart, absEnd, e.text);
+          if (!provenance) {
               stats.invalid_dropped++;
               return;
           }
@@ -192,11 +229,7 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
           
           items.entities.push({
               id: stableId,
-              provenance: { 
-                  start: absStart, 
-                  end: absEnd, 
-                  sentence: segment.text // Precise segment context
-              },
+              provenance,
               confidence: e.tier === "PRIMARY" ? 0.95 : (e.tier === "SECONDARY" ? 0.7 : 0.4),
               included: e.tier !== "NOISE", 
               text: e.text,
@@ -208,20 +241,27 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
 
   // Quotes ("...")
   const quoteRegex = /"([^"]+)"/g;
-  let match; // Define match variable
+  let match; 
   while ((match = quoteRegex.exec(text)) !== null) {
       if (match.index === undefined) continue;
       
       const start = match.index;
       const end = start + match[0].length;
       const quoteBody = match[1];
+      const rawText = match[0];
+      
+      const provenance = validateProvenance(start, end, rawText);
+      if (!provenance) {
+          stats.invalid_dropped++;
+          continue;
+      }
       
       // Stable ID
       const stableId = mockHash(`quote:${start}:${end}`);
       
       items.quotes.push({
           id: stableId,
-          provenance: { start, end, sentence: getContext(start, end) },
+          provenance,
           confidence: 0.85,
           included: true,
           quote: quoteBody,
@@ -239,20 +279,23 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
       const end = start + match[0].length;
       const value = match[1];
       const unit = match[2];
+      const rawText = match[0];
+
+      const provenance = validateProvenance(start, end, rawText);
+      if (!provenance) {
+          stats.invalid_dropped++;
+          continue;
+      }
       
       // Normalization (Basic)
       const normValue = parseFloat(value.replace(/,/g, ""));
       
       // Stable ID: Value + Unit + Offsets
-      // Using normalized value in hash for consistency? 
-      // Prompt says: "derived from content + offsets". 
-      // Let's use raw text + offsets to be safe and purely provenanced.
-      const rawText = match[0];
       const stableId = mockHash(`metric:${rawText}:${start}:${end}`);
 
       items.metrics.push({
           id: stableId,
-          provenance: { start, end, sentence: getContext(start, end) },
+          provenance,
           confidence: 0.95,
           included: true,
           value: value,
@@ -269,12 +312,19 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
 
       const start = match.index;
       const end = start + match[0].length;
+      const rawText = match[0];
       
+      const provenance = validateProvenance(start, end, rawText);
+      if (!provenance) {
+          stats.invalid_dropped++;
+          continue;
+      }
+
       const stableId = mockHash(`time:${match[0]}:${start}:${end}`);
 
       items.timeline.push({
           id: stableId,
-          provenance: { start, end, sentence: getContext(start, end) },
+          provenance,
           confidence: 0.9,
           included: true,
           date: match[0],
