@@ -7,6 +7,9 @@ import { PackV1, PackV1Schema } from "./schema/pack_v1";
 // The Discriminated Union
 export type AnyPack = LanternPack | PackV1;
 
+const DB_NAME = "lantern-db";
+const DB_VERSION = 1;
+
 export const SCHEMA_VERSION = 1;
 
 // The core data shape

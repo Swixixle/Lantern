@@ -31,9 +31,12 @@ import {
   ArrowLeft,
   Link as LinkIcon,
   AlertTriangle,
-  FolderOpen
+  FolderOpen,
+  Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
+import { InfluenceHubsFinding } from "@/lib/heuristics/types";
 
 export default function DossierEditor() {
   const { id } = useParams();
@@ -41,6 +44,7 @@ export default function DossierEditor() {
   const [pack, setPack] = useState<PackV1 | null>(null);
   const [storageStatus, setStorageStatus] = useState<StorageStatus>("idle");
   const [activeTab, setActiveTab] = useState("entities");
+  const [heuristicsResult, setHeuristicsResult] = useState<InfluenceHubsFinding | null>(null);
 
   // Form States (New Item Inputs)
   const [newEntity, setNewEntity] = useState<{name: string, type: string}>({ name: "", type: "person" });
@@ -185,6 +189,12 @@ export default function DossierEditor() {
       saveDossier(updated);
   };
 
+  const runHeuristics = () => {
+      if (!pack) return;
+      const result = computeInfluenceHubs(pack);
+      setHeuristicsResult(result);
+  };
+
 
   if (!pack) return <div className="p-12 text-center font-mono">Loading Dossier...</div>;
 
@@ -216,6 +226,7 @@ export default function DossierEditor() {
               <TabsTrigger value="edges" className="font-mono text-xs uppercase"><LinkIcon className="w-3 h-3 mr-2"/> Edges ({pack.edges.length})</TabsTrigger>
               <TabsTrigger value="evidence" className="font-mono text-xs uppercase"><FileText className="w-3 h-3 mr-2"/> Evidence ({pack.evidence.length})</TabsTrigger>
               <TabsTrigger value="claims" className="font-mono text-xs uppercase"><ShieldAlert className="w-3 h-3 mr-2"/> Claims ({pack.claims.length})</TabsTrigger>
+              <TabsTrigger value="heuristics" className="font-mono text-xs uppercase"><Zap className="w-3 h-3 mr-2"/> Heuristics</TabsTrigger>
            </TabsList>
 
            {/* --- ENTITIES TAB --- */}
@@ -383,6 +394,7 @@ export default function DossierEditor() {
            {/* --- CLAIMS TAB --- */}
            <TabsContent value="claims" className="space-y-6">
               <Card className="border-border bg-card/50 border-l-4 border-l-blue-500">
+                 {/* ... (Existing Claims Tab Content) ... */}
                  <CardHeader><CardTitle className="text-sm font-mono uppercase">Add Claim</CardTitle></CardHeader>
                  <CardContent className="space-y-4">
                     <div className="space-y-2">
@@ -484,6 +496,60 @@ export default function DossierEditor() {
                     </Card>
                  ))}
               </div>
+           </TabsContent>
+
+           {/* --- HEURISTICS TAB --- */}
+           <TabsContent value="heuristics" className="space-y-6">
+              <div className="flex justify-between items-center">
+                  <div>
+                      <h3 className="text-lg font-mono font-bold">Shadow-Caste Heuristics v1</h3>
+                      <p className="text-xs text-muted-foreground">Automated analysis of network structure.</p>
+                  </div>
+                  <Button onClick={runHeuristics} className="bg-purple-600 hover:bg-purple-700 text-white font-mono">
+                      <Zap className="w-4 h-4 mr-2" /> Run Influence Hubs
+                  </Button>
+              </div>
+
+              {heuristicsResult ? (
+                  <div className="space-y-4">
+                      <Card className="border-purple-500/20 bg-purple-500/5">
+                          <CardHeader className="pb-2">
+                              <CardTitle className="text-sm font-mono uppercase flex justify-between">
+                                  <span>Influence Hubs (Degree Centrality)</span>
+                                  <span className="text-xs text-muted-foreground">{new Date(heuristicsResult.generatedAt).toLocaleTimeString()}</span>
+                              </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                              <div className="space-y-2">
+                                  {heuristicsResult.results.map((res, i) => {
+                                      const entity = pack.entities.find(e => e.id === res.entityId);
+                                      return (
+                                          <div key={res.entityId} className="flex items-center gap-4 p-2 bg-background/50 rounded border border-border">
+                                              <div className="font-mono font-bold text-lg text-purple-500 w-8 text-center">#{i + 1}</div>
+                                              <div className="flex-1">
+                                                  <div className="font-bold">{entity?.name || "Unknown Entity"}</div>
+                                                  <div className="text-xs text-muted-foreground font-mono">
+                                                      Total Degree: {res.degree} (In: {res.inDegree}, Out: {res.outDegree})
+                                                  </div>
+                                              </div>
+                                              <div className="text-right text-[10px] text-muted-foreground font-mono">
+                                                  {res.supportingEdgeIds.length} Edges Cited
+                                              </div>
+                                          </div>
+                                      );
+                                  })}
+                                  {heuristicsResult.results.length === 0 && (
+                                      <p className="text-sm text-muted-foreground text-center py-4">No connected hubs found.</p>
+                                  )}
+                              </div>
+                          </CardContent>
+                      </Card>
+                  </div>
+              ) : (
+                  <div className="border border-dashed border-border rounded-lg p-12 text-center text-muted-foreground font-mono text-sm">
+                      Run heuristics to analyze the dossier structure.
+                  </div>
+              )}
            </TabsContent>
 
         </Tabs>

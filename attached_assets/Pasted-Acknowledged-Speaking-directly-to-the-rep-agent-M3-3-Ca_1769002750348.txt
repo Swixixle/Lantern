@@ -1,0 +1,115 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M3.3 Capture UI review
+
+Based on your summary, you have delivered the required “workflow-complete” dossier editor:
+	•	Dedicated editor route (client/src/pages/dossier-editor.tsx) with CRUD for Entities, Edges, Evidence, Claims
+	•	Guardrail enforcing no fact claim without evidence
+	•	Visual claim-type labeling
+	•	Promote flow redirecting into dossier editor
+	•	IndexedDB persistence integration with debounced saves
+	•	Unit test verifying guardrail logic
+
+Certification status: PROVISIONALLY ACCEPTED
+
+This is “provisional” for one reason only: your verification evidence is currently unit-level. M3.3’s acceptance criteria includes persistence after reload and lossless export/import with both pack types present. You likely have this working already, but it must be explicitly certified.
+
+Required final verification (no new development; just proof)
+
+To close M3.3 formally, produce a short proof log with:
+	1.	Persistence after reload
+
+	•	Create dossier → add entity + evidence + claim (with evidence)
+	•	Hard refresh / restart dev server
+	•	Dossier loads with identical contents
+
+	2.	Export/import coexistence
+
+	•	Export library JSON containing:
+	•	at least one lantern.extract.pack.v1
+	•	at least one lantern.dossier.pack.v1
+	•	Clear library
+	•	Import JSON
+	•	Verify both pack types restored and dossier editor opens correctly
+
+Once you report those two proofs, M3.3 becomes fully certified.
+
+⸻
+
+Next instructions: proceed to M4 Shadow-Caste Heuristic Lens v1
+
+You are now authorized to implement heuristics. Keep M4 narrow, explainable, and testable.
+
+M4.1 Deliverable: Influence Hubs (Degree Centrality)
+
+Output
+
+For a given dossier pack:
+	•	compute per-entity:
+	•	total degree (in + out)
+	•	in-degree
+	•	out-degree
+	•	return a ranked list of top N hubs
+
+Rules
+	•	Heuristics are pure functions: input PackV1 → output Findings
+	•	No mutation of packs
+	•	Every finding must cite supporting IDs (entity IDs, edge IDs)
+
+File layout
+	•	client/src/lib/heuristics/influenceHubs.ts
+	•	client/src/lib/heuristics/types.ts (shared finding schema)
+
+Finding schema (example)
+
+type Finding = {
+  kind: "influence_hubs_v1";
+  packId: string;
+  generatedAt: string;
+  results: Array<{
+    entityId: string;
+    degree: number;
+    inDegree: number;
+    outDegree: number;
+    supportingEdgeIds: string[];
+  }>;
+};
+
+Tests (required)
+	•	deterministic test pack fixture with known edges
+	•	assert correct ranking + counts
+	•	assert supportingEdgeIds accuracy
+
+⸻
+
+M4.2 Deliverable: Funding Gravity (optional second lens, only if quick)
+
+If you already model edge types like funded_by, donated_to, sponsored_by:
+	•	compute concentration and top funder nodes
+If not, skip for now—do not invent.
+
+⸻
+
+UI for heuristics (minimal)
+
+Add a “Heuristics” panel in the dossier editor:
+	•	button: “Run Influence Hubs”
+	•	renders ranked list and the edges supporting each hub
+
+No graphs yet.
+
+⸻
+
+Definition of done for M4.1
+
+PASS only if:
+	•	It runs on any dossier with edges
+	•	Output is deterministic
+	•	It cites IDs
+	•	Tests pass
+
+⸻
+
+When you provide the two M3.3 proofs above, I will mark M3.3 fully certified and you proceed with M4.1 immediately.
+
+ALEX STOP
