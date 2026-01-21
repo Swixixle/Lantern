@@ -51,4 +51,26 @@ export interface FundingGravityFinding {
   notes?: string;
 }
 
-export type AnyHeuristicFinding = InfluenceHubsFinding | FundingGravityFinding;
+// M4.3 Enforcement Map
+export interface EnforcerStat {
+  entityId: string;
+  enforcementActions: number; // Outgoing enforcement (being the enforcer)
+  supportingEdgeIds: string[];
+}
+
+export interface TargetStat {
+  entityId: string;
+  targetedActions: number; // Incoming enforcement (being the target)
+  supportingEdgeIds: string[];
+}
+
+export interface EnforcementMapFinding {
+  kind: "enforcement_map_v1";
+  packId: string;
+  generatedAt: string;
+  enforcers: EnforcerStat[];
+  targets: TargetStat[];
+  breakdownByType: Record<string, number>;
+}
+
+export type AnyHeuristicFinding = InfluenceHubsFinding | FundingGravityFinding | EnforcementMapFinding;

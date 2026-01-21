@@ -1,0 +1,119 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M4.2 Funding Gravity review and certification
+
+Based on your report, you satisfied the full M4.2 scope as directed:
+	•	Edge-type discipline: you moved from free-text to dedicated funding edge types in pack_v1.ts (critical for determinism and future analytics).
+	•	Canonicalization: you implemented direction normalization (e.g., funded_by inversion) so the heuristic operates on a canonical Funder → Recipient model.
+	•	Metrics: Top Funders, Top Recipients, and concentration shares (edge share) are computed.
+	•	Testing: mixed-direction fixture and concentration validation with 4 passing tests.
+	•	UI integration: Heuristics tab now runs both heuristics and handles insufficient data gracefully.
+
+Status
+
+M4.2: CERTIFIED COMPLETE.
+
+⸻
+
+Immediate review notes (non-blocking, but important)
+
+1) Schema change implications
+
+You updated pack_v1.ts to include dedicated edge types. Ensure you also:
+	•	updated any existing dossiers created before this change (either via migration stub or allowing legacy edge types to parse as “unknown/other”).
+	•	updated any Zod enums so that older packs don’t fail import/parse.
+
+If you already did this: fine. If not, you need a small compatibility shim.
+
+2) Canonicalization auditability
+
+In fundingGravity.ts, ensure the canonicalization step preserves traceability:
+	•	when you invert an edge, keep the original edgeId as the supporting ID (not a synthetic ID).
+	•	do not “rewrite” the edge; just interpret direction for computation.
+
+This is essential for explainability.
+
+3) Concentration metric definition
+
+Your metric is “share of edges.” That’s acceptable for v1. For v1.1 consider:
+	•	weighting by amount (if/when you add amounts), otherwise “edge share” can be gamed by splitting flows.
+
+Not required now.
+
+⸻
+
+Next instructions: M4.3 “Enforcement & Gatekeeping Lens” (Shadow-Caste v1)
+
+You now have:
+	•	structure (influence hubs)
+	•	money flow (funding gravity)
+
+The third pillar for “shadow castes” is enforcement mechanisms—who can punish, block, or delegitimize.
+
+M4.3 goal
+
+Detect and summarize enforcement/gatekeeping relationships:
+	•	deplatforming, censorship, banning
+	•	credentialing, licensing, accreditation actions
+	•	employment termination / blacklisting signals
+	•	litigation threats / legal pressure
+	•	demonetization / banking denial
+	•	institutional exclusion (committees, journals, conferences)
+
+Data requirement
+
+This requires edge types that represent enforcement/gatekeeping, e.g.:
+	•	censored_by, banned_by, deplatformed_by
+	•	sued_by, threatened_by
+	•	fired_by, investigated_by, sanctioned_by
+	•	regulated_by, licensed_by, accredited_by
+	•	demonetized_by, banked_by / debanked_by
+
+If you don’t want to expand enums again, you can create a separate enum bucket: edgeCategory: "funding" | "influence" | "enforcement" | "other" and keep type as specific string. But given you already tightened funding, I recommend tightening enforcement too.
+
+⸻
+
+M4.3 deliverables
+	1.	client/src/lib/heuristics/enforcementMap.ts
+
+	•	Computes:
+	•	top “enforcers” (high out-degree on enforcement edges)
+	•	top “targets” (high in-degree)
+	•	categorized counts by enforcement type
+
+	2.	Tests
+
+	•	fixture dossier with mixed enforcement edges
+	•	asserts correct ranking and supportingEdgeIds
+
+	3.	UI
+
+	•	Add “Enforcement Map” card in Heuristics tab
+	•	Show:
+	•	Top Enforcers
+	•	Top Targets
+	•	Breakdown by enforcement type
+
+Acceptance criteria
+
+PASS only if:
+	•	deterministic
+	•	cites edge IDs
+	•	handles “insufficient data”
+	•	tests pass
+
+⸻
+
+Alternate path (if you prefer not to add new edge enums right now)
+
+Then do M4.3b: Narrative Coordination Lens using:
+	•	Evidence.publisher / publication entities
+	•	edges like published_by, amplified_by, criticized_by
+
+But enforcement is the more direct “shadow caste” lever.
+
+⸻
+
+If you want my directive: proceed with M4.3 Enforcement Map next.
+
+ALEX STOP

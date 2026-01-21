@@ -27,7 +27,17 @@ export const EdgeTypeEnum = z.enum([
   "donated_by",
   "sponsored_by",
   "grant_from",
-  "grant_to"
+  "grant_to",
+  // Enforcement Types (M4.3)
+  "censored_by",
+  "banned_by",
+  "sued_by",
+  "threatened_by",
+  "fired_by",
+  "investigated_by",
+  "sanctioned_by",
+  "regulated_by",
+  "licensed_by"
 ]);
 
 export const ClaimTypeEnum = z.enum([

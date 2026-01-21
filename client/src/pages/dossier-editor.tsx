@@ -37,7 +37,8 @@ import {
 import { cn } from "@/lib/utils";
 import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
 import { computeFundingGravity } from "@/lib/heuristics/fundingGravity";
-import { InfluenceHubsFinding, FundingGravityFinding } from "@/lib/heuristics/types";
+import { computeEnforcementMap } from "@/lib/heuristics/enforcementMap";
+import { InfluenceHubsFinding, FundingGravityFinding, EnforcementMapFinding } from "@/lib/heuristics/types";
 
 export default function DossierEditor() {
   const { id } = useParams();
@@ -47,6 +48,7 @@ export default function DossierEditor() {
   const [activeTab, setActiveTab] = useState("entities");
   const [influenceResult, setInfluenceResult] = useState<InfluenceHubsFinding | null>(null);
   const [fundingResult, setFundingResult] = useState<FundingGravityFinding | null>(null);
+  const [enforcementResult, setEnforcementResult] = useState<EnforcementMapFinding | null>(null);
 
   // Form States (New Item Inputs)
   const [newEntity, setNewEntity] = useState<{name: string, type: string}>({ name: "", type: "person" });
@@ -199,6 +201,9 @@ export default function DossierEditor() {
 
       const fund = computeFundingGravity(pack);
       setFundingResult(fund);
+
+      const enf = computeEnforcementMap(pack);
+      setEnforcementResult(enf);
   };
 
 
@@ -516,7 +521,7 @@ export default function DossierEditor() {
                   </Button>
               </div>
 
-              {influenceResult || fundingResult ? (
+              {influenceResult || fundingResult || enforcementResult ? (
                   <div className="space-y-6">
                       {/* Influence Hubs */}
                       {influenceResult && (
@@ -618,6 +623,63 @@ export default function DossierEditor() {
                                 )}
                             </CardContent>
                            </Card>
+                      )}
+
+                      {/* Enforcement Map */}
+                      {enforcementResult && (
+                          <Card className="border-red-500/20 bg-red-500/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-mono uppercase flex justify-between">
+                                    <span>Enforcement Map (Gatekeeping)</span>
+                                    <span className="text-xs text-muted-foreground">{new Date(enforcementResult.generatedAt).toLocaleTimeString()}</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {enforcementResult.enforcers.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {/* Breakdown Badges */}
+                                        <div className="flex flex-wrap gap-2">
+                                            {Object.entries(enforcementResult.breakdownByType).map(([type, count]) => (
+                                                <Badge key={type} variant="outline" className="text-[10px] font-mono border-red-500/30 text-red-500">
+                                                    {type.toUpperCase().replace("_BY", "")}: {count}
+                                                </Badge>
+                                            ))}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <h4 className="text-xs font-bold uppercase mb-2 text-red-600">Top Enforcers</h4>
+                                                {enforcementResult.enforcers.slice(0, 3).map((e, i) => {
+                                                    const entity = pack.entities.find(ent => ent.id === e.entityId);
+                                                    return (
+                                                        <div key={e.entityId} className="text-xs mb-1 flex justify-between border-b border-dashed border-red-500/20 pb-1">
+                                                            <span>{i+1}. {entity?.name}</span>
+                                                            <span className="font-mono text-red-500">{e.enforcementActions} Actions</span>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-bold uppercase mb-2 text-orange-600">Top Targets</h4>
+                                                {enforcementResult.targets.slice(0, 3).map((t, i) => {
+                                                    const entity = pack.entities.find(ent => ent.id === t.entityId);
+                                                    return (
+                                                        <div key={t.entityId} className="text-xs mb-1 flex justify-between border-b border-dashed border-orange-500/20 pb-1">
+                                                            <span>{i+1}. {entity?.name}</span>
+                                                            <span className="font-mono text-orange-500">{t.targetedActions} In</span>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-6 text-muted-foreground text-xs font-mono">
+                                        No enforcement edges found (e.g. banned_by, sued_by).
+                                    </div>
+                                )}
+                            </CardContent>
+                          </Card>
                       )}
                   </div>
               ) : (
