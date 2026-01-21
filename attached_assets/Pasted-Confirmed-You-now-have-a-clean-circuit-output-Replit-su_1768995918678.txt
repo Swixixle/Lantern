@@ -1,0 +1,117 @@
+Confirmed. You now have a clean circuit output: **Replit summary + Gemini redline + Grok certification**. I’m going to do two things:
+
+1. **Arbitrate the disagreement** (Gemini wants more verification; Grok says fully certified) using the thinking contract.
+2. Produce the **single consolidated directive** you will send to the Replit Agent next (Packet 2).
+
+---
+
+# 1) Arbitration under the Thinking Contract
+
+### What’s disputed
+
+* **Gemini** flags “intelligent merging” as high interpretive risk and wants raw code + smoke logs before allowing M2 segmentation to proceed.
+* **Grok** says evidence appendix already exists and certifies that dedupe is binary (skip/replace) and round-trip is lossless.
+
+### What the contract requires
+
+Under your governance rules, *any* claim of “intelligent merging” must be verified because it can silently mutate packs (offset drift = fatal). Even if Grok is correct, Gemini’s demand is low-cost and high-safety.
+
+### Ruling
+
+**We proceed with sentence segmentation, but only after one last verification step that costs ~5 minutes and closes the merging risk permanently.**
+
+This is not a stall. It’s a final seal.
+
+**Decision:**
+
+* Remediation: **CERTIFIED** (storage default restored and gated properly)
+* “Intelligent merging” risk: **must be closed with raw code + a single dedupe test assertion** (binary policy)
+
+After that, M2 segmentation proceeds with no further storage talk.
+
+---
+
+# 2) Consolidated Packet 2 directive to the Replit Agent (send this)
+
+## Message to Replit Agent (copy/paste)
+
+Remediation is certified. Before we proceed, we must close one remaining redline: the phrase “intelligent merging” has interpretive-risk implications. This is a final verification seal.
+
+### A) Final verification seal (required, small)
+
+1. Paste the **exact dedupe/import logic** from `client/src/pages/lantern-extract.tsx` (only the functions that:
+
+   * parse import JSON
+   * dedupe by `pack_id`
+   * decide skip/replace
+   * save library)
+
+2. Add/confirm a unit test that enforces **binary dedupe policy**:
+
+   * If incoming pack_id matches an existing pack_id:
+
+     * policy must be either **SKIP** or **REPLACE ENTIRE PACK**
+     * no field-level merge
+     * no offset repair
+     * no partial combines
+   * Test must assert deep equality of the preserved pack object (or the replaced object) and confirm offsets unchanged.
+
+3. Paste smoke/test output showing this test passes (along with the existing persistence smoke if convenient).
+
+Once this is provided, the “merging” concern is formally closed.
+
+---
+
+### B) Proceed to M2 Priority #1: Sentence Segmentation (after A is delivered)
+
+Implement a deterministic rule-based sentence segmenter:
+
+Deliver as Packet 1:
+
+1. `client/src/lib/heuristics/segmenters/sentenceSegmenter.ts` (full)
+2. abbreviation whitelist (40–60 entries) and matching rules
+3. decimals/currency non-splitting rules
+4. quote-spanning continuity logic
+5. 8–10 before/after fixture-style examples
+6. pre/post metrics (Precision, Recall, F1 + discard count)
+
+Constraints remain:
+
+* no persistence work
+* no backend
+* no LLM/ML
+* offsets must remain exact
+
+Proceed.
+
+---
+
+# 3) Optional: Gemini’s adversarial edge-case list (answering their question)
+
+Yes—have Gemini prepare it, but only after we receive the segmenter Packet 1. Otherwise Gemini will generate cases that don’t map to the implemented rules.
+
+When the segmenter arrives, instruct Gemini to attack with:
+
+* Unicode dashes: `– — - -` in ranges and hyphenated words
+* Ellipses: `...` and `…`
+* Nested quotes: `"He said, 'No.'"` and `'He said, "No."'`
+* Abbrev collisions: `St.` (Street vs Saint), `No.` (number vs sentence end)
+* Initialisms: `U.S.A.` with trailing punctuation
+* Decimal adjacency: `3.14...` followed by newline
+* Currency formats: `$1,200.50` / `€1.200,50`
+* Weird spacing: `Dr . Smith` (should still split correctly, if you choose to support)
+
+---
+
+# 4) What you do next
+
+Send the Packet 2 directive above to the Replit Agent.
+
+When the agent returns:
+
+* dedupe/import functions + unit test proof, and
+* the sentence segmenter packet,
+
+paste them here. I’ll certify the dedupe seal, then certify/patch the segmenter, then issue M2 Priority #2 (entity tiering) with fixtures.
+
+This keeps the circuit disciplined and prevents a quiet integrity failure later.

@@ -1,0 +1,180 @@
+Below is the **final Packet 2 directive** you should paste to the Replit Agent. It includes (a) the **AI team briefing**, (b) the **Return Packet format** with explicit “what to show/tell,” and (c) the **end-of-day usability constraint** framed as a hard operational objective without adding scope drift.
+
+---
+
+## Message to Replit Agent (Packet 2 – AI Circuit + End-of-Day Gate) — copy/paste
+
+You are now operating inside a **four-AI review circuit** with audit discipline. This is a tracked governance process, not informal iteration.
+
+### AI Review Team (who reviews what)
+
+* **Owner (Alex):** Final authority. Approves gates and directives.
+* **ChatGPT:** Arbiter/Compiler. Enforces scope, certifies gates, issues next instructions.
+* **Gemini:** Adversarial auditor. Hunts interpretive risk, silent mutation, edge cases.
+* **Grok:** Product realism & operator clarity. UX friction, practical failure modes.
+
+**Rule:** Nothing is considered “done” unless you return the required artifacts in the format below. Narrative summaries without evidence will be treated as incomplete.
+
+---
+
+# END-OF-DAY OPERATIONAL OBJECTIVE
+
+Lantern must remain **usable and stable** through today’s work:
+
+* App loads
+* User can extract
+* Packs can be saved
+* Export/Import works
+* No offset drift
+  No broad refactors. No backend. No storage changes. No LLM.
+
+---
+
+# TASK A (Blocking): Final Verification Seal — “Intelligent Merging” must be binary
+
+We must permanently close the interpretive-risk redline around “intelligent merging.”
+
+### A1) Show the exact code (verbatim)
+
+Paste only the relevant functions from:
+`client/src/pages/lantern-extract.tsx` (or wherever the import/save logic actually lives)
+
+Include only the functions that:
+
+* parse incoming JSON during import
+* check `pack_id` collisions / dedupe
+* decide **SKIP vs REPLACE**
+* persist via `saveLibrary` or equivalent
+
+No unrelated UI code.
+
+### A2) Add/confirm a unit test enforcing binary policy
+
+Create or confirm a unit test file (suggested path):
+`tests/unit/importDedupe.test.ts` (or similar)
+
+Test requirements:
+
+* Setup existing library with pack P (pack_id = "test-001") including at least one metric with offsets.
+* Import JSON containing a conflicting pack with the same pack_id but different values/offsets.
+* Assert persisted result is **EITHER**:
+
+  * exact deepEqual to original pack (SKIP policy), OR
+  * exact deepEqual to incoming pack (REPLACE policy)
+* Assert **NO partial merge** occurred:
+
+  * no appended metrics
+  * no union of offsets
+  * no repaired spans
+  * no mixed fields
+* Assert offsets remain exact integers from the winning pack.
+
+Policy must be one of:
+
+* SKIP incoming entirely
+* REPLACE entire pack (overwrite)
+  No third option.
+
+### A3) Show proof it passed
+
+Paste:
+
+* the test file content (or the relevant test case)
+* terminal output showing test pass (green)
+
+Once Task A is delivered, the “merging” concern is formally closed.
+
+---
+
+# TASK B (Next): M2 Priority #1 — Deterministic Sentence Segmenter
+
+After completing Task A, proceed to sentence segmentation.
+
+### B1) Implement segmenter (deterministic only)
+
+Deliver full file:
+`client/src/lib/heuristics/segmenters/sentenceSegmenter.ts` (or the actual chosen path)
+
+Must include:
+
+* abbreviation whitelist (40–60 items) and lookup structure (Set/Map/etc.)
+* rules preventing false splits on:
+
+  * abbreviations (Dr., Mr., Inc., U.S., U.K., etc.)
+  * decimals/currency ($1,200.50, 3.14, €12.50, 1.2M)
+  * quote-spanning punctuation
+  * parentheses/brackets
+  * dash ranges (– and -)
+
+### B2) Provide 8–10 fixture-style examples (before/after)
+
+Format each example as:
+
+* input text
+* output array of `{ text, start, end }` using **original source offsets**
+* 1 line: which rule prevented the false split
+
+Must include cases:
+
+* “Mr. Smith paid $12.50 in U.S. dollars.”
+* “He said, "Wait... no." She continued.”
+* “Prof. Jones (Ph.D.) arrived late.”
+* “Revenue rose 4.2%–5.1% in Q3.”
+* “See St. Louis Inc. report.”
+
+### B3) Metrics
+
+Provide a small pre/post boundary report on a representative edge subset:
+
+* Precision / Recall / F1 for sentence boundaries
+* Discard/Noise count (if any)
+* Fixture count used for the report
+
+---
+
+# RETURN PACKET (required for every response)
+
+When you reply, structure your message exactly like this:
+
+## Return Packet
+
+### 1) What changed (paths)
+
+* [file path] — 1 sentence describing change
+
+### 2) Evidence
+
+**Task A Evidence**
+
+* Paste dedupe/import functions
+* Paste unit test (or relevant test case)
+* Paste terminal output showing pass
+
+**Task B Evidence (if included in same reply)**
+
+* Paste full segmenter file (or link/path + full content)
+* Paste 8–10 examples (input + outputs with offsets)
+* Paste metrics table + test output
+
+### 3) Verification checklist (tick all)
+
+* [ ] No backend work
+* [ ] No storage/persistence work beyond Task A verification (no changes to storage layer)
+* [ ] No LLM/ML
+* [ ] Deterministic behavior preserved (5-run stability if tested)
+* [ ] Offsets preserved (no drift)
+* [ ] All tests green
+
+Deliver Task A first; Task B may be in the same reply or immediate follow-up.
+
+Proceed.
+
+---
+
+This message gives the Agent: the AI-team framing, the “leave tracks” requirement, and the end-of-day usability constraint without derailing scope.
+
+When you paste the Agent’s Return Packet back here, I will:
+
+* certify the dedupe seal,
+* validate the segmenter against Gemini-grade edge cases,
+* then issue the next locked directive (M2 Priority #2: entity tiering) with an equally strict Return Packet format.
