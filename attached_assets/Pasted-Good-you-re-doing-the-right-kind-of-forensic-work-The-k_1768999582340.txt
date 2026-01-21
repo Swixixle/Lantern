@@ -1,0 +1,191 @@
+Good — you’re doing the right kind of forensic work. The key issue right now is that you **do not yet have a confirmed error**, only *symptoms* (reload failure + Vite overlay at some point). Until we surface the **first concrete compiler/runtime error**, everything else is noise.
+
+Let me reset this cleanly and give you a **deterministic, low-friction plan** that will surface the real fault in minutes.
+
+---
+
+## First: clarify what the error actually is (important)
+
+Right now, based on what you’ve described:
+
+* You **do not currently have proof** of an active “Internal Server Error”
+* You **do have historical Vite reload failures** (e.g. `lantern-extract.tsx`)
+* You **do see successful reconnects afterward**
+* Your `grep` attempt failed due to a **ripgrep misuse**, not an app error
+
+So we must **force Vite to tell us the truth**.
+
+---
+
+## Step 1 — Stop guessing, force a clean Vite failure
+
+Kill everything and restart clean.
+
+```bash
+# stop all running dev servers
+pkill -f vite || true
+pkill -f node || true
+```
+
+Now restart **with verbose logging**:
+
+```bash
+npm run dev:client -- --debug
+```
+
+or if that doesn’t propagate:
+
+```bash
+DEBUG=vite:* npm run dev:client
+```
+
+This matters — default Vite output often hides the *first* error.
+
+---
+
+## Step 2 — Watch for the FIRST red line (this is the real error)
+
+You are looking for **the earliest occurrence** of any of these:
+
+* `Internal server error:`
+* `Failed to load module`
+* `Unexpected token`
+* `does not provide an export named`
+* `Cannot find module`
+* `ReferenceError` / `TypeError` during module eval
+
+⚠️ **Do not scroll past it**. The *first* error is the root cause; everything after is cascading failure.
+
+---
+
+## Step 3 — Correct way to grep logs (your command was invalid)
+
+This line tells us something important:
+
+> `'files_with_matches' is not a recognized ripgrep file type`
+
+That means you accidentally passed a flag as a filetype.
+
+Here is the **correct way** to search everything recursively:
+
+```bash
+rg -i "error|exception|internal server|failed to load|unexpected token|does not provide" .
+```
+
+If you want **just Vite / client files**:
+
+```bash
+rg -i "error|failed" client
+```
+
+If you want **workflow logs only** (Replit):
+
+```bash
+rg -i "error|exception|500" .replit
+```
+
+---
+
+## Step 4 — If Vite overlay appears again
+
+When the browser overlay shows up:
+
+1. Click **“Details”**
+2. Copy **everything**, especially:
+
+   * file path (`/src/pages/...`)
+   * line + column
+   * import chain
+
+That overlay is gold. Without it, we’re blind.
+
+---
+
+## Step 5 — 90% likely causes (based on your repo + recent work)
+
+Given your M2 work and file list, the most likely culprits are:
+
+### 1) Import/export mismatch
+
+Very common after refactors.
+
+Example:
+
+```ts
+import { extract } from "@/lib/lanternExtract";
+```
+
+but file actually exports:
+
+```ts
+export default extract;
+```
+
+or vice versa.
+
+### 2) TypeScript syntax error Vite doesn’t like
+
+Examples:
+
+* stray trailing comma
+* unterminated generic
+* malformed enum
+* `as const` misuse
+
+### 3) File moved / renamed but import path not updated
+
+Especially casing issues:
+
+```ts
+./LanternExtract.ts
+```
+
+vs
+
+```ts
+./lanternExtract.ts
+```
+
+Works on macOS, breaks in Linux.
+
+### 4) Top-level code throws during module evaluation
+
+For example:
+
+```ts
+const x = window.location // throws in SSR-ish context
+```
+
+or accessing something undefined during import.
+
+---
+
+## What I need from you (non-negotiable to proceed)
+
+Please send **one of the following** — whichever you can get first:
+
+### Option A (best)
+
+* The **exact Vite terminal error block** (first red error)
+
+### Option B
+
+* The **Vite overlay details** (stack trace)
+
+### Option C (fallback)
+
+* The **full contents** of `client/src/pages/lantern-extract.tsx`
+
+With *any one* of those, I can give you:
+
+* the exact line causing failure,
+* the minimal patch,
+* and confirmation you’re clear to move on.
+
+---
+
+## Reassurance (important)
+
+You are **not stuck**, and you are **not blocked by Replit**. This is a normal dev-server failure that happens after heavy refactoring. The fact that Vite reconnects is actually a good sign — it means the failure is localized, not systemic.
+
+Get me the **first real error**, and we end this quickly.
