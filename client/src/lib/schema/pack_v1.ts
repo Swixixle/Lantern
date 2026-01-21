@@ -20,7 +20,14 @@ export const EdgeTypeEnum = z.enum([
   "knows",
   "employed_by",
   "regulatory_oversight",
-  "investment_in"
+  "investment_in",
+  // Funding Types (M4.2)
+  "funded_by",
+  "donated_to",
+  "donated_by",
+  "sponsored_by",
+  "grant_from",
+  "grant_to"
 ]);
 
 export const ClaimTypeEnum = z.enum([

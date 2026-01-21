@@ -1,0 +1,155 @@
+Acknowledged. Speaking directly to the rep agent.
+
+Certification decision
+
+M3.3 Capture UI
+
+You have now provided the missing hard proof via an integration test that covers:
+	•	persistence after reload, and
+	•	export/import coexistence with both lantern.extract.pack.v1 and lantern.dossier.pack.v1.
+
+M3.3: FULLY CERTIFIED.
+
+M4.1 Influence Hubs
+
+You have:
+	•	a typed finding schema (heuristics/types.ts)
+	•	a pure heuristic implementation (heuristics/influenceHubs.ts)
+	•	deterministic unit test with a star-graph fixture
+	•	minimal UI integration (Heuristics tab + “Run Influence Hubs” + ranked results)
+
+M4.1: CERTIFIED COMPLETE.
+
+⸻
+
+Review notes on the posted extract_to_dossier.ts
+
+This is acceptable for current scope, with two forward-looking flags (not blockers):
+	1.	sourceType: "quote" and "timeline_event" being “loose strings” is fine for now, but you should decide whether Evidence.sourceType is an enum or a free string and enforce consistently. Right now you normalize the source document to "News"|"Filing"|"Transcript"|"Unknown" while allowing others ad hoc. That’s okay in v1; tighten in v1.1.
+	2.	The “fact of utterance” claim remains semantically safe as long as the text is explicit (it is) and confidence is not 1.0 (it isn’t). Good.
+
+No action required unless you want to harden enums now.
+
+⸻
+
+Next instructions: proceed to M4.2 Funding Gravity (v1)
+
+This is the next highest-value “shadow caste” lens and fits your current data model (entities + edges). Keep it simple and evidence-citable.
+
+M4.2 scope
+
+Implement a heuristic that answers:
+	•	“Which entities act as funders/benefactors (sources of money/resources)?”
+	•	“Which entities are recipients?”
+	•	“Is funding concentrated (a few nodes dominate)?”
+	•	“Which recipients depend most on a small number of funders?”
+
+Requirements
+	•	Pure function, no mutation.
+	•	Deterministic output.
+	•	Every result cites entity IDs and supporting edge IDs.
+	•	Only run if relevant edge types exist; otherwise return “insufficient data.”
+
+⸻
+
+Step 1 — Define edge types that qualify as “funding”
+
+Create a whitelist:
+	•	funded_by
+	•	donated_to
+	•	donated_by
+	•	sponsored_by
+	•	sponsors
+	•	grant_from
+	•	grant_to
+	•	financed_by
+	•	contracted_by (optional; treat separately if you want “procurement gravity”)
+
+If your edge types are currently free-text, implement:
+	•	normalization (toLowerCase, trim)
+	•	a mapping table
+	•	warn if unknown types
+
+⸻
+
+Step 2 — Heuristic output schema
+
+Add to client/src/lib/heuristics/types.ts:
+
+type FundingGravityFinding = {
+  kind: "funding_gravity_v1";
+  packId: string;
+  generatedAt: string;
+  funders: Array<{
+    entityId: string;
+    outgoingFundingEdges: number;
+    totalRecipients: number;
+    supportingEdgeIds: string[];
+  }>;
+  recipients: Array<{
+    entityId: string;
+    incomingFundingEdges: number;
+    totalFunders: number;
+    supportingEdgeIds: string[];
+  }>;
+  concentration?: {
+    topFundersShare: number; // 0..1 of all funding edges
+    topRecipientsShare: number;
+    edgesCount: number;
+  };
+  notes?: string;
+};
+
+
+⸻
+
+Step 3 — Algorithm (v1)
+	•	Filter edges by funding edge types.
+	•	Treat direction consistently:
+	•	If edge is funded_by: from=recipient, to=funder (invert) or normalize to (funder → recipient).
+	•	Pick one canonical direction: funder → recipient.
+	•	Compute:
+	•	funder out-degree on funding edges
+	•	recipient in-degree on funding edges
+	•	Compute concentration:
+	•	share of edges accounted for by top 1 / top 3 funders
+	•	same for recipients
+
+⸻
+
+Step 4 — Tests
+
+Create a fixture with:
+	•	2 funders, 5 recipients
+	•	one funder funds 4 recipients
+	•	assert concentration reflects dominance
+	•	assert supporting edge IDs correctly collected
+
+⸻
+
+Step 5 — UI integration (minimal)
+
+In the Heuristics tab:
+	•	add “Run Funding Gravity”
+	•	show:
+	•	Top Funders
+	•	Top Recipients
+	•	Concentration metrics
+
+No graph yet.
+
+⸻
+
+Acceptance criteria for M4.2 (PASS/FAIL)
+
+PASS only if:
+	•	Works with canonicalized edge direction
+	•	Returns “insufficient data” when no funding edges exist
+	•	Results cite IDs and edges
+	•	Unit tests pass
+
+⸻
+
+If you confirm your current edge type values (is it a free string or enum?), I can give you an exact normalization + canonicalization mapping (including how to treat funded_by vs donated_to) without ambiguity.
+
+ALEX STOP

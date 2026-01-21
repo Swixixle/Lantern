@@ -36,7 +36,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
-import { InfluenceHubsFinding } from "@/lib/heuristics/types";
+import { computeFundingGravity } from "@/lib/heuristics/fundingGravity";
+import { InfluenceHubsFinding, FundingGravityFinding } from "@/lib/heuristics/types";
 
 export default function DossierEditor() {
   const { id } = useParams();
@@ -44,7 +45,8 @@ export default function DossierEditor() {
   const [pack, setPack] = useState<PackV1 | null>(null);
   const [storageStatus, setStorageStatus] = useState<StorageStatus>("idle");
   const [activeTab, setActiveTab] = useState("entities");
-  const [heuristicsResult, setHeuristicsResult] = useState<InfluenceHubsFinding | null>(null);
+  const [influenceResult, setInfluenceResult] = useState<InfluenceHubsFinding | null>(null);
+  const [fundingResult, setFundingResult] = useState<FundingGravityFinding | null>(null);
 
   // Form States (New Item Inputs)
   const [newEntity, setNewEntity] = useState<{name: string, type: string}>({ name: "", type: "person" });
@@ -191,8 +193,12 @@ export default function DossierEditor() {
 
   const runHeuristics = () => {
       if (!pack) return;
-      const result = computeInfluenceHubs(pack);
-      setHeuristicsResult(result);
+      
+      const inf = computeInfluenceHubs(pack);
+      setInfluenceResult(inf);
+
+      const fund = computeFundingGravity(pack);
+      setFundingResult(fund);
   };
 
 
@@ -506,44 +512,113 @@ export default function DossierEditor() {
                       <p className="text-xs text-muted-foreground">Automated analysis of network structure.</p>
                   </div>
                   <Button onClick={runHeuristics} className="bg-purple-600 hover:bg-purple-700 text-white font-mono">
-                      <Zap className="w-4 h-4 mr-2" /> Run Influence Hubs
+                      <Zap className="w-4 h-4 mr-2" /> Run Analysis
                   </Button>
               </div>
 
-              {heuristicsResult ? (
-                  <div className="space-y-4">
-                      <Card className="border-purple-500/20 bg-purple-500/5">
-                          <CardHeader className="pb-2">
-                              <CardTitle className="text-sm font-mono uppercase flex justify-between">
-                                  <span>Influence Hubs (Degree Centrality)</span>
-                                  <span className="text-xs text-muted-foreground">{new Date(heuristicsResult.generatedAt).toLocaleTimeString()}</span>
-                              </CardTitle>
-                          </CardHeader>
-                          <CardContent>
-                              <div className="space-y-2">
-                                  {heuristicsResult.results.map((res, i) => {
-                                      const entity = pack.entities.find(e => e.id === res.entityId);
-                                      return (
-                                          <div key={res.entityId} className="flex items-center gap-4 p-2 bg-background/50 rounded border border-border">
-                                              <div className="font-mono font-bold text-lg text-purple-500 w-8 text-center">#{i + 1}</div>
-                                              <div className="flex-1">
-                                                  <div className="font-bold">{entity?.name || "Unknown Entity"}</div>
-                                                  <div className="text-xs text-muted-foreground font-mono">
-                                                      Total Degree: {res.degree} (In: {res.inDegree}, Out: {res.outDegree})
-                                                  </div>
-                                              </div>
-                                              <div className="text-right text-[10px] text-muted-foreground font-mono">
-                                                  {res.supportingEdgeIds.length} Edges Cited
-                                              </div>
-                                          </div>
-                                      );
-                                  })}
-                                  {heuristicsResult.results.length === 0 && (
-                                      <p className="text-sm text-muted-foreground text-center py-4">No connected hubs found.</p>
-                                  )}
-                              </div>
-                          </CardContent>
-                      </Card>
+              {influenceResult || fundingResult ? (
+                  <div className="space-y-6">
+                      {/* Influence Hubs */}
+                      {influenceResult && (
+                          <Card className="border-purple-500/20 bg-purple-500/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-mono uppercase flex justify-between">
+                                    <span>Influence Hubs (Degree Centrality)</span>
+                                    <span className="text-xs text-muted-foreground">{new Date(influenceResult.generatedAt).toLocaleTimeString()}</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-2">
+                                    {influenceResult.results.slice(0, 5).map((res, i) => {
+                                        const entity = pack.entities.find(e => e.id === res.entityId);
+                                        return (
+                                            <div key={res.entityId} className="flex items-center gap-4 p-2 bg-background/50 rounded border border-border">
+                                                <div className="font-mono font-bold text-lg text-purple-500 w-8 text-center">#{i + 1}</div>
+                                                <div className="flex-1">
+                                                    <div className="font-bold">{entity?.name || "Unknown Entity"}</div>
+                                                    <div className="text-xs text-muted-foreground font-mono">
+                                                        Total Degree: {res.degree} (In: {res.inDegree}, Out: {res.outDegree})
+                                                    </div>
+                                                </div>
+                                                <div className="text-right text-[10px] text-muted-foreground font-mono">
+                                                    {res.supportingEdgeIds.length} Edges Cited
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {influenceResult.results.length === 0 && (
+                                        <p className="text-sm text-muted-foreground text-center py-4">No connected hubs found.</p>
+                                    )}
+                                </div>
+                            </CardContent>
+                          </Card>
+                      )}
+
+                      {/* Funding Gravity */}
+                      {fundingResult && (
+                           <Card className="border-emerald-500/20 bg-emerald-500/5">
+                            <CardHeader className="pb-2">
+                                <CardTitle className="text-sm font-mono uppercase flex justify-between">
+                                    <span>Funding Gravity (Financial Flows)</span>
+                                    <span className="text-xs text-muted-foreground">{new Date(fundingResult.generatedAt).toLocaleTimeString()}</span>
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {fundingResult.concentration ? (
+                                    <div className="space-y-4">
+                                        {/* Metrics */}
+                                        <div className="grid grid-cols-3 gap-2 mb-4">
+                                            <div className="bg-background/50 p-2 rounded border text-center">
+                                                <div className="text-[10px] uppercase text-muted-foreground">Total Flows</div>
+                                                <div className="font-bold font-mono">{fundingResult.concentration.edgesCount}</div>
+                                            </div>
+                                            <div className="bg-background/50 p-2 rounded border text-center">
+                                                <div className="text-[10px] uppercase text-muted-foreground">Top Funder Share</div>
+                                                <div className="font-bold font-mono">{(fundingResult.concentration.topFundersShare * 100).toFixed(0)}%</div>
+                                            </div>
+                                            <div className="bg-background/50 p-2 rounded border text-center">
+                                                <div className="text-[10px] uppercase text-muted-foreground">Top Recipient Share</div>
+                                                <div className="font-bold font-mono">{(fundingResult.concentration.topRecipientsShare * 100).toFixed(0)}%</div>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <h4 className="text-xs font-bold uppercase mb-2 text-emerald-600">Top Funders</h4>
+                                                {fundingResult.funders.slice(0, 3).map((f, i) => {
+                                                    const entity = pack.entities.find(e => e.id === f.entityId);
+                                                    return (
+                                                        <div key={f.entityId} className="text-xs mb-1 flex justify-between border-b border-dashed pb-1">
+                                                            <span>{i+1}. {entity?.name}</span>
+                                                            <span className="font-mono">{f.outgoingFundingEdges} Out</span>
+                                                        </div>
+                                                    )
+                                                })}
+                                                {fundingResult.funders.length === 0 && <span className="text-xs text-muted-foreground">None</span>}
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-bold uppercase mb-2 text-blue-600">Top Recipients</h4>
+                                                {fundingResult.recipients.slice(0, 3).map((r, i) => {
+                                                    const entity = pack.entities.find(e => e.id === r.entityId);
+                                                    return (
+                                                        <div key={r.entityId} className="text-xs mb-1 flex justify-between border-b border-dashed pb-1">
+                                                            <span>{i+1}. {entity?.name}</span>
+                                                            <span className="font-mono">{r.incomingFundingEdges} In</span>
+                                                        </div>
+                                                    )
+                                                })}
+                                                {fundingResult.recipients.length === 0 && <span className="text-xs text-muted-foreground">None</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-6 text-muted-foreground text-xs font-mono">
+                                        No funding edges found (e.g. funded_by, donated_to).
+                                    </div>
+                                )}
+                            </CardContent>
+                           </Card>
+                      )}
                   </div>
               ) : (
                   <div className="border border-dashed border-border rounded-lg p-12 text-center text-muted-foreground font-mono text-sm">
