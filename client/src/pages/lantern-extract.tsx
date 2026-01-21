@@ -37,7 +37,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { extract, computePackId, diffPacks, scoreExtraction, LanternPack, ExtractionOptions, PackDiff, QualityReport } from "@/lib/lanternExtract";
-import { persistence, debouncedSave, type StorageStatus, type LibraryState, AnyPack } from "@/lib/storage";
+import { persistence, debouncedSave, type StorageStatus, type LibraryState, AnyPack, isExtractPack, isDossierPack } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 import fixtures from "@/fixtures/metric_and_attribution_edge_cases.json";
 import { createDossierFromExtract } from "@/lib/converters/extract_to_dossier";
@@ -121,12 +121,12 @@ export default function LanternExtract() {
   const handleSave = async () => {
     if (pack) {
       setStorageStatus("saving");
-      const existing = savedPacks.find(p => "pack_id" in p ? p.pack_id === pack.pack_id : (p as any).packId === pack.pack_id);
+      const existing = savedPacks.find(p => isExtractPack(p) ? p.pack_id === pack.pack_id : p.packId === pack.pack_id);
       
       try {
           const newSaved = existing 
             ? savedPacks.map(p => {
-                const pId = "pack_id" in p ? p.pack_id : (p as any).packId;
+                const pId = isExtractPack(p) ? p.pack_id : p.packId;
                 return pId === pack.pack_id ? pack : p;
             })
             : [...savedPacks, pack as AnyPack];

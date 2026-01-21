@@ -8,6 +8,15 @@ import { migratePack } from "./migrations";
 // The Discriminated Union
 export type AnyPack = LanternPack | Pack;
 
+// Type Guards for robust discrimination
+export function isExtractPack(p: AnyPack): p is LanternPack {
+  return "schema" in p && p.schema === "lantern.extract.pack.v1";
+}
+
+export function isDossierPack(p: AnyPack): p is Pack {
+  return "schemaVersion" in p && (p as Pack).schemaVersion === 2;
+}
+
 const DB_NAME = "lantern-db";
 const DB_VERSION = 1;
 

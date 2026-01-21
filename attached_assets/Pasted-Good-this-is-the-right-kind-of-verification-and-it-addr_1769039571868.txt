@@ -1,0 +1,55 @@
+Good—this is the right kind of verification, and it addresses the exact failure mode (file corruption) with the right invariants (import locality, single export, build pass, handler presence).
+
+A few precision notes, and then you’re legitimately “back on rails.”
+
+What your verification proves
+	•	Structural integrity is restored: imports top-level, single component definition, no duplicate blocks.
+	•	Toolchain integrity holds: npm run build passed, so TS + bundler agree the module graph is coherent.
+	•	Runtime sanity holds: “workflow running” and “no console errors” indicates no immediate runtime explosions.
+	•	Local type discrimination is in place: you’re using a discriminator to separate extract packs from dossiers.
+
+That’s enough to say: the corruption event is resolved and the app is in a stable state.
+
+Two small caveats (worth tightening)
+
+1) Discriminating on "pack_id" in p
+
+This is workable, but it’s not the most robust discriminator long-term.
+
+Why:
+	•	It’s a structural property that could accidentally overlap if schemas evolve.
+	•	You already have explicit discriminators in your ecosystem (schema, schemaVersion, packType).
+
+Better (v1.1 improvement, not urgent):
+	•	Prefer p.schema === "lantern.extract.pack.v1" vs p.schema === "lantern.dossier.pack.v1" (or whatever your exact strings are).
+	•	Or discriminate on packType + schemaVersion.
+
+If you keep "pack_id" in p, it should be treated as a temporary compatibility shim.
+
+2) “Handlers restored” is necessary but not sufficient
+
+You verified presence and placement, which is good. The only remaining risk class is semantic drift (e.g., compare button routes dossiers but you pass extracts, or a restored handler uses the wrong state slice). Your “no console errors” helps, but it’s still worth doing one fast end-to-end click path:
+	•	Create extract → promote → open dossier editor
+	•	Run heuristics → report → markdown export
+	•	Compare two dossiers → comparison fingerprint shows → export comparison markdown
+
+If all of that works in one run, you’re beyond “running”—you’re functionally validated.
+
+On M12 (Comparison Integrity)
+
+Your summary matches the intended design:
+	•	comparison hash binds source fingerprints + comparison result
+	•	displayed in UI and emitted in export frontmatter
+
+One sanity invariant to ensure this is truly cryptographic rather than decorative:
+	•	The comparison fingerprint should remain stable across refresh as long as A, B, and the comparison algorithm inputs are unchanged.
+If it changes every refresh, you’re accidentally hashing timestamps or non-canonical fields.
+
+Bottom line
+
+Corruption is resolved. Build is green. You’re operational again.
+
+If you want the next “adult” move now that the platform is stable:
+	•	Freeze v1: tag a baseline, and add a CI gate (eslint + tsc + vitest) so this kind of file-level corruption cannot quietly reappear.
+
+If you want, paste the schema discriminator strings you’re using, and I’ll give you the minimal refactor to replace "pack_id" in p with a future-proof union guard.
