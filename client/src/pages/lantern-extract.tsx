@@ -28,7 +28,10 @@ import {
   GitCompare,
   Play,
   AlertTriangle,
-  ArrowRight
+  ArrowRight,
+  Download,
+  Upload,
+  Trash2
 } from "lucide-react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
@@ -115,6 +118,59 @@ export default function LanternExtract() {
       } else {
          alert(`New Snapshot Saved (ID: ${pack.pack_id.slice(0, 8)})`);
       }
+    }
+  };
+
+  // --- M1: Data Portability (Export/Import) ---
+  const handleExportLibrary = () => {
+    const packs = loadPacks();
+    const blob = new Blob([JSON.stringify(packs, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lantern_library_backup_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const handleImportLibrary = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const importedPacks = JSON.parse(content);
+        
+        if (!Array.isArray(importedPacks)) throw new Error("Invalid format: Expected array");
+        
+        // Basic validation check
+        const valid = importedPacks.every(p => p.pack_id && p.items && p.hashes);
+        if (!valid) throw new Error("Invalid Lantern Pack schema in file");
+
+        // Merge strategy: Overwrite by ID, keep others
+        const currentPacks = loadPacks();
+        const packMap = new Map(currentPacks.map(p => [p.pack_id, p]));
+        
+        importedPacks.forEach(p => packMap.set(p.pack_id, p));
+        
+        const merged = Array.from(packMap.values());
+        localStorage.setItem("lantern_packs", JSON.stringify(merged));
+        setSavedPacks(merged);
+        alert(`Successfully imported ${importedPacks.length} packs.`);
+      } catch (err) {
+        alert("Failed to import: " + (err as Error).message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleClearLibrary = () => {
+    if (confirm("Are you sure? This will delete all saved packs from browser storage.")) {
+        localStorage.removeItem("lantern_packs");
+        setSavedPacks([]);
     }
   };
 
@@ -369,6 +425,26 @@ export default function LanternExtract() {
                     <Button variant="ghost" size="icon" className="h-3 w-3 ml-2 p-0" onClick={() => setFilterSourceHash(null)}>×</Button>
                  </Badge>
              )}
+          </div>
+
+          <div className="flex gap-2 justify-end border-b border-border pb-4">
+             <div className="relative">
+                <input 
+                  type="file" 
+                  accept=".json" 
+                  onChange={handleImportLibrary}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+                <Button variant="outline" size="sm" className="font-mono text-xs">
+                   <Upload className="w-3 h-3 mr-2" /> Import JSON
+                </Button>
+             </div>
+             <Button variant="outline" size="sm" onClick={handleExportLibrary} className="font-mono text-xs">
+                <Download className="w-3 h-3 mr-2" /> Export JSON
+             </Button>
+             <Button variant="destructive" size="sm" onClick={handleClearLibrary} className="font-mono text-xs">
+                <Trash2 className="w-3 h-3 mr-2" /> Clear All
+             </Button>
           </div>
 
           <div className="grid gap-4">

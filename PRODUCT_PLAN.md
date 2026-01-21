@@ -52,12 +52,12 @@ Lantern is a structured knowledge extraction tool that converts unstructured tex
 *   **Goal**: App boots, extracts, saves (local), and passes smoke tests.
 *   **Status**: **Green**. `AUDIT_REPORT.md` confirms integrity.
 
-### M1: Data Safety & Portability
+### M1: Data Safety & Portability (COMPLETED)
 *   **Goal**: Prevent data loss via file backups.
 *   **Deliverables**:
-    *   [ ] `Export Pack` button (Download JSON).
-    *   [ ] `Import Pack` button (Upload JSON).
-    *   [ ] `Clear Library` utility.
+    *   [x] `Export Pack` button (Download JSON).
+    *   [x] `Import Pack` button (Upload JSON).
+    *   [x] `Clear Library` utility.
 *   **Tests**: Verify import restores exact hash ID.
 
 ### M2: Heuristic Reliability

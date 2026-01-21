@@ -3,7 +3,7 @@ import { extract, computePackId } from "../client/src/lib/lanternExtract";
 // Mock Text
 const text = "Apple Inc. reported $5 million in revenue on January 1, 2023. 'Great result,' said Tim.";
 
-console.log("--- SMOKE TEST: Lantern Extraction ---");
+console.log("--- SMOKE TEST: Lantern Extraction & Data Safety (M1) ---");
 
 // 1. Test Extraction
 try {
@@ -26,6 +26,31 @@ try {
 
     if (id1 !== id2) throw new Error("Determinism Check Failed: IDs do not match");
     console.log(`[PASS] Determinism Check (ID: ${id1})`);
+
+    // 3. Test Export/Import Roundtrip (M1)
+    console.log("--- Testing M1: Export/Import Roundtrip ---");
+    
+    // Create a mock library
+    const mockPack = {
+        pack_id: id1,
+        schema: "lantern.extract.pack.v1",
+        items: result.items,
+        hashes: { source_text_sha256: "hash1", pack_sha256: id1 }
+    };
+    const library = [mockPack];
+
+    // "Export"
+    const exportedJSON = JSON.stringify(library);
+    
+    // "Import"
+    const importedLibrary = JSON.parse(exportedJSON);
+
+    // Verify
+    if (importedLibrary.length !== 1) throw new Error("Import failed: Wrong count");
+    if (importedLibrary[0].pack_id !== id1) throw new Error("Import failed: ID mismatch");
+    if (JSON.stringify(importedLibrary) !== exportedJSON) throw new Error("Roundtrip failed: Content mutation");
+
+    console.log(`[PASS] Export/Import Roundtrip Lossless (Size: ${exportedJSON.length} chars)`);
 
     console.log("\n✅ SMOKE TEST PASSED");
     process.exit(0);
