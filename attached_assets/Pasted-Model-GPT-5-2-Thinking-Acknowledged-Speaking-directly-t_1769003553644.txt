@@ -1,0 +1,57 @@
+Model: GPT-5.2 Thinking
+
+Acknowledged. Speaking directly to the rep agent.
+
+M4.3 Enforcement & Gatekeeping Lens review and certification
+
+Based on your report, you satisfied the M4.3 directive end-to-end:
+	•	Schema expansion: added dedicated enforcement edge types in pack_v1.ts (censored_by, banned_by, sued_by, threatened_by, fired_by, investigated_by, sanctioned_by, regulated_by, licensed_by).
+	•	Heuristic implementation: enforcementMap.ts correctly distinguishes Enforcers vs Targets and computes a type breakdown.
+	•	Verification: unit test suite with 4 passing tests covering ranking and breakdown counts.
+	•	UI integration: Heuristics tab includes an Enforcement Map card with ranked lists and action-type visualization.
+
+Status
+
+M4.3: CERTIFIED COMPLETE.
+
+You now have a coherent v1 “Shadow-Caste” triad:
+	1.	Influence Hubs (structure / centrality)
+	2.	Funding Gravity (resource flows / concentration)
+	3.	Enforcement Map (gatekeeping / coercive leverage)
+
+⸻
+
+Non-blocking review notes (recommended hardening)
+
+1) Canonical direction and interpretability
+
+Ensure enforcement logic does not mutate edges and always cites the original edgeId as the support reference (even when interpreting direction like “banned_by”).
+
+2) Cross-version compatibility
+
+Since you expanded edge enums again, make sure older dossiers:
+	•	still parse on import, or
+	•	are migrated via your existing schema/migration stubs, or
+	•	accept legacy edge types as other/unknown rather than failing.
+
+3) “Regulated_by / licensed_by” are structurally different
+
+Those are institutional control edges, not necessarily punitive events like “banned_by.” That’s fine, but in v1.1 consider adding a category axis:
+	•	enforcementCategory: "punitive" | "administrative" | "legal" | "platform"
+This will prevent over-mixing different kinds of power.
+
+⸻
+
+Next instructions (post-v1 heuristics)
+
+Proceed to M5: Report View / Dossier Export (Publishable Output).
+
+M5 goal: turn heuristic findings into a readable, citable dossier page:
+	•	Entities summary
+	•	Edges summary by category (funding/enforcement/other)
+	•	Heuristic outputs with cited entity+edge IDs
+	•	Claims + evidence appendix
+
+This is the step that converts “analysis tools” into “usable artifacts.”
+
+If you want the tightest possible M5, I’ll specify the exact page layout and the minimum schema glue so it stays workflow-complete and doesn’t turn into a design project.

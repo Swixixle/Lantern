@@ -238,6 +238,11 @@ export default function DossierEditor() {
               <TabsTrigger value="evidence" className="font-mono text-xs uppercase"><FileText className="w-3 h-3 mr-2"/> Evidence ({pack.evidence.length})</TabsTrigger>
               <TabsTrigger value="claims" className="font-mono text-xs uppercase"><ShieldAlert className="w-3 h-3 mr-2"/> Claims ({pack.claims.length})</TabsTrigger>
               <TabsTrigger value="heuristics" className="font-mono text-xs uppercase"><Zap className="w-3 h-3 mr-2"/> Heuristics</TabsTrigger>
+              <div className="ml-auto flex items-center gap-2 pr-2">
+                 <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setLocation(`/dossier/${id}/report`)}>
+                     <FileText className="w-3 h-3 mr-2" /> Report
+                 </Button>
+              </div>
            </TabsList>
 
            {/* --- ENTITIES TAB --- */}
