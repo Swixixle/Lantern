@@ -1,0 +1,147 @@
+Understood. Based on what you described, the failure mode is credible (imports inside a function body + duplicated fragments starting mid-file is exactly what you get from an accidental paste/merge corruption), and the repair plan you executed is the right shape: normalize imports, delete the duplicate region, then restore the missing handlers and type exports.
+
+That said, the only thing that matters now is verifiable integrity. When a file has been “surgically reconstructed,” it can be syntactically valid while being semantically wrong (handlers wired wrong, state reset broken, wrong types silently widening, etc.). So here’s how to lock this down in a way that is defensible.
+
+⸻
+
+1) Confirm the corruption is truly gone
+
+Open client/src/pages/lantern-extract.tsx and validate these invariants:
+
+Imports
+	•	All import statements are at the top-level of the module (no imports inside functions, conditionals, or components).
+	•	There is exactly one component definition for the page (e.g., export default function LanternExtract() or equivalent).
+	•	There are no JSX fragments outside of the component return.
+
+Duplicate region check
+
+Search for:
+	•	import  (string)
+	•	export default function
+	•	function LanternExtract
+You should find them exactly once each.
+
+If any appear twice, corruption remains.
+
+⸻
+
+2) Verify you didn’t “repair” by over-widening types
+
+You said you changed LanternPack[] → AnyPack[]. That can be correct, but it can also hide a logic regression.
+
+Check:
+	•	The Library list is rendering only packs that lantern-extract expects (extract packs vs dossiers).
+	•	If AnyPack is a union, the UI must discriminate by schema (or packType) before assuming items.entities, etc.
+
+Invariant: no code should assume extract-only fields without guarding schema === "lantern.extract.pack.v1" (or whatever your discriminator is).
+
+⸻
+
+3) The big risk: “restored functions” are correct in name but wrong in behavior
+
+When you “added missing function definitions” (reset, toggleItem, handleLoadPack, handleCompare, downloadJSON, downloadPDF, runQualityTests), you need to ensure each one:
+	•	references the correct state variables (not stale names)
+	•	uses the current schema (post versioning)
+	•	respects the new persistence and export systems
+	•	doesn’t create circular flows (e.g., compare route expecting dossiers but you pass extracts)
+
+Do a quick manual pass:
+
+reset()
+	•	must reset all local UI state (filters, selections, search, temp form state), not just saved packs.
+
+toggleItem()
+	•	must update inclusion flags immutably and should not mutate nested arrays directly.
+
+handleLoadPack()
+	•	must load by id and set all dependent derived state.
+
+handleCompare()
+	•	must route to /compare with dossier IDs (if compare is dossier-only).
+	•	if compare supports extracts, it should convert/promote first. If not, it should block with a clear message.
+
+scoreExtraction()
+	•	you fixed the call signature; ensure you didn’t “just make TS happy.”
+	•	confirm the parameters you now pass actually match what the scorer uses (e.g., sourceText, extract, options).
+
+⸻
+
+4) Hard verification (non-negotiable)
+
+You can’t certify “operational” off “workflow is running.” You need these passes:
+
+A) Typecheck/build
+
+Run whatever your repo uses, typically:
+	•	npm run build (or pnpm build)
+
+B) Unit tests
+	•	npx vitest run
+
+C) Smoke test
+	•	node script/smoke_test.ts (or your command)
+
+Expected: all green. If any fail, the reconstruction likely broke a cross-file assumption.
+
+⸻
+
+5) Manual acceptance tests (fast but decisive)
+
+Do these in the UI:
+	1.	Extract tab
+
+	•	create an extract
+	•	toggle include/exclude for entities/quotes/timeline
+	•	ensure no console errors
+
+	2.	Promote
+
+	•	promote extract to dossier
+	•	land in dossier editor
+
+	3.	Heuristics
+
+	•	run heuristics
+	•	check “insufficient data” gating behaves
+
+	4.	Report
+
+	•	open report
+	•	verify integrity header + disclaimers + migration notes + sensitivity section
+
+	5.	Export
+
+	•	download Markdown
+	•	open file: frontmatter present, tables not broken (escaping)
+
+	6.	Compare
+
+	•	select two dossiers
+	•	verify comparison fingerprint appears
+	•	export comparison markdown, verify fingerprints appear in frontmatter
+
+⸻
+
+6) One thing you should do immediately: add a guardrail against this corruption happening again
+
+These two changes prevent “imports inside function body” and “duplicate fragments” from ever shipping:
+	•	ESLint rule: no-inner-declarations and enforce import/first
+	•	Prettier + lint-staged on commit
+
+Even minimal:
+	•	eslint --max-warnings=0 in CI
+	•	tsc --noEmit in CI
+
+This turns future corruptions into instant failures, not mysteries.
+
+⸻
+
+What I need from you to be precise (optional)
+
+If you paste either:
+	•	the git diff for lantern-extract.tsx (or the relevant chunk around where the duplicate region was removed), or
+	•	the section showing the restored function signatures and the scoreExtraction() call,
+
+…I can sanity-check the highest-risk spots quickly: discrimination on AnyPack, compare flow expectations, and the scorer signature.
+
+But even without that, if you run the build/tests/smoke and do the 6 UI checks above, you’ll know—conclusively—whether it’s actually fixed or just “running.”
