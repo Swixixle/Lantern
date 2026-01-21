@@ -37,7 +37,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { extract, computePackId, diffPacks, scoreExtraction, LanternPack, ExtractionOptions, PackDiff, QualityReport } from "@/lib/lanternExtract";
-import { storage, debouncedSave, type StorageStatus } from "@/lib/storage";
+import { persistence, debouncedSave, type StorageStatus, type LibraryState } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 import fixtures from "@/fixtures/metric_and_attribution_edge_cases.json";
 
@@ -81,8 +81,13 @@ export default function LanternExtract() {
   // Init Load
   useEffect(() => {
     const load = async () => {
-        const lib = await storage.loadLibrary();
-        setSavedPacks(lib.packs);
+        const library = await persistence.loadLibrary();
+        if (library) {
+            setSavedPacks(library.packs);
+        } else {
+            // Initialize empty if needed, or just leave as empty array default
+            setSavedPacks([]); 
+        }
     };
     load();
   }, []);
@@ -123,9 +128,8 @@ export default function LanternExtract() {
             
           setSavedPacks(newSaved);
           
-          await storage.savePack(pack);
-          setStorageStatus("saved");
-          setTimeout(() => setStorageStatus("idle"), 2000);
+          // Debounced Persist
+          debouncedSave({ packs: newSaved }, setStorageStatus);
 
           if (existing) {
              alert(`Pack updated (Snapshot ${pack.pack_id.slice(0, 8)})`);
@@ -215,11 +219,8 @@ export default function LanternExtract() {
         const merged = Array.from(packMap.values());
         
         // Persist
-        setStorageStatus("saving");
-        await storage.saveLibrary(merged);
+        debouncedSave({ packs: merged }, setStorageStatus);
         setSavedPacks(merged);
-        setStorageStatus("saved");
-        setTimeout(() => setStorageStatus("idle"), 2000);
         
         alert(`Import Report:\nAdded: ${added}\nSkipped (Duplicate): ${skipped}\nErrors: ${errors.length}`);
         
@@ -232,7 +233,7 @@ export default function LanternExtract() {
 
   const handleClearLibrary = async () => {
     if (confirm("Are you sure? This will delete all saved packs from IndexedDB.")) {
-        await storage.clearLibrary();
+        await persistence.clearLibrary();
         setSavedPacks([]);
     }
   };
@@ -464,7 +465,7 @@ export default function LanternExtract() {
             <div>
                <h1 className="text-2xl font-mono font-bold">Saved Packs</h1>
                <div className="flex items-center gap-2 mt-1">
-                 <p className="text-xs font-mono text-muted-foreground">{storage.getBackendName()} v1</p>
+                 <p className="text-xs font-mono text-muted-foreground">IndexedDB v1</p>
                  {storageStatus === "saving" && <span className="text-[10px] text-amber-500 font-mono animate-pulse">SAVING...</span>}
                  {storageStatus === "saved" && <span className="text-[10px] text-emerald-500 font-mono">ALL CHANGES SAVED</span>}
                  {storageStatus === "error" && <span className="text-[10px] text-red-500 font-mono">STORAGE ERROR</span>}

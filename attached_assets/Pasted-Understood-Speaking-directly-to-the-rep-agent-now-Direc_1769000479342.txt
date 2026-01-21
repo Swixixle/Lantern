@@ -1,0 +1,107 @@
+Understood. Speaking directly to the rep agent now.
+
+⸻
+
+Directive 2 — Implement Persistence (M2)
+
+Objective
+Make Lantern’s Library (including Public Figure Packs) durable, reloadable, and portable so dossiers and evidence graphs survive refresh, restart, and schema change.
+
+This is a foundational systems task, not a feature.
+
+⸻
+
+What you are building (exactly)
+
+A persistence layer that guarantees:
+	•	Library state survives browser refresh and restart
+	•	State loads deterministically on app start
+	•	State saves safely on mutation (no partial writes)
+	•	Schema versioning exists (even if v1 → v1 initially)
+	•	Export/import remains lossless and compatible
+
+This is what makes Lantern a real dossier system instead of a volatile UI.
+
+⸻
+
+Concrete implementation checklist (no ambiguity)
+
+1. Storage mechanism
+	•	Use IndexedDB
+	•	Store a single authoritative record:
+
+{
+  schemaVersion: number,
+  updatedAt: string,
+  library: LibraryState
+}
+
+
+
+2. Persistence API (new module)
+Create something like:
+
+loadLibrary(): Promise<LibraryState | null>
+saveLibrary(state: LibraryState): Promise<void>
+clearLibrary(): Promise<void>
+
+Requirements:
+	•	Atomic write (transactional)
+	•	Debounced/coalesced saves (avoid write storms)
+	•	On failure: do not corrupt prior saved state
+
+3. App lifecycle wiring
+	•	On app startup:
+	•	call loadLibrary()
+	•	if present → hydrate store
+	•	if absent → initialize empty library
+	•	On any library mutation:
+	•	call saveLibrary() (debounced)
+
+4. Schema versioning (minimal, but real)
+	•	Add schemaVersion = 1
+	•	Add a migrate(input) function, even if it’s identity for now
+	•	Import path must be:
+	1.	validate
+	2.	migrate
+	3.	merge
+	4.	persist
+
+5. Tests (must pass before calling M2 done)
+	•	Persistence round-trip: save → reload → deep equality
+	•	Import after reload: reload → import → equality
+	•	Failure safety: simulate save error → previous state intact
+
+6. UX signal (minimal)
+	•	Small status indicator:
+	•	“Saved”
+	•	“Saving…”
+	•	“Save failed” (non-blocking)
+
+⸻
+
+Definition of “done” for this step
+
+You may declare M2 complete only if:
+	•	Library survives refresh and restart
+	•	Export → clear → reload → import reproduces identical structure
+	•	Tests are green
+	•	No heuristics touched
+	•	No product scope drift
+
+⸻
+
+Important boundary (do NOT do yet)
+	•	Do not implement heuristics
+	•	Do not add network graphs
+	•	Do not add “shadow caste” logic yet
+
+This step is about memory, not meaning.
+
+⸻
+
+When this persistence layer is complete, Lantern becomes capable of handling public-figure dossiers with evidentiary weight. Until then, everything else is premature.
+
+You are clear to execute.
+
+ALEX STOP
