@@ -35,6 +35,69 @@ import {
   Zap
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { CopyID } from "@/components/copy-id";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { toast } from "sonner";
+import { Check, ChevronsUpDown, Search, MessageSquarePlus } from "lucide-react";
+
+function EntityCombobox({ 
+  value, 
+  onChange, 
+  entities,
+  placeholder = "Select entity..."
+}: { 
+  value: string, 
+  onChange: (val: string) => void, 
+  entities: Entity[],
+  placeholder?: string
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = entities.find(e => e.id === value);
+  
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal text-xs h-9">
+          {selected ? (
+             <span className="truncate flex items-center gap-2">
+                <span className="font-bold">{selected.name}</span> 
+                <span className="text-muted-foreground opacity-50">({selected.type})</span>
+             </span>
+          ) : (
+             <span className="text-muted-foreground">{placeholder}</span>
+          )}
+          <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[300px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Search entity..." className="text-xs" />
+          <CommandList>
+             <CommandEmpty className="py-2 text-center text-xs text-muted-foreground">No entity found.</CommandEmpty>
+             <CommandGroup>
+               {entities.map(e => (
+                 <CommandItem 
+                    key={e.id} 
+                    value={e.name + " " + e.aliases.join(" ")}
+                    onSelect={() => { onChange(e.id); setOpen(false); }}
+                    className="text-xs"
+                 >
+                   <Check className={cn("mr-2 h-3 w-3", value === e.id ? "opacity-100" : "opacity-0")} />
+                   <div className="flex flex-col">
+                      <span>{e.name}</span>
+                      <span className="text-[9px] text-muted-foreground uppercase">{e.type}</span>
+                   </div>
+                 </CommandItem>
+               ))}
+             </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
 import { computeFundingGravity } from "@/lib/heuristics/fundingGravity";
 import { computeEnforcementMap } from "@/lib/heuristics/enforcementMap";
@@ -57,6 +120,52 @@ export default function DossierEditor() {
   const [newClaim, setNewClaim] = useState<{text: string, type: string, confidence: number, evidenceIds: Set<string>}>({ 
     text: "", type: "allegation", confidence: 0.8, evidenceIds: new Set() 
   });
+  const [evidenceSearch, setEvidenceSearch] = useState("");
+
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        // Cmd/Ctrl + Enter to Save (Global context isn't quite right, but user asked for "Cmd/Ctrl+Enter to save")
+        // Since saving is auto-debounced, maybe this just forces a toast or ensures focus is lost?
+        // Or maybe it submits the "Add" form if focused?
+        // Let's make it trigger the relevant "Add" action based on activeTab.
+        
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+            e.preventDefault();
+            if (activeTab === "entities") addEntity();
+            if (activeTab === "edges") addEdge();
+            if (activeTab === "evidence") addEvidence();
+            if (activeTab === "claims") addClaim();
+            toast.success("Quick Add Triggered");
+        }
+        
+        // Esc to clear/cancel
+        if (e.key === "Escape") {
+            // Clear forms
+            setNewEntity({ name: "", type: "person" });
+            setNewEdge({ ...newEdge, from: "", to: "" });
+            setNewEvidence({ title: "", sourceType: "News", date: new Date().toISOString().split('T')[0] });
+            setNewClaim({ text: "", type: "allegation", confidence: 0.8, evidenceIds: new Set() });
+            setEvidenceSearch("");
+        }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [activeTab, newEntity, newEdge, newEvidence, newClaim]); // Deps needed for closures
+
+  // Helper: Create Claim from Evidence
+  const createClaimFromEvidence = (ev: Evidence) => {
+      setActiveTab("claims");
+      setNewClaim({
+          text: `Claim based on ${ev.title}...`,
+          type: "fact",
+          confidence: 0.9,
+          evidenceIds: new Set([ev.id])
+      });
+      toast.info("Drafting claim from evidence...");
+  };
+
 
   // Load Dossier
   useEffect(() => {
@@ -282,9 +391,12 @@ export default function DossierEditor() {
                                 </div>
                              )}
                           </div>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteEntity(e.id)}>
-                             <Trash2 className="w-3 h-3 text-destructive" />
-                          </Button>
+                          <div className="flex gap-1">
+                             <CopyID id={e.id} />
+                             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteEntity(e.id)}>
+                                <Trash2 className="w-3 h-3 text-destructive" />
+                             </Button>
+                          </div>
                        </CardContent>
                     </Card>
                  ))}
@@ -298,12 +410,12 @@ export default function DossierEditor() {
                  <CardContent className="flex gap-4 items-end flex-wrap">
                     <div className="space-y-2 w-64">
                        <Label className="text-xs font-mono uppercase">From</Label>
-                       <Select value={newEdge.from} onValueChange={v => setNewEdge({...newEdge, from: v})}>
-                          <SelectTrigger><SelectValue placeholder="Select Entity" /></SelectTrigger>
-                          <SelectContent>
-                             {pack.entities.map(e => <SelectItem key={e.id} value={e.id}>{e.name} ({e.type})</SelectItem>)}
-                          </SelectContent>
-                       </Select>
+                       <EntityCombobox 
+                          value={newEdge.from} 
+                          onChange={v => setNewEdge({...newEdge, from: v})} 
+                          entities={pack.entities}
+                          placeholder="Source Entity..."
+                       />
                     </div>
                     <div className="space-y-2 w-48">
                        <Label className="text-xs font-mono uppercase">Type</Label>
@@ -316,12 +428,12 @@ export default function DossierEditor() {
                     </div>
                      <div className="space-y-2 w-64">
                        <Label className="text-xs font-mono uppercase">To</Label>
-                       <Select value={newEdge.to} onValueChange={v => setNewEdge({...newEdge, to: v})}>
-                          <SelectTrigger><SelectValue placeholder="Select Entity" /></SelectTrigger>
-                          <SelectContent>
-                             {pack.entities.map(e => <SelectItem key={e.id} value={e.id}>{e.name} ({e.type})</SelectItem>)}
-                          </SelectContent>
-                       </Select>
+                       <EntityCombobox 
+                          value={newEdge.to} 
+                          onChange={v => setNewEdge({...newEdge, to: v})} 
+                          entities={pack.entities}
+                          placeholder="Target Entity..."
+                       />
                     </div>
                     <Button onClick={addEdge} disabled={!newEdge.from || !newEdge.to}><Plus className="w-4 h-4 mr-2"/> Connect</Button>
                  </CardContent>
@@ -338,6 +450,7 @@ export default function DossierEditor() {
                               <Badge variant="outline" className="text-xs text-muted-foreground">{edge.type.replace(/_/g, " ")}</Badge>
                               <span className="font-bold">{to?.name || "Unknown"}</span>
                            </div>
+                           <CopyID id={edge.id} />
                            <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => deleteEdge(edge.id)}>
                              <Trash2 className="w-3 h-3 text-destructive" />
                            </Button>
@@ -395,9 +508,15 @@ export default function DossierEditor() {
                                    <span>{ev.date}</span>
                                 </div>
                              </div>
-                             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => deleteEvidence(ev.id)}>
-                                <Trash2 className="w-3 h-3 text-destructive" />
-                             </Button>
+                             <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-blue-500" title="Create Claim from Evidence" onClick={() => createClaimFromEvidence(ev)}>
+                                    <MessageSquarePlus className="w-3 h-3" />
+                                </Button>
+                                <CopyID id={ev.id} />
+                                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => deleteEvidence(ev.id)}>
+                                    <Trash2 className="w-3 h-3 text-destructive" />
+                                </Button>
+                             </div>
                           </div>
                           {ev.excerpt && <div className="bg-muted p-2 rounded text-xs font-mono italic border-l-2 border-blue-500">"{ev.excerpt}"</div>}
                           {ev.url && <a href={ev.url} target="_blank" className="text-[10px] text-blue-500 hover:underline mt-2 block">{ev.url}</a>}
@@ -435,15 +554,28 @@ export default function DossierEditor() {
                     </div>
 
                     <div className="space-y-2">
-                        <Label className="text-xs font-mono uppercase flex justify-between">
-                            <span>Supporting Evidence (Required for Facts)</span>
-                            <span className={cn("text-[10px]", newClaim.evidenceIds.size > 0 ? "text-emerald-500" : "text-muted-foreground")}>
+                        <div className="flex justify-between items-center">
+                            <Label className="text-xs font-mono uppercase flex justify-between gap-4">
+                                <span>Supporting Evidence (Required for Facts)</span>
+                            </Label>
+                             <span className={cn("text-[10px]", newClaim.evidenceIds.size > 0 ? "text-emerald-500" : "text-muted-foreground")}>
                                 {newClaim.evidenceIds.size} Selected
                             </span>
-                        </Label>
+                        </div>
+                        <div className="relative">
+                            <Search className="absolute left-2 top-2 w-3 h-3 text-muted-foreground" />
+                            <input 
+                                className="w-full bg-background border rounded px-8 py-1 text-xs mb-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                placeholder="Filter evidence..."
+                                value={evidenceSearch}
+                                onChange={e => setEvidenceSearch(e.target.value)}
+                            />
+                        </div>
                         <ScrollArea className="h-32 border rounded bg-background/50 p-2">
                              {pack.evidence.length === 0 && <p className="text-xs text-muted-foreground p-2">No evidence available. Add evidence first.</p>}
-                             {pack.evidence.map(ev => (
+                             {pack.evidence
+                                .filter(ev => ev.title.toLowerCase().includes(evidenceSearch.toLowerCase()) || ev.sourceType.toLowerCase().includes(evidenceSearch.toLowerCase()))
+                                .map(ev => (
                                  <div key={ev.id} className="flex items-start gap-2 mb-2 p-1 hover:bg-muted/50 rounded cursor-pointer" 
                                       onClick={() => {
                                           const next = new Set(newClaim.evidenceIds);

@@ -13,6 +13,8 @@ import { ArrowLeft, Printer, Download, Share2 } from "lucide-react";
 
 import { computeReportHash } from "@/lib/integrity";
 
+import { CopyID } from "@/components/copy-id";
+
 export default function DossierReport() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -88,7 +90,7 @@ export default function DossierReport() {
 
             <h1 className="text-4xl md:text-5xl font-bold uppercase tracking-widest mb-4">{pack.subjectName}</h1>
             <div className="flex justify-center gap-8 text-sm font-mono uppercase tracking-widest text-gray-600">
-                <span>Dossier ID: {pack.packId.slice(0, 8)}</span>
+                <span>Dossier ID: {pack.packId.slice(0, 8)} <CopyID id={pack.packId} className="inline h-3 w-3" /></span>
                 <span>Entities: {pack.entities.length}</span>
             </div>
         </header>
@@ -135,7 +137,10 @@ export default function DossierReport() {
                             <div key={res.entityId} className="flex items-baseline justify-between border-b border-dotted border-gray-300 pb-2">
                                 <div className="flex gap-4">
                                     <span className="font-mono font-bold text-gray-400">#{i+1}</span>
-                                    <span className="font-bold text-lg">{entity?.name}</span>
+                                    <span className="font-bold text-lg flex items-center gap-2">
+                                        {entity?.name}
+                                        <CopyID id={res.entityId} className="h-3 w-3 opacity-50 hover:opacity-100" />
+                                    </span>
                                 </div>
                                 <div className="text-sm font-mono">
                                     <span className="mr-4">Degree: {res.degree}</span>

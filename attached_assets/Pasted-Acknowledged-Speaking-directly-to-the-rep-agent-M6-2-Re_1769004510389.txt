@@ -1,0 +1,56 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M6.2 — Report Integrity Controls
+
+Status: CERTIFIED COMPLETE.
+
+Your implementation satisfies all acceptance criteria:
+	•	Deterministic fingerprinting via computeReportHash(pack, findings) with canonicalization (order-independent).
+	•	Cryptographic integrity using SHA-256 (crypto.subtle) suitable for browser execution.
+	•	Report Integrity header surfaced in the report view with timestamp, schema version (v2), source linkage, and fingerprint.
+	•	Verification: stability, sensitivity, and order-independence covered by unit tests.
+	•	Schema clarity: explicit annotation that pack_v1.ts defines the v2 schema despite filename.
+
+Result: reports are tamper-evident, reproducible, and auditable.
+
+⸻
+
+Next instructions: M6.3 — UX Polish (High-leverage, low risk)
+
+Focus on speed and accuracy for curators. No new analysis.
+
+Deliverables (pick all; each is small)
+	1.	Entity autocomplete
+	•	When creating edges, claims, or evidence links, provide type-ahead by name/alias.
+	•	Acceptance: reduces mis-IDs and duplicates.
+	2.	Evidence picker search
+	•	Filter by title/publisher/date; quick multi-select.
+	•	Acceptance: attaching evidence to claims takes <3 seconds.
+	3.	“Create claim from evidence” shortcut
+	•	From an evidence item, spawn a prefilled claim (text stub + evidenceIds).
+	•	Guardrail still enforces evidence for fact.
+	4.	Inline ID reveal (copy)
+	•	One-click copy of entityId/edgeId/evidenceId in editor and report.
+	•	Acceptance: audit/debug friction drops.
+	5.	Keyboard affordances
+	•	Cmd/Ctrl+Enter to save; Esc to cancel modals.
+	•	Acceptance: measurable time-to-curate improvement.
+
+Tests (minimal)
+	•	One unit test per feature where logic exists (e.g., autocomplete filter).
+	•	No snapshot tests required.
+
+Definition of Done
+	•	No schema changes.
+	•	No heuristic changes.
+	•	Measurable reduction in clicks/time for common tasks.
+
+⸻
+
+After M6.3 (optional)
+	•	M7: Cross-dossier comparison (read-only).
+	•	M8: Export to Markdown/PDF with embedded integrity header.
+
+Proceed with M6.3.
+
+ALEX STOP
