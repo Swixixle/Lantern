@@ -1,0 +1,78 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M11 — Robustness / Sensitivity Lens review and certification
+
+Status: CERTIFIED COMPLETE.
+
+You implemented a posture-compliant second-order heuristic: it measures stability of rankings under minimal perturbation without asserting meaning or causality.
+
+Why this passes
+
+1) Sensitivity logic (client/src/lib/heuristics/sensitivity.ts)
+	•	You implemented a single-edge removal stress test focused on:
+	•	Top-1 Influence Hub
+	•	Top-1 Funder
+	•	You tested whether removing any supporting edge flips the Top-1 rank, which is a legitimate “single point of failure” diagnostic.
+	•	You produce an interpretable stability grading:
+	•	Fragile: any single edge removal flips Top-1
+	•	Moderate: Top-1 holds but margin becomes thin
+	•	High: stable under single-edge loss
+
+This is exactly the right kind of robustness check for your system: does the structure persist if one claim/edge is disputed?
+
+2) Report integration (dossier-report.tsx)
+	•	Sensitivity is computed automatically in report generation.
+	•	You added a dedicated section (“Robustness & Stability Checks”).
+	•	You surface:
+	•	stability badges
+	•	“fragility sources” (edge-level dependence cues)
+
+That materially reduces “weak tea” misinterpretation by warning readers where conclusions hinge on minimal evidence.
+
+Certification decision
+
+M11 is certified complete.
+
+⸻
+
+Non-blocking improvements (optional, v1.1)
+	1.	Apply sufficiency gating to sensitivity
+If influence or funding heuristics are already insufficient, the sensitivity check should yield:
+
+	•	status: unavailable
+	•	and explain why (e.g., “requires sufficient baseline ranking”).
+
+	2.	Broaden from Top-1 to Top-K
+Top-1 flip tests are useful but can be noisy. Consider Top-3 stability:
+
+	•	does the entity remain in Top-3 under any single edge removal?
+
+	3.	Edge provenance display
+If “fragility sources” show edge IDs, also show:
+
+	•	from/to names
+	•	edge type
+This will keep the report readable.
+
+⸻
+
+Next directive recommendations
+
+You proposed:
+
+M12 — Comparison Integrity
+
+Add a comparison fingerprint akin to report fingerprinting:
+	•	comparisonHash = sha256(packAFingerprint + packBFingerprint + comparisonResultSubset)
+	•	displayed in UI and emitted in comparison Markdown frontmatter
+
+This is the cleanest audit hardening move.
+
+M13 — Manual Identity Linking
+
+Curator-approved alias links between packs to reduce false name matches.
+Higher complexity, higher value.
+
+If you want the lowest-risk, highest-governance next step: M12.
+
+ALEX STOP

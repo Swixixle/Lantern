@@ -6,6 +6,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, GitCompare, Users, ArrowRightLeft, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
+import { computeReportHash, computeComparisonHash } from "@/lib/integrity";
+import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
+import { computeFundingGravity } from "@/lib/heuristics/fundingGravity";
+import { computeEnforcementMap } from "@/lib/heuristics/enforcementMap";
+import { CopyID } from "@/components/copy-id";
+
 export default function DossierComparison() {
     const [, setLocation] = useLocation();
     const [packs, setPacks] = useState<{id: string, name: string}[]>([]);
@@ -22,9 +28,29 @@ export default function DossierComparison() {
     useEffect(() => {
         if (selectedIdA && selectedIdB && selectedIdA !== selectedIdB) {
             Promise.all([loadPack(selectedIdA), loadPack(selectedIdB)])
-                .then(([packA, packB]) => {
+                .then(async ([packA, packB]) => {
                     if (packA && packB) {
-                        setComparison(comparePacks(packA, packB));
+                        const result = comparePacks(packA, packB);
+                        
+                        // M12: Compute Integrity Fingerprints
+                        const heuristicsA = {
+                            influence: computeInfluenceHubs(packA),
+                            funding: computeFundingGravity(packA),
+                            enforcement: computeEnforcementMap(packA)
+                        };
+                        const heuristicsB = {
+                            influence: computeInfluenceHubs(packB),
+                            funding: computeFundingGravity(packB),
+                            enforcement: computeEnforcementMap(packB)
+                        };
+                        
+                        const fingerprintA = await computeReportHash(packA, heuristicsA);
+                        const fingerprintB = await computeReportHash(packB, heuristicsB);
+                        
+                        const comparisonHash = await computeComparisonHash(fingerprintA, fingerprintB, result);
+                        result.fingerprint = comparisonHash;
+                        
+                        setComparison(result);
                     }
                 });
         }
@@ -51,11 +77,21 @@ export default function DossierComparison() {
                             <GitCompare className="w-6 h-6" /> Cross-Dossier Analysis
                         </h1>
                      </div>
-                     {comparison && (
-                         <Button variant="outline" onClick={handleDownloadReport}>
-                             <Download className="w-4 h-4 mr-2" /> Download Report
-                         </Button>
-                     )}
+                     <div className="flex gap-4 items-center">
+                         {comparison && comparison.fingerprint && (
+                             <div className="hidden md:block text-right">
+                                 <div className="text-[10px] font-mono text-gray-400 uppercase">Comparison Fingerprint</div>
+                                 <div className="text-xs font-mono font-bold text-gray-600 break-all max-w-[120px] truncate" title={comparison.fingerprint}>
+                                     {comparison.fingerprint.slice(0, 16)}...
+                                 </div>
+                             </div>
+                         )}
+                         {comparison && (
+                             <Button variant="outline" onClick={handleDownloadReport}>
+                                 <Download className="w-4 h-4 mr-2" /> Download Report
+                             </Button>
+                         )}
+                     </div>
                 </header>
 
                 {/* Selection Controls */}

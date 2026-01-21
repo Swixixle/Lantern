@@ -15,6 +15,7 @@ export interface ComparisonResult {
     packA: { id: string; name: string; date: string };
     packB: { id: string; name: string; date: string };
     generatedAt: string;
+    fingerprint?: string; // M12: Comparison Integrity Hash
     
     // Entity Overlap
     sharedEntities: EntityMatch[];

@@ -71,11 +71,48 @@ export async function computeReportHash(
         const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         return hashHex;
     } else {
-        // Fallback for non-browser envs (e.g. some test setups) or older browsers
-        // Simple DJB2-like hash (not secure, but deterministic) if SHA-256 fails?
-        // No, user asked for SHA-256.
-        // We will assume environment has crypto.subtle or return a mock in test.
+        // Fallback for non-browser envs
         console.warn("crypto.subtle not available, returning mock hash");
         return "mock-hash-crypto-not-available";
     }
+}
+
+/**
+ * M12: Comparison Integrity Hash
+ * 
+ * Computes SHA-256(FingerprintA + FingerprintB + CanonicalComparisonResult)
+ * Binds the comparison output to the specific versions of the input dossiers.
+ */
+export async function computeComparisonHash(
+    fingerprintA: string,
+    fingerprintB: string,
+    result: any // Pass the comparison result (minus fingerprint itself)
+): Promise<string> {
+    
+    const canonicalData = {
+        inputs: {
+            packA: fingerprintA,
+            packB: fingerprintB
+        },
+        output: {
+            overlapScore: result.overlapScore,
+            sharedEntities: result.sharedEntities.map((e: any) => ({ name: e.name, confidence: e.confidence })).sort((a: any, b: any) => a.name.localeCompare(b.name)),
+            alignment: {
+                funders: result.commonFunders.map((c: any) => c.name).sort(),
+                hubs: result.commonHubs.map((c: any) => c.name).sort(),
+                enforcers: result.commonEnforcers.map((c: any) => c.name).sort()
+            }
+        }
+    };
+
+    const jsonString = JSON.stringify(canonicalData);
+    const encoder = new TextEncoder();
+    const data = encoder.encode(jsonString);
+
+    if (typeof crypto !== 'undefined' && crypto.subtle) {
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    return "mock-comparison-hash";
 }
