@@ -1,0 +1,179 @@
+You have enough to proceed, but we should tighten two gaps before we let the Agent run into M2 Priority #2:
+
+1. **Path / naming inconsistencies** in the Return Packet (these are how work gets lost).
+2. **Metric validity** (the segmenter “metrics” reported are not precision/recall/F1; they are descriptive stats).
+
+I’m going to (a) certify what can be certified now, (b) issue a corrected, unambiguous directive for Entity Tiering, and (c) impose a “tracking correction” requirement so the repo doesn’t fragment.
+
+---
+
+# 1) Certification decisions
+
+## Task A: Dedupe seal
+
+**CERTIFIED — PASS**
+
+Why:
+
+* Import logic implements **binary SKIP** on pack_id collision.
+* Unit test asserts deep identity of the winning pack (`JSON.stringify` equality).
+* Test output shows green.
+
+**Minor technical note (non-blocking):**
+The import function declares `updated` but never uses it; not an integrity issue, but it suggests earlier “overwrite” thinking. Leave it or remove it, but do not add merging.
+
+## Task B: Sentence segmenter
+
+**CERTIFIED — PASS (with one required follow-up item)**
+
+Why:
+
+* Examples cover key false-split hazards (abbrev, decimals, quotes).
+* Segmenter is rule-based and offsets claimed to be preserved.
+
+**Required follow-up (blocking only for “metrics claims,” not for continued M2 work):**
+The “metrics” provided are *not* precision/recall/F1. They are counts and averages. That is fine, but don’t label them as regression precision improvements unless you actually compute boundary correctness against a labeled baseline.
+
+So: we can proceed to entity tiering, but we need the Agent to add a minimal boundary-eval harness later (M2.1) if you want true P/R/F1.
+
+---
+
+# 2) Tracking correction (preventing loss)
+
+The Return Packet claims files like:
+
+* `client/src/lib/lanternExtract.ts` (integration)
+  But earlier the repo map had `client/src/lib/lanternExtract.ts` vs `client/src/lib/lanternExtract.ts`—fine—but later the test path is:
+* `client/src/lib/tests/unit/importDedupe.test.ts`
+
+That test path is abnormal: tests usually live under `tests/` or `client/src/**/__tests__`. Also the agent earlier used vitest and `tests/smoke/...`.
+
+**Directive:** before moving on, the Agent must include in the next packet:
+
+* the **actual tree snippet** for the new files (top + 3 levels under `client/src/lib/` and `tests/`) so we can confirm locations and avoid drift.
+
+This is “leaving tracks.”
+
+---
+
+# 3) Consolidated directive for Replit Agent (M2 Priority #2) — corrected and unambiguous
+
+Use this instead of the Gemini/Grok drafts. It resolves naming, adds output requirements, and keeps strict rulespace.
+
+## Message to Replit Agent (Packet 3 — Entity Reliability & Tiering + Tracking) — copy/paste
+
+M2 Priority #1 is certified (sentence segmentation) and the import dedupe seal is closed (binary SKIP on pack_id collision). Proceed to **M2 Priority #2: Entity Reliability & Tiering**.
+
+### A) Tracking correction (required in this packet)
+
+At the top of your Return Packet, include:
+
+1. A tree snippet showing where the new files actually live:
+
+   * `client/src/lib/heuristics/`
+   * `client/src/pages/`
+   * `tests/` (or wherever tests are)
+     Use “top + 3 levels” so paths are unambiguous.
+
+### B) Deliverable: Rule-based entity extractor + tierer (deterministic)
+
+Implement under:
+`client/src/lib/heuristics/entities/`
+
+Suggested files (use these names unless there is a strong reason):
+
+* `entityExtractor.ts` (mention detection + offsets)
+* `entityCanonicalizer.ts` (normalization rules)
+* `entityTierer.ts` (PRIMARY/SECONDARY/NOISE classification)
+  If you choose different names, list them clearly.
+
+### C) Hard constraints (non-negotiable)
+
+* Strictly rule-based: capitalization patterns, suffix patterns (Inc/LLC/Ltd/Corp), repetition counts, punctuation patterns, simple acronym rules.
+* No embeddings, no LLM, no probabilistic scoring.
+* Offsets must be exact in original source.
+* No persistence/storage/backend/UI changes in this milestone.
+* Immutability: do not mutate existing packs; create new extraction output objects.
+
+### D) Canonicalization rules (must be explicit)
+
+Define canonical name transformation rules such as:
+
+* trim surrounding punctuation
+* normalize whitespace
+* normalize case (e.g., title-case only if rule-safe)
+* normalize corporate suffix punctuation: “Apple, Inc.” → “Apple Inc.”
+* acronym normalization: “U.S.” → “US” only if you can preserve display text separately (do not destroy offsets)
+
+If ambiguity exists (Apple fruit vs Apple company), you MUST NOT “resolve” via meaning. Default to:
+
+* leave as extracted entity string
+* tier it lower if uncertain
+
+### E) Tiering rules (must be explicit)
+
+Return tier per mention, with doc-level rollups optional:
+
+* PRIMARY:
+
+  * multi-token proper noun OR
+  * has legal/org suffix (Inc, LLC, Ltd, Corp, Co) OR
+  * acronym pattern (NASA, WHO) that repeats ≥ 2
+* SECONDARY:
+
+  * repeats ≥ 2 but lacks strong org/legal patterns
+* NOISE:
+
+  * single capitalized token that appears once AND is sentence-initial AND not in whitelist
+  * title-case fragments from headings (“Important Meeting In The Conference Room”)
+
+### F) Required Output schema for entities
+
+For each mention, output:
+
+* `text` (exact substring)
+* `canonical` (canonical string)
+* `entity_id` (hash of canonical)
+* `tier` ('PRIMARY'|'SECONDARY'|'NOISE')
+* `start`, `end` (offsets)
+* `mention_index` (stable per mention)
+
+### G) Tests + fixtures
+
+Add fixtures that include:
+
+* “Apple Inc.” vs “Apple, Inc.” vs “APPLE INC”
+* “U.S.” vs “US”
+* heading/title-case noise
+* repeated proper noun vs one-off sentence-initial token
+  Add at least:
+* 10 unit tests
+* 5 fixture examples
+
+### Return Packet (required format)
+
+1. What changed (paths)
+2. Evidence
+
+   * Code: paste the core entity functions (extract/canonicalize/tier)
+   * 8–10 before/after examples with offsets and tiers
+   * Test output (green)
+   * Tree snippet (tracking correction)
+3. Verification checklist
+
+Proceed.
+
+---
+
+# 4) What I need from you next
+
+Send the Packet 3 directive above to the Agent.
+
+When the Agent replies, paste it here. I will:
+
+* validate offsets and canonicalization safety
+* reject any “meaning-based” resolution
+* check tier thresholds don’t suppress real entities
+* then issue the next step: either “entity linking refinements” or “metric normalization schema review” (depending on your preferred order)
+
+If your goal is “usable by end of day,” this keeps us moving without integrity drift.
