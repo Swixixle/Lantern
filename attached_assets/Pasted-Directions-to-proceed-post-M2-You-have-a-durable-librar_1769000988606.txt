@@ -1,0 +1,107 @@
+Directions to proceed (post-M2)
+
+You have a durable library substrate. Proceed in the following order; do not skip steps.
+
+⸻
+
+M3 — Public Figure Pack v1 (Schema + UI capture)
+
+1) Lock the Pack v1 schema (single source of truth)
+
+Create client/src/lib/schema/pack_v1.ts (or equivalent) and define these primitives:
+	•	Entity
+	•	id, type (person|org|role|asset|publication|event), name, aliases[], tags[]
+	•	Edge (relationship)
+	•	id, fromEntityId, toEntityId, type (controlled enum), startDate?, endDate?, notes?
+	•	Evidence
+	•	id, sourceType, publisher?, title, url?, date, excerpt?, localHash?, notes?
+	•	Claim
+	•	id, text, claimType (fact|allegation|inference|opinion), confidence (0–1 or discrete),
+evidenceIds[], counterEvidenceIds[], createdAt
+
+Pack root:
+	•	packId, packType: "public_figure" | "topic_ecosystem", schemaVersion: 1, subjectName, timestamps
+
+Definition of done: a pack can represent a figure, their network, and claims with attached evidence.
+
+⸻
+
+2) Add migrations now (even if identity)
+	•	migratePackToLatest(pack): packLatest
+	•	migrateLibraryToLatest(library): libraryLatest
+
+You already added migration stubs for library persistence; extend the discipline to packs.
+
+⸻
+
+3) Build a minimal “Capture” UI (do not boil ocean)
+
+In lantern-extract.tsx (or a new page), add these minimal flows:
+	•	Create pack: subject name + optional aliases
+	•	Add entity
+	•	Add relationship edge
+	•	Add evidence (URL + title + date + excerpt)
+	•	Add claim (text + claimType + evidence attachment)
+
+Keep it ugly but functional.
+
+Guardrails (must ship with v1):
+	•	A claim cannot be marked Fact unless it has ≥1 evidence item attached.
+	•	If claimType is allegation or inference, UI must display that label prominently.
+
+⸻
+
+M4 — Heuristic Reliability (Shadow Caste Lenses)
+
+Only after M3 is stable.
+
+4) Implement heuristic “lenses” as pure read functions
+
+Create client/src/lib/heuristics/* that accepts a Pack and returns findings:
+	•	Influence hubs: entity degree counts
+	•	Revolving door: role transitions (regulator → industry) if you capture roles
+	•	Funding gravity: donor/asset edges concentration
+	•	Narrative coordination: shared publications/publishers across entities (if captured)
+
+Rules:
+	•	Heuristics must not mutate the pack.
+	•	Each finding must cite the underlying entities/edges/evidence IDs.
+
+⸻
+
+M5 — Output / Presentation (publishable dossiers)
+
+5) Add “Report View”
+
+Generate a readable dossier with:
+	•	entity list
+	•	relationship summary
+	•	claims grouped by type
+	•	evidence appendix
+
+Exportable to JSON (already) and optionally PDF later.
+
+⸻
+
+Immediate next commit sequence (recommended)
+	1.	Add Pack v1 types + validators
+	2.	Add claimType + evidence attachment requirements
+	3.	Add minimal UI to create/edit entities, evidence, claims
+	4.	Add pack-level unit tests (validate + migrate + serialize round-trip)
+	5.	Add first heuristic: influence hub counts
+
+⸻
+
+Hard rule to prevent derailment
+
+If you cannot write a pack that includes:
+	•	one entity
+	•	one relationship
+	•	one evidence item
+	•	one claim referencing that evidence
+
+…then do not start heuristics.
+
+That is your gating condition.
+
+If you want, paste your current LibraryState and savedPacks shape (types or sample JSON) and I will map Pack v1 into your existing structure cleanly without refactors.
