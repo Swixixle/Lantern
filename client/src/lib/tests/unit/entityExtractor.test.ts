@@ -7,9 +7,7 @@ describe('Entity Extraction & Tiering', () => {
 
     it('Should normalize corporate suffixes correctly', () => {
         expect(normalizeEntity("Apple, Inc.")).toBe("Apple Inc");
-        expect(normalizeEntity("Microsoft Corp.")).toBe("Microsoft Corp"); // Regex keeps Corp if no comma? Or regex handles ", Corp."
-        // Our regex: `,\s+(${suffixes})\.?$` -> " $1"
-        // "Microsoft Corp." -> No comma -> No change (except trim)
+        expect(normalizeEntity("Microsoft Corp.")).toBe("Microsoft Corp"); 
         expect(normalizeEntity("Google, LLC")).toBe("Google LLC");
     });
 
@@ -44,13 +42,9 @@ describe('Entity Extraction & Tiering', () => {
     it('Should classify single sentence-initial common words as NOISE', () => {
         const text = "There is a cat. When is it?";
         const entities = extractEntities(text);
-        // "There" and "When" are single tokens, sentence initial, not whitelisted.
         
         const there = entities.find(e => e.text === "There");
         const when = entities.find(e => e.text === "When");
-        
-        // Wait, "When" might be excluded by regex if I put it in regex exclusion list.
-        // If not excluded by regex, it hits NOISE tier logic.
         
         if (there) expect(there.tier).toBe("NOISE");
         if (when) expect(when.tier).toBe("NOISE");
@@ -70,9 +64,6 @@ describe('Entity Extraction & Tiering', () => {
         const text = "Hello World";
         //            01234567890
         const entities = extractEntities(text);
-        const world = entities.find(e => e.text === "World"); // "Hello World" might be grabbed as one chunk?
-        // "Hello" (Cap) + " " + "World" (Cap) -> "Hello World"
-        // Correct.
         
         expect(entities[0].text).toBe("Hello World");
         expect(entities[0].start).toBe(0);
@@ -88,19 +79,30 @@ describe('Entity Extraction & Tiering', () => {
         
         expect(apple).toBeDefined();
         expect(appleInc).toBeDefined();
-        
-        // "Apple" -> Tier? Repeated 2 times (mapped to same canonical? No. "Apple" vs "Apple Inc")
-        // They have different canonicals: "Apple" vs "Apple Inc"
-        // So "Apple" (1 count) -> Sentence Initial? Yes. -> NOISE?
-        // Wait, "Apple" is whitelisted in my tierer?
-        // If whitelisted -> SECONDARY/PRIMARY?
-        
-        if (apple?.tier === "NOISE") {
-             // Acceptable if not whitelisted.
-             // But "Apple" is whitelisted in code.
-             // expect(apple?.tier).not.toBe("NOISE");
-        }
-        
         expect(appleInc?.tier).toBe("PRIMARY");
+    });
+
+    // --- GAP CLOSURE TESTS ---
+
+    it('Should generate consistent entity_ids from canonicals', () => {
+        const text = "Apple, Inc. vs Apple Inc.";
+        const entities = extractEntities(text);
+        
+        const e1 = entities[0]; // Apple, Inc.
+        const e2 = entities[1]; // Apple Inc.
+        
+        // Assert Canonicals Match
+        expect(e1.canonical).toBe("Apple Inc");
+        expect(e2.canonical).toBe("Apple Inc");
+        
+        // Assert IDs Match
+        expect(e1.entity_id).toBe(e2.entity_id);
+    });
+
+    it('Should generate different entity_ids for different canonicals', () => {
+        const text = "Apple Inc. vs Microsoft Corp.";
+        const entities = extractEntities(text);
+        
+        expect(entities[0].entity_id).not.toBe(entities[1].entity_id);
     });
 });

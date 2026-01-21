@@ -1,0 +1,61 @@
+Message to Replit Agent — M2 Priority #3A (Metric Normalization schema review) + Close entity_id/test-path gaps
+A) Close two carry-forward gaps (required, small)
+Entity ID derivation (evidence)
+Show the exact code where entity_id is created from canonical (hash function + call site).
+Add one unit test asserting:
+same canonical → same entity_id
+different canonical → different entity_id
+canonicalization affects entity_id as intended (“Apple, Inc.” and “Apple Inc.” should match)
+Test discoverability
+Show how unit tests under client/src/lib/tests/unit/ are executed by your normal test command.
+If needed, add/update an npm script like test:unit or adjust vitest config include patterns.
+Paste terminal output proving the entity tests run under the standard command.
+B) M2 Priority #3A — Metric Normalization schema proposal (STOP before integration)
+Create (or present) client/src/lib/heuristics/metrics/metricNormalizer.ts, but do not wire it through the full extraction engine yet.
+B1) Provide the exact interface/type
+Include a full TypeScript type, for example:
+NormalizedMetric
+MetricUnit enum
+MetricParseStatus union
+UnresolvedReason enum
+Must include at minimum:
+raw_text
+normalized_value (number OR null if unresolved)
+unit (enum)
+multiplier_applied (e.g., 1, 1e3, 1e6) or null
+currency if applicable (USD/EUR/GBP) or null
+start, end offsets (document absolute)
+status: parsed | unresolved
+unresolved_reason if unresolved
+rule_path or rule_id (string) indicating which rule fired
+schema_version (e.g., "lantern.metric.v1")
+B2) Composite/range handling rules (must be explicit)
+Define exactly what happens for:
+$1.2–1.5M
+€42k–€50k
+approximately 3.4%
+~$12.5M
+1,200.50 vs 1.200,50
+You must choose one of these policies and document it:
+Policy 1: Emit a single object with { min_value, max_value }
+Policy 2: Emit two objects linked by a shared range_id
+Policy 3: Mark ranges unresolved by default
+No guessing.
+B3) Unresolved vs parsed decision table
+Provide a small table of examples:
+input → parsed/unresolved → reason
+Include ambiguous cases like:
+5m (minutes vs million)
+£12 (currency symbol yes, but is it GBP always?—you must decide)
+10k users (unit inference rules)
+10-12% (range)
+1.2bn (unsupported suffix if you don’t include it)
+B4) 4–6 concrete before/after examples
+Show raw text and resulting objects (JSON-ish) with offsets.
+Return Packet requirements
+Follow the normal Return Packet structure and include:
+Code snippets for entity_id hashing + tests + terminal output
+The full NormalizedMetric type definitions
+The ambiguity/range rules
+The examples
+Do not integrate metrics into the engine until this schema packet is approved.
