@@ -1,0 +1,119 @@
+Below is a **copy/paste instruction** you can send to the Replit Agent. It is designed to (1) expose the full “guts” of Lantern for audit, (2) **avoid leaking IP/secrets**, and (3) present the output in a form I can review like a **product due diligence** package.
+
+---
+
+### Message to Replit Agent (copy/paste)
+
+You are helping me prepare a **third-party style audit package** for a Replit app called **Lantern**. I need you to show the full internal implementation (“the guts”) **without exposing IP, secrets, or proprietary identifiers**. Produce the deliverables below.
+
+## 0) Non-negotiable safety rules
+
+Before outputting anything:
+
+1. **Do not print secrets** or values from any secret store (Replit Secrets, .env, config).
+
+   * If you encounter keys/tokens/passwords, replace with `REDACTED_SECRET`.
+2. **Do not include proprietary names/strings** that could identify the project or business (internal codenames, customer names, unique dataset titles, private URLs).
+
+   * Replace with `REDACTED_IDENTIFIER`.
+3. **Do not include prompts/instructions that are proprietary** (system prompts, rubric prompts, hidden evaluation prompts).
+
+   * Instead provide a **structured summary** (purpose, inputs, outputs, constraints) and **redact exact text**.
+4. If you output code, do it as **file-by-file excerpts** with redactions in-place and keep the original structure.
+
+   * Do not “improve” or refactor unless asked; this is an audit snapshot.
+
+## 1) Repository map and entrypoints
+
+Output:
+
+* A **tree view** of the repository (top-level + two levels deep).
+* Identify **entrypoints** (web server start, main UI entry, background jobs).
+* Identify runtime type: Node/Express, Next.js, Python/FastAPI, etc.
+
+## 2) Architecture overview (audit-style)
+
+Provide a concise technical overview:
+
+* What the app does (observable behavior)
+* Major modules/services and responsibilities
+* Data flow: UI → API → model → storage
+* Where state lives (memory, DB, Replit DB/SQLite, files)
+* Any external services (OpenAI, vector DB, auth, logging)
+
+## 3) “Guts” export with redaction protocol
+
+For each file that matters, provide:
+
+* **Path**
+* **Purpose**
+* **Key functions/classes**
+* **Config/secrets used** (names only; values redacted)
+* **Any network calls** and what they send/receive (payload fields; redact proprietary strings)
+
+Include the **full source** (or the relevant sections if huge) for:
+
+* API routes/controllers (e.g., `/api/*`, server routes)
+* Model client wrapper (OpenAI calls)
+* Thread/message storage layer
+* Any summarization/deep-read/follow-up logic
+* Any auth/session logic
+* Any prompt-builder code (but redact prompt text as required above)
+* Any DB schema/migrations
+* Any middleware (rate limiting, CORS, logging)
+
+If there’s a single “core” file containing most logic, include it fully with redactions.
+
+## 4) Prompt handling report (no raw prompts)
+
+Without revealing raw prompt text:
+
+* List each prompt or instruction set by name/location (e.g., “deep_read_system”, “followup_instructions”)
+* For each: intent, inputs, outputs, constraints, and how it’s assembled (templating variables)
+* Confirm whether user content is inserted safely (escaping, delimiting)
+* Identify where “previous_response_id” / thread chaining is handled
+
+## 5) Security & privacy pass (quick)
+
+Identify:
+
+* Where secrets are loaded and how they’re protected
+* Any risk of secrets being logged
+* Any endpoints that echo request bodies
+* CORS settings and cookie/session configuration
+* Potential injection vectors (prompt injection, XSS, SSRF)
+* Rate limiting and abuse controls
+* Any analytics/telemetry and what is collected
+
+## 6) Operational readiness snapshot
+
+Provide:
+
+* How to run locally (high level; no secret values)
+* Required environment variables (names only)
+* Build/deploy steps as currently implemented
+* Observability: logs, error handling, tracing
+
+## 7) “Due diligence checklist” findings
+
+As if we’re evaluating a product to buy:
+
+* What’s solid
+* What’s brittle or unclear
+* Key unknowns / missing pieces
+* Top 10 risks
+* 5 recommended next steps to harden
+
+## Output format requirements
+
+* Use clear headings exactly matching the sections above.
+* Use code fences per file. Redactions must be explicit tokens: `REDACTED_SECRET` / `REDACTED_IDENTIFIER` / `REDACTED_PROMPT_TEXT`.
+* Do not omit files just because they look boring—if it affects runtime behavior, include it.
+
+If any rule conflicts with showing the guts, prioritize **privacy + IP protection** and provide a structured summary instead of raw content.
+
+---
+
+### Extra guidance (for you, not the agent)
+
+Once the agent returns that package, paste it here (or upload as a zip/text). I’ll review it like a procurement audit: architecture, hidden coupling, prompt/data risks, cost drivers, and what it would take to make it production-grade.
