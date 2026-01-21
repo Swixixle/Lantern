@@ -1,0 +1,186 @@
+Below is the exact message you should send to the Replit Agent. It preserves your intent (audit + restore) and adds the missing productization directive: once baseline is restored, immediately pivot into a disciplined MVP build plan with clear gates.
+
+---
+
+## Message to Replit Agent (copy/paste)
+
+You have a Lantern repo (client/server/shared, drizzle config, etc.). The app “does not work at all.” We are turning this into a working product, but you must do it in **two phases**:
+
+1. **Phase 1: Evidence-based audit + restore baseline functionality**
+2. **Phase 2: Productization roadmap + incremental implementation (MVP → v1)**
+
+### Phase 1 — Ground-truth audit report (must be evidence-based)
+
+Create a new file at repo root:
+
+* `AUDIT_REPORT.md`
+
+This report must be based on what is actually in the repo right now, not on prior summaries. Include:
+
+#### 1) Repo map + entrypoints (evidence)
+
+* Updated tree (top + 2 levels).
+* Identify actual entrypoints for:
+
+  * client (Vite)
+  * server (Express/Fastify/etc. — determine by code)
+  * shared (types/contracts)
+* Copy the exact scripts from `package.json` into the report.
+
+#### 2) Runtime architecture (as built, not assumed)
+
+* Confirm whether the app is truly client-only or actually full-stack (server/, drizzle.config.ts, storage.ts, etc.).
+* Explain the real data flow: UI → API routes → storage → return.
+
+#### 3) “No network / secrets / telemetry” proof
+
+Run these searches and paste results into the report (with file paths and line numbers):
+
+* Network calls: `fetch`, `axios`, `XMLHttpRequest`, `WebSocket`
+* External URLs + env usage: `http`, `https`, `process.env`, `import.meta.env`, `REPLIT_`, `OPENAI_`
+* Confirm if secrets are accessed; **redact values** but list variable names.
+
+#### 4) Storage/persistence reality
+
+* Identify the storage layer actually used (drizzle + sqlite/postgres? Replit DB? localStorage?).
+* Show schema files or summarize tables/columns.
+* Document where the app reads/writes data.
+
+#### 5) Extraction engine audit (current code)
+
+* List the extraction engine module(s) by path.
+* Show:
+
+  * determinism approach (hashing/IDs)
+  * sentence segmentation strategy
+  * entity linkage rules
+  * metric normalization rules
+  * quality scoring + fixtures usage
+
+#### 6) Known failure modes / risks
+
+* Top 10 technical risks with severity and evidence.
+
+#### 7) Purchase-grade verdict
+
+* PROCEED / PARK / DISCARD based on current code health, with gating items.
+* Commit `AUDIT_REPORT.md` to the repo.
+
+---
+
+### Phase 1 — Restore baseline functionality (minimum viable fix set)
+
+Do NOT add features yet. First, make the app run.
+
+#### 1) Reproduce and document failure
+
+* Run the standard dev command(s) from `package.json`.
+* Capture:
+
+  * terminal errors
+  * browser console errors
+  * server logs if present
+* Add to `AUDIT_REPORT.md`: “Current breakage and root cause.”
+
+#### 2) Fix only what is required to boot and operate the core flow
+
+Core flow definition:
+
+* App loads without crash
+* User can paste text
+* Extraction runs
+* Results render
+* Saving a pack works (either local or DB, whichever the repo actually uses)
+
+Make the smallest changes possible. For each fix:
+
+* Identify the file
+* Explain the bug
+* Explain the change
+* Add a quick manual test step
+
+#### 3) Add a smoke test
+
+Add a minimal script/test that verifies:
+
+* extraction returns non-empty output for a basic input
+* pack save/load works
+
+If there’s an existing test harness, wire into it; otherwise create:
+
+* `script/smoke.ts`
+* add an npm script to run it
+
+Commit the fix(es).
+
+---
+
+### Phase 1 — Deliverables checklist (must be in your final response)
+
+1. Link to `AUDIT_REPORT.md` (path)
+2. Exact commands to run the app locally in Replit
+3. Exact steps to verify core flow manually
+4. Summary of what was broken and what you changed
+
+Important constraints:
+
+* Do not print secret values; redact them.
+* Do not refactor broadly.
+* Do not “improve” extraction logic until the app is stable.
+
+---
+
+## Phase 2 — Productization (start immediately after Phase 1 is green)
+
+Once the baseline is restored and smoke test passes, produce and commit:
+
+* `PRODUCT_PLAN.md` at repo root
+
+This must include:
+
+### 1) Product definition (MVP)
+
+* Target user and workflow (what Lantern does end-to-end)
+* Core features shipped in MVP (no more than 5–7)
+* Non-goals
+
+### 2) Architecture decision record (ADR)
+
+* Confirm client/server split and responsibilities
+* Persistence choice (drizzle DB vs local fallback)
+* How packs, diffs, fixtures, and audit artifacts are stored and versioned
+
+### 3) Build plan with gated milestones
+
+Break into milestones with acceptance criteria, including:
+
+* M0: Baseline stable (already done)
+* M1: Persistence stable + export/import
+* M2: Extraction engine reliability improvements (tiered heuristics + noise control)
+* M3: Quality harness + deterministic regression suite
+* M4: “Audit package generation” as a first-class feature
+* M5: Production hardening (rate limits, validation, error boundaries, logging)
+
+Each milestone must list:
+
+* Files/modules touched
+* Tests added/updated
+* Definition of Done
+
+### 4) Backlog triage
+
+* Identify what to KEEP / DOWNGRADE / DELETE based on actual repo state (including any half-wired server paths).
+
+Commit `PRODUCT_PLAN.md`.
+
+---
+
+### Operating principle
+
+Phase 1 must be “green” (app runs + smoke test) before Phase 2 changes begin.
+
+---
+
+If you want a one-line instruction to frame it for the agent’s tone: you’re not asking for suggestions—you’re instructing it to produce auditable artifacts and restore the boot path first, then convert the repo into a disciplined MVP build.
+
+If you paste the agent’s `AUDIT_REPORT.md` and `PRODUCT_PLAN.md` back here, I’ll give you a hard gate-by-gate review and the next set of changes to implement.
