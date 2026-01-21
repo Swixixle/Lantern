@@ -23,31 +23,78 @@ The following files constitute the "Lantern Core" and must remain dependency-fre
 
 ## Core I/O Contract
 
-**Input:**
+### Input
 ```typescript
-(text: string, options: ExtractionOptions)
-```
-*   `text`: Raw source string (immutable).
-*   `options`: `{ mode: "conservative" | "balanced" | "broad" }`.
+type ExtractionOptions = {
+  mode: "conservative" | "balanced" | "broad";
+};
 
-**Output:**
-```typescript
-{
-  items: LanternPack["items"], // Entities, Quotes, Metrics, Timeline
-  stats: EngineStats,          // Discard counts
-  stable_source_hash: string   // Hash of input text
-}
+// Function Signature
+function extract(text: string, options: ExtractionOptions): LanternPackResult;
 ```
 
-**Artifact Contract (All Items):**
-*   `id`: Stable Hash (`content:start:end`)
-*   `provenance`: `{ start: number, end: number, sentence_text: string, ... }`
-*   `confidence`: `number` (0.0 - 1.0)
-*   `included`: `boolean`
+### Output
+```typescript
+type LanternPackResult = {
+  items: {
+    entities: EntityItem[];
+    quotes: QuoteItem[];
+    metrics: MetricItem[];
+    timeline: TimelineItem[];
+  };
+  stats: EngineStats;
+  stable_source_hash: string;
+};
+```
+
+### Artifact Shapes
+
+**1. Entity (Mandatory)**
+```typescript
+type EntityItem = {
+  id: string; // Stable Hash
+  provenance: {
+    start: number;
+    end: number;
+    sentence: string; // Legacy
+    sentence_text: string;
+    sentence_start: number;
+    sentence_end: number;
+  };
+  text: string; // Raw substring
+  canonical_family_id: string; // Hash of canonical text
+  confidence: number;
+  included: boolean;
+  type: "Organization" | "Person" | "Location" | "Event" | "Product";
+  // M3 Target: canonical_text (string), tier (enum) explicitly exposed
+};
+```
+
+**2. Metric (Mandatory)**
+```typescript
+type MetricItem = {
+  id: string;
+  provenance: { /* same as above */ };
+  value: string; // Raw value string
+  unit: string;  // Raw unit string
+  metric_kind: "scalar" | "range" | "ratio" | "rate";
+  normalized_value?: number; // Best-effort scalar
+  // M3 Target: Full NormalizedMetric schema with min/max/currency
+};
+```
+
+**3. Segment (M3 Target / Internal Only Today)**
+```typescript
+type Segment = {
+  start: number;
+  end: number;
+  text: string;
+};
+```
 
 ## Prohibited Dependencies in Core
 
-The Core module **MUST NOT** import or usage:
+The Core module **MUST NOT** import or use:
 *   `react` / `jsx` / `tsx` (UI components)
 *   `@/components/ui/*` (Shadcn/UI)
 *   `window` / `document` / `localStorage` (Browser APIs)

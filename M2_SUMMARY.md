@@ -20,9 +20,10 @@ The following heuristic engines are now certified as **deterministic, rule-based
     *   Stable ID generation (hash of canonical text + offsets).
 
 3.  **Metric Normalization (`M2.3`)**
+    *   **Status:** Certified (Schema + Rules), Integration Pending (M3).
     *   Schema defined for scalar and range values.
-    *   Unresolved status handling for ambiguous units.
-    *   (Note: Schema proposed and accepted; full wiring pending productization, but Provenance logic covers metrics).
+    *   Unresolved status handling defined for ambiguous units.
+    *   *Note: Full runtime wiring into the extraction loop is an M3 task.*
 
 4.  **Provenance Tightening (`M2.4`)**
     *   Strict enforcement of `NO OFFSET, NO ITEM`.
@@ -38,7 +39,7 @@ These invariants are strictly enforced in the codebase. Violations result in ite
 *   **C) Offsets are Document-Absolute:** All offsets reference the original source string indices (0 to N).
 *   **D) Stable IDs:** IDs are deterministic hashes derived strictly from `content + start_offset + end_offset`. UUIDs/Randomness are PROHIBITED.
 *   **E) Binary Import Policy:** On `pack_id` collision during import, the policy is **SKIP** (preserve existing). No field-level merging.
-*   **F) No Guessing:** Ambiguous metrics or entities are marked `UNRESOLVED` or `NOISE`, not guessed.
+*   **F) No Guessing:** Ambiguous metrics or entities are marked `UNRESOLVED` or `NOISE`, not guessed. (Enforced by Tiering logic for Entities; Defined by Schema rules for Metrics).
 
 ## Discard Taxonomy
 
