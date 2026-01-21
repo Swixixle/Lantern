@@ -1,0 +1,104 @@
+IMPORTANT: PROCESS + RESPONSE FORMAT (NON-NEGOTIABLE)
+
+We are now operating under a fixed, auditable multi-AI review circuit.
+This protocol exists to prevent scope drift, silent mutation, and loss of review context.
+
+────────────────────────────────────────────
+ACTIVE AI CIRCUIT (LOCKED)
+────────────────────────────────────────────
+Replit Agent → User → Gemini (Red-Team QA) → User → ChatGPT (Judge / Integrator) → User → Replit Agent
+
+Rules:
+- Grok is now a SILENT ADVISOR only and is NOT part of the active loop unless explicitly invoked.
+- Gemini performs adversarial QA (interpretive risk, offset drift, ambiguity defaults).
+- ChatGPT is the sole arbiter. Only consolidated directives routed back through ChatGPT are actionable.
+- Do NOT act on Gemini or Grok feedback unless it returns as a consolidated directive from ChatGPT via the user.
+
+────────────────────────────────────────────
+MANDATORY RESPONSE FORMAT (YOU MUST USE THIS)
+────────────────────────────────────────────
+
+ALL replies from you must be returned using THIS EXACT STRUCTURE,
+wrapped in a single copy-safe code block, as shown below.
+
+You must COPY THIS TEMPLATE and FILL IT IN.
+
+──────────── RETURN PACKET ────────────
+(Return using this exact structure)
+
+1) WHAT CHANGED (PATHS)
+- List every file created or modified (relative paths).
+- One-line purpose per file.
+
+2) EVIDENCE
+- Relevant code excerpts ONLY (functions or blocks you changed).
+- Unit tests added/updated (show test bodies or critical assertions).
+- Terminal output proving tests passed.
+- Grep/search output if requested (raw, not summarized).
+
+3) EXAMPLES
+- 6–10 concrete before/after examples (fixture-style).
+Each example MUST include:
+  • raw_text
+  • offsets [start, end] (document-absolute)
+  • canonical / normalized form (if applicable)
+  • tier / status / unresolved_reason (if applicable)
+
+4) VERIFICATION CHECKLIST
+Explicitly confirm each item:
+- [ ] No backend work
+- [ ] No persistence / storage changes (unless explicitly authorized)
+- [ ] No LLM / ML usage
+- [ ] Deterministic behavior preserved
+- [ ] Offsets are document-absolute and unchanged
+- [ ] All tests green
+
+──────────── END RETURN PACKET ────────────
+
+Your response must contain NOTHING outside this block.
+
+────────────────────────────────────────────
+CURRENT ACTIVE MILESTONE
+────────────────────────────────────────────
+
+We are in **M2 – Heuristic Reliability**
+Active pillar: **M2 Priority #4 — Provenance Tightening**
+
+DELIVERABLE REQUIREMENTS:
+
+- Enforce **NO OFFSET, NO ITEM** across:
+  • sentence segments
+  • entity mentions
+  • normalized metrics
+
+- Every extracted artifact MUST include:
+  • offsets: [start, end] (document-absolute)
+  • stable_id: deterministic hash derived from content + offsets
+    (e.g. mockHash(`${canonical}:${start}:${end}`))
+
+Your Return Packet MUST include:
+1. Code excerpts showing:
+   - offset enforcement (discard if missing)
+   - stable_id generation logic
+2. 6–8 full provenance examples (input → artifacts with offsets + stable_id)
+3. One example of an item being discarded due to missing provenance
+4. Updated regression metrics:
+   - Precision / Recall / F1
+   - % discarded (by reason: no offset, unresolved, noise)
+   - Pre-M2 vs current M2 comparison
+
+HARD CONSTRAINTS:
+- NO persistence changes
+- NO UI work
+- NO probabilistic logic
+- Offsets must always reference the original document string
+
+────────────────────────────────────────────
+COMPLETION SIGNAL
+────────────────────────────────────────────
+
+End your reply with this line INSIDE THE CODE BLOCK:
+
+RETURN PACKET COMPLETE — READY FOR RED-TEAM REVIEW
+
+Do NOT proceed to any new milestone until a consolidated directive is returned.

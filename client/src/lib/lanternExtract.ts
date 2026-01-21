@@ -1,4 +1,5 @@
 import { segmentSentences, type Segment } from "./heuristics/segmenters/sentenceSegmenter";
+import { extractEntities } from "./heuristics/entities/entityExtractor";
 
 // --- TYPES ---
 
@@ -159,78 +160,121 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
   
   const getContext = (start: number, end: number): string => {
       // Find segment that covers the match
-      // Naive linear search is fine for mockup MVP (text < 1MB)
-      // Optimization: Binary search or Interval Tree if needed.
       const segment = segments.find(s => s.start <= start && s.end >= end);
       if (segment) return segment.text;
       
-      // Fallback: Cross-sentence match? (Shouldn't happen with valid segmentation unless entity spans sentences)
-      // Return the slice covering matched segments
       const covering = segments.filter(s => s.end > start && s.start < end);
       if (covering.length > 0) {
-          // Join them? Or just take the first/largest?
-          // Let's just join them for context.
           return covering.map(s => s.text).join(" ");
       }
       
-      // Ultimate Fallback
       return text.slice(Math.max(0, start - 20), Math.min(text.length, end + 20));
   };
 
-  // Simple Regex Heuristics for Mockup
-  
-  // Entities (Capitalized Words)
-  const entityRegex = /([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/g;
-  let match;
-  while ((match = entityRegex.exec(text)) !== null) {
-    const word = match[0];
-    // Filter out common stopwords if needed
-    if (word.length > 3 && !["The", "This", "That"].includes(word)) {
-         items.entities.push({
-            id: mockHash(`entity-${word}-${match.index}`),
-            provenance: { start: match.index, end: match.index + word.length, sentence: getContext(match.index, match.index + word.length) },
-            confidence: 0.9,
-            included: true,
-            text: word,
-            type: "Organization" // Mock type
-         });
-    }
-  }
+  // --- ENTITIES (Integrated M2.2 & M2.4) ---
+  // Run extractor PER SEGMENT to respect sentence boundaries and prevent cross-sentence merging.
+  segments.forEach(segment => {
+      const segmentEntities = extractEntities(segment.text);
+      
+      segmentEntities.forEach(e => {
+          // Adjust offsets to document-absolute
+          const absStart = segment.start + e.start;
+          const absEnd = segment.start + e.end;
+
+          // Enforce Provenance: NO OFFSET, NO ITEM
+          if (absStart < 0 || absEnd > text.length) {
+              stats.invalid_dropped++;
+              return;
+          }
+
+          // Stable ID: Canonical + Offsets
+          const stableId = mockHash(`${e.canonical}:${absStart}:${absEnd}`);
+          
+          items.entities.push({
+              id: stableId,
+              provenance: { 
+                  start: absStart, 
+                  end: absEnd, 
+                  sentence: segment.text // Precise segment context
+              },
+              confidence: e.tier === "PRIMARY" ? 0.95 : (e.tier === "SECONDARY" ? 0.7 : 0.4),
+              included: e.tier !== "NOISE", 
+              text: e.text,
+              type: "Organization",
+              canonical_family_id: e.entity_id
+          });
+      });
+  });
 
   // Quotes ("...")
   const quoteRegex = /"([^"]+)"/g;
+  let match; // Define match variable
   while ((match = quoteRegex.exec(text)) !== null) {
+      if (match.index === undefined) continue;
+      
+      const start = match.index;
+      const end = start + match[0].length;
+      const quoteBody = match[1];
+      
+      // Stable ID
+      const stableId = mockHash(`quote:${start}:${end}`);
+      
       items.quotes.push({
-          id: mockHash(`quote-${match.index}`),
-          provenance: { start: match.index, end: match.index + match[0].length, sentence: getContext(match.index, match.index + match[0].length) },
+          id: stableId,
+          provenance: { start, end, sentence: getContext(start, end) },
           confidence: 0.85,
           included: true,
-          quote: match[1],
-          speaker: null, // Basic mock doesn't attribute
+          quote: quoteBody,
+          speaker: null,
       });
   }
 
   // Metrics (Numbers + Units)
+  // Updated for Provenance Tightening (M2.4)
   const metricRegex = /(\d+(?:,\d{3})*(?:\.\d+)?)\s?(million|billion|trillion|%|USD|EUR|items|users)/gi;
   while ((match = metricRegex.exec(text)) !== null) {
+      if (match.index === undefined) continue;
+
+      const start = match.index;
+      const end = start + match[0].length;
+      const value = match[1];
+      const unit = match[2];
+      
+      // Normalization (Basic)
+      const normValue = parseFloat(value.replace(/,/g, ""));
+      
+      // Stable ID: Value + Unit + Offsets
+      // Using normalized value in hash for consistency? 
+      // Prompt says: "derived from content + offsets". 
+      // Let's use raw text + offsets to be safe and purely provenanced.
+      const rawText = match[0];
+      const stableId = mockHash(`metric:${rawText}:${start}:${end}`);
+
       items.metrics.push({
-          id: mockHash(`metric-${match.index}`),
-          provenance: { start: match.index, end: match.index + match[0].length, sentence: getContext(match.index, match.index + match[0].length) },
+          id: stableId,
+          provenance: { start, end, sentence: getContext(start, end) },
           confidence: 0.95,
           included: true,
-          value: match[1],
-          unit: match[2],
+          value: value,
+          unit: unit,
           metric_kind: "scalar",
-          normalized_value: parseFloat(match[1].replace(/,/g, ""))
+          normalized_value: normValue
       });
   }
 
   // Timeline (Dates)
   const dateRegex = /(January|February|March|April|May|June|July|August|September|October|November|December)\s\d{1,2},?\s\d{4}/g;
   while ((match = dateRegex.exec(text)) !== null) {
+      if (match.index === undefined) continue;
+
+      const start = match.index;
+      const end = start + match[0].length;
+      
+      const stableId = mockHash(`time:${match[0]}:${start}:${end}`);
+
       items.timeline.push({
-          id: mockHash(`time-${match.index}`),
-          provenance: { start: match.index, end: match.index + match[0].length, sentence: getContext(match.index, match.index + match[0].length) },
+          id: stableId,
+          provenance: { start, end, sentence: getContext(start, end) },
           confidence: 0.9,
           included: true,
           date: match[0],
@@ -239,14 +283,27 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
       });
   }
 
-  // Simple dedupe mock
-  const uniqueEntities = new Map();
-  items.entities.forEach(e => {
-      const key = createItemKey(e, "entities");
-      if (!uniqueEntities.has(key)) uniqueEntities.set(key, e);
-      else stats.duplicates_collapsed++;
-  });
-  items.entities = Array.from(uniqueEntities.values());
+  // Simple dedupe mock - UPDATED for M2.4 (Provenance)
+  // We DO NOT collapse entities by text anymore. We only collapse if IDs match (exact same provenance).
+  // Stable ID includes offsets, so this maps duplicates only if they are the exact same artifact.
+  // This effectively disables collapsing of different mentions, preserving all occurrences.
+  const uniqueItems = new Map();
+  const allItems = [...items.entities, ...items.quotes, ...items.metrics, ...items.timeline];
+  
+  // Actually, we should dedupe per list to preserve types
+  const dedupeList = (list: any[]) => {
+      const map = new Map();
+      list.forEach(i => {
+         if (!map.has(i.id)) map.set(i.id, i);
+         else stats.duplicates_collapsed++;
+      });
+      return Array.from(map.values());
+  };
+
+  items.entities = dedupeList(items.entities);
+  items.quotes = dedupeList(items.quotes);
+  items.metrics = dedupeList(items.metrics);
+  items.timeline = dedupeList(items.timeline);
 
   return { items, stats, stable_source_hash };
 };
