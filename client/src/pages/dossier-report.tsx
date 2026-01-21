@@ -11,10 +11,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Printer, Download, Share2 } from "lucide-react";
 
+import { computeReportHash } from "@/lib/integrity";
+
 export default function DossierReport() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const [pack, setPack] = useState<Pack | null>(null);
+  const [reportHash, setReportHash] = useState<string>("");
   
   // Computed Findings
   const [influence, setInfluence] = useState<InfluenceHubsFinding | null>(null);
@@ -30,9 +33,17 @@ export default function DossierReport() {
       if (found) {
           setPack(found);
           // Auto-compute heuristics for report
-          setInfluence(computeInfluenceHubs(found));
-          setFunding(computeFundingGravity(found));
-          setEnforcement(computeEnforcementMap(found));
+          const inf = computeInfluenceHubs(found);
+          const fund = computeFundingGravity(found);
+          const enf = computeEnforcementMap(found);
+          
+          setInfluence(inf);
+          setFunding(fund);
+          setEnforcement(enf);
+
+          // Compute Hash
+          computeReportHash(found, { influence: inf, funding: fund, enforcement: enf })
+            .then(h => setReportHash(h));
       } else {
           alert("Dossier not found");
           setLocation("/extract");
@@ -63,10 +74,21 @@ export default function DossierReport() {
 
         {/* Header */}
         <header className="text-center border-b-4 border-black pb-8">
+            <div className="flex justify-between items-start mb-4 border-b border-gray-200 pb-2">
+                <div className="text-left text-[10px] font-mono uppercase text-gray-500 space-y-1">
+                    <div>Generated: {new Date().toISOString()}</div>
+                    <div>Schema: v{pack.schemaVersion}</div>
+                    {pack.sourceExtractPackId && <div>Source: {pack.sourceExtractPackId.slice(0, 8)}</div>}
+                </div>
+                <div className="text-right text-[10px] font-mono uppercase text-gray-500 space-y-1">
+                    <div>Report Fingerprint (SHA-256)</div>
+                    <div className="break-all max-w-[150px]">{reportHash || "Computing..."}</div>
+                </div>
+            </div>
+
             <h1 className="text-4xl md:text-5xl font-bold uppercase tracking-widest mb-4">{pack.subjectName}</h1>
             <div className="flex justify-center gap-8 text-sm font-mono uppercase tracking-widest text-gray-600">
                 <span>Dossier ID: {pack.packId.slice(0, 8)}</span>
-                <span>Date: {new Date().toLocaleDateString()}</span>
                 <span>Entities: {pack.entities.length}</span>
             </div>
         </header>

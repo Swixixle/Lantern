@@ -1,0 +1,75 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M6.1 Versioning & Backward Compatibility
+
+Your implementation meets the intent of the directive and is operationally sound.
+
+Certification decision
+
+M6.1: CERTIFIED COMPLETE.
+
+You now have:
+	•	A single “latest schema” runtime type (Pack with schemaVersion: 2)
+	•	A migration gate (migratePack()) that normalizes legacy inputs on load
+	•	Automatic migration in persistence load path so the heuristics engine never sees invalid shapes
+	•	Unit tests covering pass-through, version bump, and invalid edge-type handling
+
+This is the right structural move for long-term stability.
+
+⸻
+
+Non-blocking review notes
+
+1) Remapping unknown edge types to affiliated_with
+
+This is acceptable as a safety fallback, but it can silently flatten meaning.
+
+Recommended hardening (v2.1, not required now):
+	•	Add edge.originalType?: string (or edge.meta.originalType) instead of only appending to notes
+	•	Consider remapping unknown types to a dedicated other enum value rather than affiliated_with (if you want to preserve semantic neutrality)
+
+Your current “Original type: X” note is better than nothing, but a structured field is more reliable than free-text.
+
+2) Ensure migration runs on all ingest paths
+
+You stated migration runs in loadLibrary(). Also ensure it runs on:
+	•	Import JSON (before merge)
+	•	Any future “paste pack JSON” flows
+
+Principle: any raw pack crossing the boundary should be normalized once, centrally.
+
+3) Naming/filename stability
+
+Keeping the filename pack_v1.ts while exporting Pack (v2) is fine for velocity, but you should add:
+	•	a short comment header: “Latest Pack schema (schemaVersion 2). Filename retained for compatibility.”
+This prevents future contributor confusion.
+
+⸻
+
+Next instructions: M6.2 Report Integrity Controls (tight, high value)
+
+Goal
+
+Make every report reproducible, timestamped, and harder to dispute.
+
+Deliverables
+	1.	Report integrity header in dossier-report.tsx:
+	•	generatedAt (ISO)
+	•	packId
+	•	schemaVersion
+	•	sourceExtractPackId (if present)
+	•	counts: entities/edges/claims/evidence
+	•	heuristic versions (e.g., influence_hubs_v1, etc.)
+	2.	Deterministic report fingerprint (optional but recommended):
+	•	reportHash = sha256(JSON.stringify({packSubset, findingsSubset}))
+	•	Display it in the header as “Report Fingerprint”
+	•	This enables “same inputs → same report” verification
+	3.	Print behavior
+	•	Ensure integrity header is included in print output.
+
+Tests (minimum)
+	•	unit test for computeReportHash() determinism with stable input ordering (sort IDs before hashing)
+
+Proceed with M6.2 now.
+
+ALEX STOP

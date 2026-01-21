@@ -1,5 +1,10 @@
 import { z } from "zod";
 
+/**
+ * Latest Pack schema (schemaVersion 2). 
+ * Filename retained as 'pack_v1.ts' for backward compatibility.
+ */
+
 // --- Enums ---
 
 export const EntityTypeEnum = z.enum([
