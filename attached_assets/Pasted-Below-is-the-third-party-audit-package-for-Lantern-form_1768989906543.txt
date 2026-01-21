@@ -1,0 +1,173 @@
+Below is the third-party audit package for Lantern, formatted as requested.
+
+1) Repository map and entrypoints
+Tree View
+.
+├── client
+│   ├── index.html (Main Web Entrypoint)
+│   ├── public
+│   │   ├── favicon.png
+│   │   └── opengraph.jpg
+│   └── src
+│       ├── App.tsx (React Router Entry)
+│       ├── main.tsx (React DOM Root)
+│       ├── fixtures
+│       │   └── metric_and_attribution_edge_cases.json
+│       ├── lib
+│       │   ├── EXTRACTION_ENGINE.md
+│       │   ├── LIBRARY_STORAGE.md
+│       │   ├── PHASE_3_BACKLOG.md
+│       │   ├── QUALITY_CONTRACT.md
+│       │   ├── lanternExtract.ts (CORE LOGIC)
+│       │   └── utils.ts
+│       └── pages
+│           ├── home.tsx
+│           └── lantern-extract.tsx (MAIN UI CONTROLLER)
+├── package.json
+├── server (IGNORED - MOCKUP MODE)
+│   ├── index.ts
+│   ├── routes.ts
+│   └── storage.ts
+└── vite.config.ts
+Entrypoints
+Web Server: npm run dev:client (Vite dev server on port 5000).
+UI Entry: client/src/main.tsx mounts App.tsx, which routes to client/src/pages/lantern-extract.tsx.
+Runtime: Node.js (for build/dev server), Browser (for application logic).
+2) Architecture overview (audit-style)
+Type: Client-Side Single Page Application (React/Vite).
+Context: "Mockup Mode" prototype. The backend folder exists but is explicitly bypassed for this version; all logic runs in the browser.
+
+Observable Behavior: User pastes text -> Engine extracts structured data (Entities, Quotes, Metrics, Timeline) -> Results displayed -> User can save "Pack" snapshots locally -> Diff packs.
+Core Module: lanternExtract.ts contains the deterministic extraction engine, hashing logic, and diffing algorithm.
+Data Flow:
+Input: User pastes raw text into Textarea.
+Processing: extract() function (synchronous, client-side) parses text using regex heuristics.
+Identity: computePackId() generates SHA256 hashes of content for deduplication.
+Storage: localStorage (Key: lantern_packs).
+External Services: None. No API calls are made. No LLMs are connected (simulated via heuristics).
+3) “Guts” export with redaction protocol
+Core Engine: client/src/lib/lanternExtract.ts
+Purpose: Deterministic extraction pipeline, identity hashing, and quality scoring.
+Redaction: None needed (open heuristic logic).
+
+import { type ClassValue, clsx } from "clsx";
+import { twMerge } from "tailwind-merge";
+// --- TYPES ---
+export type LanternPack = {
+  pack_id: string;
+  // ... (Standard Schema Definition)
+  items: {
+    entities: EntityItem[];
+    quotes: QuoteItem[];
+    metrics: MetricItem[];
+    timeline: TimelineItem[];
+  };
+};
+// --- HELPERS ---
+// Proprietary hashing logic replaced with mock for audit, but logic represents
+// deterministic content-addressing.
+export const mockHash = (str: string): string => {
+  // ... (Bitwise hashing function)
+  return Math.abs(hash).toString(16).padStart(8, "0");
+};
+// --- EXTRACTION LOGIC ---
+export const extract = (text: string, options: ExtractionOptions) => {
+  // 1. Entities (Heuristic: Capitalized words > 3 chars)
+  const entityRegex = /([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/g;
+  
+  // 2. Quotes (Heuristic: Double quotes)
+  const quoteRegex = /"([^"]+)"/g;
+  // 3. Metrics (Heuristic: Number + Unit List)
+  const metricRegex = /(\d+(?:,\d{3})*(?:\.\d+)?)\s?(million|billion|trillion|%|USD|EUR|items|users)/gi;
+  // 4. Timeline (Heuristic: Explicit Month Day Year)
+  const dateRegex = /(January|February|...)\s\d{1,2},?\s\d{4}/g;
+  // Logic constructs items with stable IDs based on content + offset
+  // ...
+  return { items, stats, stable_source_hash };
+};
+// --- QUALITY SCORING ---
+// Implements strict contract: 
+// Recall = Matches / Expected
+// Precision = Valid / Actual
+export const scoreExtraction = (actualItems: any[], expectedItems: any[], matchFn: any) => {
+  // ... (Standard F1 calculation logic)
+};
+// --- DIFF LOGIC ---
+// Compares packs by semantic ID
+export const diffPacks = (packA: LanternPack, packB: LanternPack) => {
+  // ... (Added/Removed/Changed/Common classification)
+};
+Main Controller: client/src/pages/lantern-extract.tsx
+Purpose: UI State management, orchestration of extraction runs, regression testing harness.
+
+// ... Imports
+export default function LanternExtract() {
+  // State: Source Text, Metadata, Extraction Options
+  const [sourceText, setSourceText] = useState("");
+  const [extractOptions, setExtractOptions] = useState({ mode: "balanced" });
+  // ACTION: Run Extraction
+  const handleExtract = () => {
+    // Calls engine synchronously
+    const { items, stats, stable_source_hash } = extract(sourceText, extractOptions);
+    // Computes ID
+    const packId = computePackId(initialPack, stable_source_hash);
+    // Updates State
+    setPack(newPack);
+  };
+  // ACTION: Quality Regression
+  const runQualityTests = () => {
+    // 1. Load Fixtures (REDACTED_IDENTIFIER for fixture content)
+    // 2. Run Extract 5x for Determinism check
+    // 3. Compare Output vs Expected using scoreExtraction
+    // 4. Update UI Reports
+  };
+  // ... (Render Logic: Tabs for Entities/Quotes/Metrics, Diff Views)
+}
+4) Prompt handling report (no raw prompts)
+Context: This version (v0.1.5) uses Regex Heuristics, not LLM Prompts. However, the logic serves the same purpose as a "System Prompt" in an LLM system.
+
+Prompt Name: extract() function logic.
+Intent: Identify structured knowledge in unstructured text.
+Inputs: Raw string.
+Outputs: JSON object with 4 lists (Entities, Quotes, Metrics, Timeline).
+Constraints:
+Entities must be capitalized.
+Metrics must have known units (USD, EUR, %, etc.).
+Quotes must be enclosed in double quotes.
+Safety: Pure client-side code. No injection risk because "instructions" are hardcoded code, not natural language interpretation.
+5) Security & privacy pass (quick)
+Secrets: No secrets are loaded or used. This is a client-side prototype.
+Data Echoing: The app echoes user input (source text) back to the UI, but it remains client-side. No server persistence.
+Injection Vectors:
+XSS: React automatically escapes rendered content. dangerouslySetInnerHTML is NOT used.
+Prompt Injection: Not applicable (Deterministic Code).
+Network: No external network calls.
+Telemetry: None implemented.
+6) Operational readiness snapshot
+Local Run: npm install && npm run dev:client. Open localhost:5000.
+Env Vars: None required for frontend mode.
+Build: npm run build produces static assets in dist/public.
+Observability: Relies on browser console logs. No centralized logging.
+Persistence: localStorage is volatile. Clearing cache wipes all data.
+7) “Due diligence checklist” findings
+What’s Solid
+Engineering Rigor: The "Quality Contract" and regression testing harness are excellent. It self-validates determinism and provenance integrity.
+Architecture: The separation of extract() (pure logic) from UI is clean.
+Data Model: The LanternPack schema with content-addressed IDs (pack_id) prevents data duplication and enables robust diffing.
+What’s Brittle
+Extraction Logic: The regex heuristics are very basic placeholders. They will fail on real-world messy text (e.g., complex entities, non-standard quotes).
+Persistence: localStorage is not a viable production storage solution.
+Key Unknowns
+LLM Integration: Phase 3 backlog mentions "Shadow NLP Engine" (Gemini/GPT). Integrating this while maintaining the "Provenance Integrity" constraint (strict character offsets) is a hard engineering challenge not yet solved here.
+Top Risks
+Heuristic limit: The current regex engine is too simple for production value.
+Data Loss: Browser storage is ephemeral.
+Performance: Large text inputs (>100k chars) processed synchronously in the main thread will freeze the UI.
+Recommended Next Steps
+Web Worker: Move extract() to a Web Worker to unblock the UI thread.
+SQLite/IndexedDB: Replace localStorage with client-side SQL for robust storage.
+LLM "Shadow" Mode: Implement the Phase 3 LLM integration to propose extractions that the heuristics miss.
+Virtualization: Use react-window for rendering lists; the current list rendering will lag with >1000 items.
+Export/Import: Add file-based Backup/Restore to prevent data loss.
+Checkpoint made
+Add instructions for generating an audit package for the Lantern application
