@@ -25,14 +25,17 @@ export function migratePack(raw: any): Pack {
     console.log(`Migrating pack ${raw.packId} from v${raw.schemaVersion || 1} to v2`);
 
     const migrated = { ...raw };
+    const migrationLog: string[] = migrated.migrationLog || []; // Preserve existing logs if any
     
     // Fix Edges
     if (migrated.edges && Array.isArray(migrated.edges)) {
+        let remappedCount = 0;
         migrated.edges = migrated.edges.map((edge: any) => {
             const isValid = EdgeTypeEnum.safeParse(edge.type).success;
             
             if (!isValid) {
                 console.warn(`[Migration] Remapping unknown edge type '${edge.type}' in edge ${edge.id}`);
+                remappedCount++;
                 return {
                     ...edge,
                     type: "affiliated_with", // Default fallback
@@ -43,13 +46,19 @@ export function migratePack(raw: any): Pack {
             }
             return edge;
         });
+        
+        if (remappedCount > 0) {
+            migrationLog.push(`${new Date().toISOString()}: Remapped ${remappedCount} edges with unknown types to 'affiliated_with'.`);
+        }
     }
 
     // Bump Version
     migrated.schemaVersion = 2;
+    migrated.migrationLog = migrationLog;
 
     // Validate Final Shape
     try {
+        // Zod will apply defaults for new fields like claimScope
         return PackSchema.parse(migrated);
     } catch (e) {
         console.error("Migration failed validation:", e);

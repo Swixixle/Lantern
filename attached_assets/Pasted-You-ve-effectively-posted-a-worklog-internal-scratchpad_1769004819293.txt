@@ -1,0 +1,82 @@
+You’ve effectively posted a worklog + internal scratchpad and (implicitly) want two things:
+	1.	a clean status/recap you can trust (what’s actually complete), and
+	2.	a tight, forward directive (what’s next, with no drift).
+
+Here it is.
+
+⸻
+
+Current status (what is complete)
+
+M5 — Printable Dossier Report View
+
+Complete.
+You implemented a print-friendly report route with an executive summary + heuristic sections + claims/evidence appendix, and navigation from the editor.
+
+M6.1 — Schema Versioning + Backward Compatibility
+
+Complete.
+You established “latest schema at runtime” (schemaVersion 2), added migration on load (migratePack()), integrated it into persistence, and wrote passing migration tests.
+
+M6.2 — Report Integrity Controls
+
+Complete.
+You added deterministic SHA-256 report fingerprinting (canonicalization + stable hash) and surfaced an integrity header in the report view. Tests validate stability, sensitivity, and order independence.
+
+M6.3 — UX Polish
+
+Complete.
+You added:
+	•	Entity combobox autocomplete for edge creation
+	•	Evidence search within claim evidence picker
+	•	“Create claim from evidence” shortcut
+	•	CopyID utility and inline ID copying
+	•	Keyboard affordances (Ctrl/Cmd+Enter and Esc)
+
+Net: curation speed and audit ergonomics improved materially.
+
+⸻
+
+Important note about the “glob found no files” / import confusion
+
+That’s a non-issue as long as your code compiles and tests pass. The scratchpad reflects a temporary mismatch between assumptions and project structure; your final result indicates you found the right components and built what you needed.
+
+⸻
+
+What’s next (recommended directive)
+
+You are now at v1 feature-complete plus stabilization and audit integrity. The next highest value work is not another heuristic. It is making outputs harder to misread and harder to misuse.
+
+M7 — “Epistemic Posture & Safety Layer” (publishing hardening)
+
+This is the last step before you start sharing anything about “shadow castes” publicly.
+
+Deliverables:
+	1.	Claim taxonomy tightening
+	•	Add claimScope: "utterance" | "content" (or equivalent) so “fact” is never ambiguous.
+	2.	Auto-disclaimer blocks in report
+	•	A short, fixed “Interpretation limits” section:
+	•	heuristics are structural indicators, not truth claims
+	•	evidence density requirements
+	•	unknown-edge remaps flagged
+	3.	Migration transparency
+	•	Report a “Migration Notes” panel:
+	•	number of edges remapped
+	•	original types captured
+	•	any dropped fields
+	4.	Findings receipts
+	•	Each heuristic section outputs a “receipt” line:
+	•	inputs counted, thresholds, and any refusal conditions triggered
+
+Why this is next: it prevents “structure → accusation” slippage when the report leaves your studio.
+
+⸻
+
+If you want a different direction, there are only two viable alternatives:
+	•	M7b: Cross-dossier comparison (read-only “compare two subjects”)
+	•	M7c: Markdown/PDF export with embedded integrity header + citations
+
+Tell me which of the three you want to run next:
+	•	M7 Epistemic Posture & Safety
+	•	M7b Cross-dossier comparison
+	•	M7c Export formats

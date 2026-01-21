@@ -9,7 +9,7 @@ import { InfluenceHubsFinding, FundingGravityFinding, EnforcementMapFinding } fr
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Printer, Download, Share2 } from "lucide-react";
+import { ArrowLeft, Printer, Download, Share2, AlertTriangle } from "lucide-react";
 
 import { computeReportHash } from "@/lib/integrity";
 
@@ -100,6 +100,31 @@ export default function DossierReport() {
             <h2 className="text-2xl font-bold uppercase border-b-2 border-black mb-4 flex justify-between items-baseline">
                 <span>01. Executive Summary</span>
             </h2>
+            
+            {/* M7.2: Interpretation Limits (Auto-Disclaimer) */}
+            <div className="bg-gray-100 border-l-4 border-gray-400 p-4 mb-8 text-sm text-gray-700 font-sans">
+                <h3 className="font-bold uppercase text-xs mb-1 text-gray-500">Interpretation Limits & Disclaimer</h3>
+                <ul className="list-disc pl-4 space-y-1">
+                    <li><strong>Heuristics are indicators, not verdicts.</strong> Structural centrality or funding flows suggest influence pathways but do not prove wrongdoing or intent.</li>
+                    <li><strong>Evidence is point-in-time.</strong> Claims are based on available public records as of the extraction date.</li>
+                    <li><strong>Automated Analysis.</strong> This report was generated with the assistance of the Lantern Protocol. Verification by human analysts is required for high-stakes decisions.</li>
+                </ul>
+            </div>
+
+            {/* M7.3: Migration Log (Transparency) */}
+            {pack.migrationLog && pack.migrationLog.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 p-4 mb-8 text-xs font-mono text-amber-900">
+                    <h3 className="font-bold uppercase mb-2 flex items-center gap-2">
+                        <AlertTriangle className="w-3 h-3" /> Data Migration Notes
+                    </h3>
+                    <ul className="list-disc pl-4 space-y-1">
+                        {pack.migrationLog.map((log, i) => (
+                            <li key={i}>{log}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                 <div className="p-4 border border-black bg-gray-50">
                     <div className="text-3xl font-bold">{pack.claims.filter(c => c.claimType === "fact").length}</div>
@@ -187,6 +212,9 @@ export default function DossierReport() {
                 </div>
                 <div className="mt-4 p-4 bg-emerald-50 border border-emerald-100 text-sm font-mono text-emerald-800">
                     <strong>Concentration:</strong> The top funder controls {(funding.concentration.topFundersShare * 100).toFixed(1)}% of all mapped flows.
+                    <div className="mt-2 text-[10px] text-emerald-600 border-t border-emerald-200 pt-1 uppercase">
+                        Receipt: Processed {pack.edges.filter(e => e.type.includes("funded") || e.type.includes("donated")).length} funding edges.
+                    </div>
                 </div>
             </section>
         )}
@@ -229,6 +257,9 @@ export default function DossierReport() {
                             {type.replace("_by", "")}: {count}
                         </span>
                     ))}
+                </div>
+                 <div className="mt-4 text-[10px] font-mono text-gray-500 uppercase border-t border-gray-100 pt-2">
+                    Receipt: Identified {enforcement.enforcers.length} active enforcers and {enforcement.targets.length} targets.
                 </div>
             </section>
         )}

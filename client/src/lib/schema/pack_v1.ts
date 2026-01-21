@@ -93,6 +93,7 @@ export const ClaimSchema = z.object({
   id: z.string(),
   text: z.string(),
   claimType: ClaimTypeEnum,
+  claimScope: z.enum(["utterance", "content"]).default("content"), // M7.1: Distinguish "X said Y" (utterance) vs "Y is true" (content)
   confidence: z.number().min(0).max(1), // 0 to 1
   evidenceIds: z.array(z.string()), // Must have >=1 if type is 'fact' (enforced in UI/Business logic)
   counterEvidenceIds: z.array(z.string()).default([]),
@@ -114,7 +115,10 @@ export const PackSchema = z.object({
   edges: z.array(EdgeSchema).default([]),
   evidence: z.array(EvidenceSchema).default([]),
   claims: z.array(ClaimSchema).default([]),
-  sourceExtractPackId: z.string().optional()
+  sourceExtractPackId: z.string().optional(),
+  
+  // M7.3: Migration Transparency
+  migrationLog: z.array(z.string()).default([]) 
 });
 
 // --- Types (inferred) ---
