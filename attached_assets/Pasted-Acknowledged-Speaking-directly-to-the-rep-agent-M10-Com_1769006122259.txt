@@ -1,0 +1,95 @@
+Acknowledged. Speaking directly to the rep agent.
+
+M10 — Comparison Report (with sufficiency gating) review and certification
+
+Status: CERTIFIED COMPLETE.
+
+You implemented the correct extension of the M7/M8 posture into the comparison plane.
+
+Why this passes
+	1.	Comparison logic hardened
+
+	•	ComparisonResult now includes heuristic sufficiency status for both packs.
+	•	Alignment is gated: if either pack is insufficient, alignment for that heuristic is explicitly unavailable.
+	•	This prevents the single most common comparison failure: “shared pattern” claims from low-N data.
+
+	2.	Export is posture-consistent
+
+	•	generateComparisonMarkdown includes:
+	•	frontmatter + timestamps + overlap scores
+	•	matching-confidence disclaimers (ID vs name match)
+	•	explicit “Analysis Unavailable” sections when gated
+	•	stable sorting + escaping
+
+	3.	UI mirrors export rules
+
+	•	The UI surfaces the same insufficiency blocks and adds explicit confidence badges for entity matches.
+	•	This prevents “UI says yes, export says no” divergence.
+
+Certification decision
+
+M10 is certified complete.
+Your v1 system is now complete across:
+	•	creation/curation
+	•	constrained heuristics
+	•	evidence-density refusal
+	•	auditable reports
+	•	safe cross-dossier comparison
+	•	portable exports
+
+⸻
+
+Non-blocking hardening recommendations (optional, v1.1)
+	1.	Comparison fingerprint
+
+	•	Add comparisonHash = sha256(packA.fingerprint + packB.fingerprint + compareResultSubset) for tamper-evident comparison artifacts.
+
+	2.	Name-match normalization
+
+	•	Consider simple normalization beyond case-insensitive:
+	•	collapse whitespace
+	•	strip punctuation
+	•	handle “Inc.”/“LLC” suffixes
+But keep it conservative to avoid false merges.
+
+	3.	Manual identity linking
+
+	•	Future: allow curator-approved alias bridging between dossiers (read-only link table), so comparisons can move from “potential match” to “confirmed match” without rewriting source packs.
+
+⸻
+
+Since you asked: “More on heuristics”
+
+Here’s the next level of heuristics thinking you’re now ready for—because you’ve built the governance around it.
+
+The “second-order” heuristics
+
+These don’t invent new meanings; they measure stability and fragility of your existing findings.
+	1.	Sensitivity / Robustness
+
+	•	How much do top hubs/funders change if you remove 1–2 edges?
+	•	If rankings collapse with tiny edits, the finding is unstable.
+
+	2.	Role Intersection
+
+	•	Who appears in multiple power dimensions?
+	•	hub + funder
+	•	funder + enforcer
+	•	hub + enforcer
+	•	This is not guilt; it’s structural multiplexing.
+
+	3.	Structural chokepoints
+
+	•	Bridge detection: nodes/edges whose removal fragments the graph.
+	•	“Single point of failure” detection.
+
+All of these can be made posture-compliant because they are still where/what, not why.
+
+⸻
+
+If you want a next directive, it should be one of these:
+	•	M11: Robustness/Sensitivity Lens (safe second-order heuristic)
+	•	M12: Comparison Integrity Hashing (audit hardening)
+	•	M13: Manual Identity Linking (reduce false positives in comparisons)
+
+ALEX STOP

@@ -5,6 +5,7 @@ import { persistence } from "@/lib/storage";
 import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
 import { computeFundingGravity } from "@/lib/heuristics/fundingGravity";
 import { computeEnforcementMap } from "@/lib/heuristics/enforcementMap";
+import { computeSensitivity, SensitivityReport } from "@/lib/heuristics/sensitivity";
 import { InfluenceHubsFinding, FundingGravityFinding, EnforcementMapFinding } from "@/lib/heuristics/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,7 @@ export default function DossierReport() {
   const [influence, setInfluence] = useState<InfluenceHubsFinding | null>(null);
   const [funding, setFunding] = useState<FundingGravityFinding | null>(null);
   const [enforcement, setEnforcement] = useState<EnforcementMapFinding | null>(null);
+  const [sensitivity, setSensitivity] = useState<SensitivityReport | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -39,10 +41,12 @@ export default function DossierReport() {
           const inf = computeInfluenceHubs(found);
           const fund = computeFundingGravity(found);
           const enf = computeEnforcementMap(found);
+          const sens = computeSensitivity(found);
           
           setInfluence(inf);
           setFunding(fund);
           setEnforcement(enf);
+          setSensitivity(sens);
 
           // Compute Hash
           computeReportHash(found, { influence: inf, funding: fund, enforcement: enf })
@@ -308,7 +312,51 @@ export default function DossierReport() {
             </section>
         )}
 
-        {/* 5. Appendix: Claims & Evidence */}
+        {/* 5. Robustness & Stability (M11) */}
+        {sensitivity && (sensitivity.influence || sensitivity.funding) && (
+             <section className="break-inside-avoid mb-12">
+                 <h2 className="text-xl font-bold uppercase border-b border-gray-400 mb-4 text-blue-900">
+                    05. Robustness & Stability Checks
+                </h2>
+                <div className="grid md:grid-cols-2 gap-6">
+                    {sensitivity.influence && (
+                        <div className={`p-4 border border-dashed ${sensitivity.influence.rating === "High" ? "bg-blue-50 border-blue-200" : "bg-orange-50 border-orange-200"}`}>
+                            <div className="flex justify-between items-center mb-2">
+                                <h3 className="font-mono text-xs uppercase font-bold text-gray-500">Influence Hubs Stability</h3>
+                                <Badge variant={sensitivity.influence.rating === "High" ? "default" : "destructive"} className="uppercase text-[10px]">
+                                    {sensitivity.influence.rating} Stability
+                                </Badge>
+                            </div>
+                            <p className="text-sm font-serif italic mb-2">"{sensitivity.influence.description}"</p>
+                            {sensitivity.influence.criticalEdges.length > 0 && (
+                                <div className="text-[10px] font-mono text-gray-500 mt-2">
+                                    Fragility Source: {sensitivity.influence.criticalEdges.length} critical relationship(s).
+                                </div>
+                            )}
+                        </div>
+                    )}
+                    
+                    {sensitivity.funding && (
+                        <div className={`p-4 border border-dashed ${sensitivity.funding.rating === "High" ? "bg-blue-50 border-blue-200" : "bg-orange-50 border-orange-200"}`}>
+                             <div className="flex justify-between items-center mb-2">
+                                <h3 className="font-mono text-xs uppercase font-bold text-gray-500">Funding Flow Stability</h3>
+                                <Badge variant={sensitivity.funding.rating === "High" ? "default" : "destructive"} className="uppercase text-[10px]">
+                                    {sensitivity.funding.rating} Stability
+                                </Badge>
+                            </div>
+                            <p className="text-sm font-serif italic mb-2">"{sensitivity.funding.description}"</p>
+                             {sensitivity.funding.criticalEdges.length > 0 && (
+                                <div className="text-[10px] font-mono text-gray-500 mt-2">
+                                    Fragility Source: {sensitivity.funding.criticalEdges.length} critical transaction(s).
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+             </section>
+        )}
+
+        {/* 6. Appendix: Claims & Evidence */}
         <section className="break-before-page">
              <h2 className="text-2xl font-bold uppercase border-b-2 border-black mb-6">
                 Appendix: Verified Claims
