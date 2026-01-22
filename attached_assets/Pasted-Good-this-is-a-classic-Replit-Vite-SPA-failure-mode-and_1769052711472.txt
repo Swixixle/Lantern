@@ -1,0 +1,175 @@
+Good — this is a classic Replit + Vite + SPA failure mode, and the fact that it’s a pure white screen with no error is actually very diagnostic.
+
+I’m going to do this in three layers:
+	1.	What this almost certainly is (conceptually)
+	2.	A fast, concrete checklist you can run right now
+	3.	Exact instructions you can give the agent to fix it without “breaking Lantern”
+
+No fluff. No mysticism. Just surgical debugging.
+
+⸻
+
+1. What’s Actually Happening (Zoomed Out)
+
+If the app:
+	•	Builds successfully
+	•	Server says “running”
+	•	Preview loads a white screen forever
+	•	No visible error overlay
+
+Then one of these is true 90% of the time:
+
+A. The client bundle is failing before React mounts
+
+Examples:
+	•	index.tsx never runs
+	•	createRoot(...).render(<App />) never executes
+	•	An import throws silently before render
+
+B. The app is mounted to a DOM node that doesn’t exist
+
+Example:
+
+createRoot(document.getElementById("root")!)
+
+…but index.html no longer has <div id="root"></div>
+
+C. Routing mismatch (VERY likely in your case)
+
+You recently:
+	•	Changed landing routes
+	•	Swapped dashboards
+	•	Added /library, /extract, /compare
+
+If React Router is rendering nothing at /, you get a white screen with no error.
+
+D. Vite preview + Replit proxy mismatch
+
+Replit sometimes serves / but your app expects /index.html or a base path.
+
+⸻
+
+2. What YOU Can Check in 2 Minutes (No Agent)
+
+Step 1: Open the Browser Console (critical)
+
+In the Preview pane:
+	•	Click Console tab (not Replit console)
+	•	Or right-click → Inspect → Console
+
+You are looking for:
+	•	Red errors
+	•	Even one warning
+
+If you see nothing at all, that tells us React never mounted.
+
+⸻
+
+Step 2: Check the DOM
+
+In the Elements tab, look for:
+
+<div id="root"></div>
+
+If it’s missing → that’s the bug.
+
+⸻
+
+Step 3: Hard-refresh the preview
+
+Replit caches aggressively.
+
+Do this exactly:
+	•	Stop the server
+	•	Run again
+	•	In preview, click the ⟳ icon
+	•	If still white → click Open in Browser (important)
+
+If it works in “Open in browser” but not Preview → it’s a Replit proxy issue, not your code.
+
+⸻
+
+3. The MOST LIKELY Lantern-Specific Cause
+
+Based on everything you’ve done:
+
+You changed the landing page to “Library”, but / no longer renders anything.
+
+This usually looks like:
+
+<Routes>
+  <Route path="/library" element={<Library />} />
+  <Route path="/extract" element={<Extract />} />
+  <Route path="/compare" element={<Compare />} />
+</Routes>
+
+But no route for /.
+
+React Router does NOT error on this.
+It just renders nothing.
+Hence: white screen.
+
+⸻
+
+4. The Fix (Minimal, Safe, Non-Destructive)
+
+Option A (Recommended): Redirect / → /library
+
+import { Navigate } from "react-router-dom";
+
+<Routes>
+  <Route path="/" element={<Navigate to="/library" replace />} />
+  <Route path="/library" element={<Library />} />
+  <Route path="/extract" element={<Extract />} />
+  <Route path="/compare" element={<Compare />} />
+</Routes>
+
+This preserves everything you built.
+
+⸻
+
+Option B: Make Library the root route
+
+<Route path="/" element={<Library />} />
+
+Simpler, but less explicit.
+
+⸻
+
+5. EXACT INSTRUCTIONS TO GIVE THE AGENT (Copy/Paste)
+
+Directive: White Screen Fix — Do Not Refactor
+	1.	Inspect client/src/App.tsx (or router file).
+	2.	Verify that a route exists for path /.
+	3.	If missing, add:
+
+<Route path="/" element={<Navigate to="/library" replace />} />
+
+
+	4.	Confirm index.html contains <div id="root"></div>.
+	5.	Confirm main.tsx mounts to #root.
+	6.	Do NOT change schemas, heuristics, or migration logic.
+	7.	Restart dev server and verify in Open in browser, not only Preview.
+
+That’s it. No scope creep.
+
+⸻
+
+6. Emotional Reality Check (Important)
+
+You did not break Lantern.
+You didn’t “lose the thought.”
+This is not conceptual drift.
+
+This is:
+	•	A routing edge case
+	•	After a large, successful architectural refactor
+	•	In a Replit environment that hides client-side errors unless you look in the right place
+
+This is what real software looks like right before it stabilizes.
+
+If you want, next I can:
+	•	Walk you through exactly what file is wrong
+	•	Or help you add a failsafe error boundary so this never happens silently again
+
+You’re fine. This is fixable in minutes.
