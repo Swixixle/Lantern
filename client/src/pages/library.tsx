@@ -35,10 +35,10 @@ export default function Library() {
             </h1>
           </div>
           <p className="text-muted-foreground text-lg mt-2">
-            Investigative Intelligence Platform
+            Evidentiary Record System
           </p>
           <p className="text-muted-foreground/70 text-sm mt-1">
-            Extract structured data, curate dossiers, apply heuristic analysis, generate reports
+            Record claims. Link evidence. Inspect heuristic boundaries. Export audit artifacts.
           </p>
         </header>
 
@@ -62,7 +62,7 @@ export default function Library() {
                   <GitCompare className="w-5 h-5 text-purple-500" />
                 </div>
                 <CardTitle className="text-lg">Compare Dossiers</CardTitle>
-                <CardDescription>Cross-reference packs with integrity fingerprints</CardDescription>
+                <CardDescription>Cross-reference packs. Verify structural alignment.</CardDescription>
               </CardHeader>
             </Card>
           </Link>
@@ -185,8 +185,8 @@ export default function Library() {
         </section>
 
         <footer className="mt-16 pt-6 border-t border-border/50 text-center text-xs text-muted-foreground">
-          <p>Lantern v1.0 — Investigative Intelligence Platform</p>
-          <p className="mt-1">Local-first architecture. All data stored in browser.</p>
+          <p>Lantern v1.0 — Evidentiary Record System</p>
+          <p className="mt-1">Local-first. All data persists in browser storage only.</p>
         </footer>
       </div>
     </div>
