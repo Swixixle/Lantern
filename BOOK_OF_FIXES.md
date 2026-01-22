@@ -108,6 +108,34 @@ This correctly identifies both v1 and v2 dossier packs for migration.
 
 ---
 
+## Incident 004: Migration Field Transformation (Complete v1→v2)
+
+**Date:** 2026-01-22
+
+### Symptom
+V1 pack acceptance tests failing with Zod validation errors: missing `packType`, `subjectName`, `timestamps` object, and wrong edge field names (`sourceId/targetId` vs `fromEntityId/toEntityId`).
+
+### Root Cause
+Migration logic only handled edge type remapping but not the structural field differences between v1 and v2 schemas.
+
+### Fix Approach
+Enhanced `migratePack()` to perform full field transformations:
+- `createdAt/updatedAt` → `timestamps: { created, updated }`
+- `title` → `subjectName`
+- Added default `packType: "public_figure"`
+- `sourceId/targetId` → `fromEntityId/toEntityId` on edges
+
+### Verification
+- [x] `npm run build` - PASS
+- [x] 57/57 tests pass (11 new v1 pack acceptance tests)
+- [x] v1 packs properly migrate and validate against PackSchema
+
+### Files Changed
+- client/src/lib/migrations.ts (enhanced field transformations)
+- client/src/lib/tests/unit/v1PackMigration.test.ts (new acceptance tests)
+
+---
+
 ## Bookkeeping Standards
 
 For any future incident:

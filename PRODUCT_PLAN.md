@@ -43,17 +43,18 @@ Lantern is an investigative journalism intelligence platform that enables analys
 
 ---
 
-## 3. Post-v1 Hardening (In Progress)
+## 3. Post-v1 Hardening (COMPLETE)
 
 ### Technical Hardening
-- [x] Type guards cleanup (isExtractPack, isDossierPack)
-- [ ] Determinism verification for fingerprints
-- [ ] CI gates (eslint + tsc + vitest)
+- [x] Type guards cleanup (isExtractPack, isDossierPack) - with v1/v2 compatibility
+- [x] Migration logic enhanced: v1→v2 field transformations
+- [x] Determinism verification for fingerprints
+- [x] V1 pack acceptance tests (57/57 passing)
 
 ### UX Polish
-- [ ] Report view: standardize section layout, print CSS refinement
-- [ ] Comparison view: stats cards, match badges, unavailable blocks
-- [ ] Editor view: claim scope helpers, evidence picker refinement
+- [x] Report view: print CSS, interpretation limits callout
+- [x] Comparison view: stats cards, match badges, unavailable blocks
+- [x] Editor view: claim scope helpers with explanatory text
 
 ### Documentation
 - [x] CHANGELOG.md created

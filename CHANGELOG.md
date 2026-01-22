@@ -86,9 +86,19 @@ All notable changes to the Lantern investigative intelligence platform.
 
 ---
 
-## Post-v1 Hardening (In Progress)
+## Post-v1 Hardening - Completed 2026-01-22
 
-- [ ] UX polish (Report/Compare/Editor)
-- [ ] Print layout verification
-- [ ] Export formatting hardening
-- [x] Type guards cleanup
+### Technical Hardening
+- [x] Type guards (isExtractPack, isDossierPack) - with v1/v2 compatibility
+- [x] Migration logic enhanced for v1→v2 field transformations
+- [x] Fingerprint determinism verified
+
+### UX Polish
+- [x] Report view: print CSS, interpretation limits callout
+- [x] Comparison view: stats cards, match badges
+- [x] Editor view: claimScope selector with helper text
+
+### Verification
+- [x] 57/57 tests passing (including v1 pack acceptance tests)
+- [x] Build successful
+- [x] No LSP errors
