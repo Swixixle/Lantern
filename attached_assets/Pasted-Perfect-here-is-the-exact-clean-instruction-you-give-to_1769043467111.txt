@@ -1,0 +1,155 @@
+Perfect — here is the exact, clean instruction you give to the agent.
+This is written so it protects the work, avoids scope creep, and produces a portable snapshot you can hand to other models without explanation.
+
+You can paste this verbatim.
+
+⸻
+
+DIRECTIVE TO AGENT: GENERATE LANTERN SYSTEM SNAPSHOT
+
+Objective
+Produce a portable, human-readable snapshot of the Lantern application suitable for external review by other AI systems (e.g., Grok, Gemini) and human experts.
+
+This snapshot is not code, not marketing, and not a tutorial.
+It is an explanatory artifact that captures structure, function, and epistemic posture.
+
+⸻
+
+1. Create a Markdown File
+
+Filename:
+
+LANTERN_SYSTEM_SNAPSHOT.md
+
+
+⸻
+
+2. Required Sections (Do Not Omit)
+
+A. What This System Is
+	•	One concise paragraph
+	•	Emphasize:
+	•	Evidentiary analysis
+	•	Court-defensible posture
+	•	No automatic conclusions
+	•	Human-in-the-loop curation
+
+B. What This System Is NOT
+	•	Explicitly list exclusions:
+	•	Not generative truth
+	•	Not predictive
+	•	Not recommender
+	•	Not verdict-issuing
+
+C. Core Objects & Schemas
+	•	Extract Pack
+	•	Dossier Pack (v2+)
+	•	Report Snapshot
+	•	Comparison Report
+	•	Include discriminator fields used in the codebase
+
+D. System Flow (Stepwise)
+Describe the lifecycle from:
+	•	Upload → Extract → Dossier → Heuristics → Report → Export
+
+Plain language only. No implementation details.
+
+E. Heuristic Lenses
+For each:
+	•	Influence Hubs
+	•	Funding Gravity
+	•	Enforcement Map
+	•	Sensitivity / Robustness
+
+Include:
+	•	What it measures
+	•	Minimum evidence thresholds
+	•	“Insufficient data” behavior
+
+F. Safety & Epistemic Controls
+Include:
+	•	Claim scope (utterance vs content)
+	•	Migration logs
+	•	Interpretation limits
+	•	Evidence density thresholds
+
+G. Integrity & Auditability
+Explain:
+	•	Report fingerprinting (SHA-256)
+	•	Comparison fingerprinting
+	•	Non-auto-updating snapshots
+	•	Why this matters legally and journalistically
+
+H. Intended Use Cases
+	•	Investigative journalism
+	•	Legal review
+	•	Historical analysis
+	•	Adversarial inquiry
+
+⸻
+
+3. Include a Visual Inventory (No Images Embedded)
+
+Add a section titled:
+
+## Visual Surfaces (Referenced)
+
+List exactly which UI screens exist, e.g.:
+	•	Library View
+	•	Dossier Editor
+	•	Report View
+	•	Comparison View
+
+No screenshots embedded — just names and purposes.
+
+⸻
+
+4. Tone Requirements
+	•	Procedural
+	•	Sober
+	•	Non-promotional
+	•	No metaphors
+	•	No philosophical flourishes
+
+This is a systems document, not a manifesto.
+
+⸻
+
+5. Explicitly Do NOT
+	•	Do not include source code
+	•	Do not include implementation files
+	•	Do not speculate on future features
+	•	Do not claim AI autonomy
+	•	Do not anthropomorphize the system
+
+⸻
+
+6. Deliverable
+
+Return only the contents of LANTERN_SYSTEM_SNAPSHOT.md.
+
+No commentary.
+
+⸻
+
+END DIRECTIVE
+
+⸻
+
+Why this matters (for you)
+
+This snapshot lets you:
+	•	Hand Lantern to Grok, Gemini, or a human expert
+	•	Ask what it is, not what it should be
+	•	Detect misinterpretation instantly
+	•	Preserve the integrity of your work
+
+You’re not asking them to judge you.
+You’re asking them to interrogate a bounded epistemic machine.
+
+If you want next:
+	•	I can pre-write the snapshot so the agent just verifies it
+	•	Or help you craft different prompts for Grok vs Gemini
+	•	Or design a one-page “How to Use” tutorial that lives behind the hamburger menu without corrupting the core
+
+Just say the word.
