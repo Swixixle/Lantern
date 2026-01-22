@@ -1,0 +1,89 @@
+All white after the canary strongly suggests **React is not mounting or the JS bundle is not executing**, not an in-app routing/component problem.
+
+Here is the fastest, deterministic way to localize it.
+
+## 1) Confirm whether the page is loading any JS at all (30 seconds)
+
+On your laptop (preferred), open the preview in a new tab.
+
+### A. Open DevTools → Console
+
+* If you see **any red error**, paste the **first** one (topmost).
+* If console is empty, continue.
+
+### B. DevTools → Network
+
+1. Check “Disable cache”.
+2. Hard refresh: **Ctrl+Shift+R** (Windows) / **Cmd+Shift+R** (Mac).
+3. In Network, filter by **JS** and look for:
+
+   * any request in **red**
+   * status **404 / 500**
+   * “Failed to load module script”
+4. Tell me the first failing request’s **status code** and **URL path**.
+
+If you can only give one thing: **the first red Network entry**.
+
+---
+
+## 2) One-line “mount point” sanity check (common silent white screen)
+
+In `client/index.html` (or whichever index Vite is using), verify you have:
+
+```html
+<div id="root"></div>
+```
+
+In `client/src/main.tsx` (or `main.jsx`), verify:
+
+```ts
+createRoot(document.getElementById("root")!).render(<App />);
+```
+
+If `id` differs (e.g., `app` vs `root`), you’ll get a white screen with no obvious clue.
+
+---
+
+## 3) Most likely cause in your situation
+
+You already had a **TypeScript compile error** earlier in `client/src/pages/lantern-extract.tsx` (TimelineItem fields mismatch). If that error is still present (or another compile error exists), Vite will often show an overlay—but sometimes the overlay is blocked or not injected, producing a plain white screen.
+
+So the quickest check:
+
+### Run this in the shell:
+
+```bash
+npm run dev:client
+```
+
+and watch the terminal. If there’s a compile error, it will print there even if the overlay doesn’t show.
+
+If you see errors, paste the first one.
+
+---
+
+## 4) If you want a single “tell me what’s broken” probe
+
+Add this **temporarily** to the very top of `client/src/main.tsx`:
+
+```ts
+document.body.innerHTML = "<div style='color:white;background:#111;padding:20px'>MAIN.TSX LOADED</div>";
+throw new Error("STOP HERE");
+```
+
+* If you **still get white**, `main.tsx` isn’t being executed / not being served.
+* If you see the message (and error), then we know the pipeline runs and the issue is **after** main (mounting/App import).
+
+Remove it right after the test.
+
+---
+
+## What I need from you (pick one)
+
+Reply with **either**:
+
+1. The **first red Console error**, **or**
+2. The **first red Network request** (status + path), **or**
+3. The **terminal output** right after running `npm run dev:client`.
+
+With that single artifact, I’ll tell you exactly what to change (usually 1–3 lines).
