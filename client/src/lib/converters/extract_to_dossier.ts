@@ -37,6 +37,7 @@ export function createDossierFromExtract(
     edges: [],
     evidence: [],
     claims: [],
+    migrationLog: [],
     sourceExtractPackId: extract.pack_id
   };
 
@@ -125,6 +126,7 @@ export function createDossierFromExtract(
       id: claimId,
       text: claimText,
       claimType: "fact", // Fact of utterance
+      claimScope: "utterance", // This is about what was said, not its truth
       confidence: speaker === "Unknown speaker" ? 0.7 : 0.9,
       evidenceIds: [evidenceId, sourceEvidenceId], // Link to quote + source doc
       counterEvidenceIds: [],
@@ -156,6 +158,7 @@ export function createDossierFromExtract(
         id: claimId,
         text: `Metric: ${m.value} ${m.unit} (${m.metric_kind})`,
         claimType: "fact",
+        claimScope: "content", // Metric is about the value itself
         confidence: m.confidence || 0.8,
         evidenceIds: [sourceEvidenceId],
         counterEvidenceIds: [],

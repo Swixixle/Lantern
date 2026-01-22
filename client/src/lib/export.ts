@@ -1,5 +1,17 @@
+import { Pack, Entity } from "./schema/pack_v1";
+import { 
+    InfluenceHubsFinding, 
+    FundingGravityFinding, 
+    EnforcementMapFinding,
+    InfluenceHubResult,
+    FunderStat,
+    RecipientStat,
+    EnforcerStat,
+    TargetStat
+} from "./heuristics/types";
+
 // Hardening Helper
-const safeStr = (str: string) => {
+const safeStr = (str: string): string => {
     // Escape pipes, backticks, etc.
     return str.replace(/\|/g, "\\|").replace(/`/g, "\\`");
 };
@@ -64,8 +76,8 @@ generatedBy: Lantern Protocol
         } else if (findings.influence.results.length > 0) {
             md += `| Rank | Entity | Degree | Citations |\n`;
             md += `|------|--------|--------|-----------|\n`;
-            findings.influence.results.slice(0, 10).forEach((res, i) => {
-                const entity = pack.entities.find(e => e.id === res.entityId);
+            findings.influence.results.slice(0, 10).forEach((res: InfluenceHubResult, i: number) => {
+                const entity = pack.entities.find((e: Entity) => e.id === res.entityId);
                 md += `| ${i+1} | ${safeStr(entity?.name || "Unknown")} | ${res.degree} | ${res.supportingEdgeIds.length} |\n`;
             });
             md += `\n`;
@@ -80,15 +92,15 @@ generatedBy: Lantern Protocol
              md += `> **Insufficient Data:** This section requires at least ${findings.funding.threshold} verified funding relationships. Current count: ${findings.funding.processedCount}.\n\n`;
         } else if (findings.funding.concentration) {
             md += `### Top Funders\n`;
-            findings.funding.funders.slice(0, 5).forEach((f, i) => {
-                const entity = pack.entities.find(e => e.id === f.entityId);
+            findings.funding.funders.slice(0, 5).forEach((f: FunderStat, i: number) => {
+                const entity = pack.entities.find((e: Entity) => e.id === f.entityId);
                 md += `${i+1}. **${safeStr(entity?.name || "Unknown")}** (${f.outgoingFundingEdges} Out)\n`;
             });
             md += `\n`;
 
             md += `### Top Recipients\n`;
-            findings.funding.recipients.slice(0, 5).forEach((r, i) => {
-                const entity = pack.entities.find(e => e.id === r.entityId);
+            findings.funding.recipients.slice(0, 5).forEach((r: RecipientStat, i: number) => {
+                const entity = pack.entities.find((e: Entity) => e.id === r.entityId);
                 md += `${i+1}. **${safeStr(entity?.name || "Unknown")}** (${r.incomingFundingEdges} In)\n`;
             });
             md += `\n`;
@@ -106,15 +118,15 @@ generatedBy: Lantern Protocol
              md += `> **Insufficient Data:** This section requires at least ${findings.enforcement.threshold} verified enforcement events. Current count: ${findings.enforcement.processedCount}.\n\n`;
         } else if (findings.enforcement.enforcers.length > 0) {
             md += `### Enforcers (Active)\n`;
-            findings.enforcement.enforcers.slice(0, 5).forEach((e, i) => {
-                const entity = pack.entities.find(ent => ent.id === e.entityId);
+            findings.enforcement.enforcers.slice(0, 5).forEach((e: EnforcerStat, i: number) => {
+                const entity = pack.entities.find((ent: Entity) => ent.id === e.entityId);
                 md += `- **${safeStr(entity?.name || "Unknown")}**: ${e.enforcementActions} Actions\n`;
             });
             md += `\n`;
 
             md += `### Targets (Passive)\n`;
-            findings.enforcement.targets.slice(0, 5).forEach((t, i) => {
-                const entity = pack.entities.find(ent => ent.id === t.entityId);
+            findings.enforcement.targets.slice(0, 5).forEach((t: TargetStat, i: number) => {
+                const entity = pack.entities.find((ent: Entity) => ent.id === t.entityId);
                 md += `- **${safeStr(entity?.name || "Unknown")}**: ${t.targetedActions} In\n`;
             });
             md += `\n`;
