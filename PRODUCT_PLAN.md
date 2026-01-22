@@ -61,6 +61,11 @@ Lantern is an investigative journalism intelligence platform that enables analys
 - [x] BOOK_OF_FIXES.md created (incident tracking)
 - [x] PRODUCT_PLAN.md updated
 
+### IA/Entry Route
+- [x] Root route `/` → Library (investigative Lantern landing)
+- [x] Legacy dashboard moved to `/legacy`
+- [x] Quick nav: Library, Extract, Compare
+
 ---
 
 ## 4. Architecture Decision Record

@@ -1,0 +1,101 @@
+Good — the rep agent’s acceptance checklist is now substantive (migration field transforms + 57 tests + bookkeeping artifacts). That resolves the “silent data-loss” class.
+
+But your screenshots are still a blocking issue for publishing, because they show the app booting into a different product narrative (“Sovereignty Navigation System” finance dashboard) instead of the dossier/heuristics tool we built. That is a home-route / IA problem, not a test problem.
+
+Below are the missing instructions you asked me to include (re: screenshots), plus the final “publish-ready” directive you can paste to the rep agent.
+
+⸻
+
+Screenshot Issue: What to do (Required before publish)
+
+What we see in screenshots
+	•	Landing shows LAN­TERN — Sovereignty Navigation System v1.0
+	•	Finance metrics: Target savings, burn, cashflow curve, home buy phase
+	•	Bottom nav: Dashboard / Core / Extract
+	•	This is not the investigative Lantern (Extract → Dossier → Heuristics → Report → Compare)
+
+Root cause (almost certainly)
+
+The root route / is pointing to the wrong component (likely Dashboard) which contains the finance UI.
+
+Required fix
+
+Make the investigative Lantern the default entry point, and move the sovereignty dashboard to a legacy route.
+
+Acceptance criteria (UI)
+On load (/):
+	•	User sees Library / Extract entry for investigative workflow
+	•	Clear primary actions: New Extract, Open Dossier, Compare
+	•	No finance language, no “home buy”, no “sovereignty curve”
+
+⸻
+
+Copy/paste Replit directive to rep agent (includes “books” + usability + screenshot fix)
+
+Directive: Post-M12 Stabilization Finalization — Route Identity + IA
+
+Context: All 57 tests passing; migration + bookkeeping done; workflow running. Screenshots reveal wrong landing UI (“Sovereignty Navigation System”). Fix routing/IA to present the correct product.
+
+1) Fix the app’s identity at the root route
+	•	Open client/src/App.tsx.
+	•	Ensure / routes to the investigative Lantern entrypoint (choose one):
+	•	Preferred: a Library page (lists packs + “New Extract” + “Compare”)
+	•	Acceptable for v1: route / → LanternExtract (start-here workflow)
+	•	Move the sovereignty dashboard component off /:
+	•	Route it to /legacy or /sovereignty if you want to keep it
+	•	Or remove it if it’s not part of Lantern v1
+
+2) Add an Investigative “Home / Library” page if missing (recommended)
+
+Create client/src/pages/library.tsx (or similar):
+	•	Sections:
+	•	Extracts (schema: lantern.extract.pack.v1)
+	•	Dossiers (schemaVersion: 2, migrated)
+	•	Actions:
+	•	“New Extract” → /extract (or the extract route)
+	•	“Open” dossier → /dossier/:id
+	•	“Report” → /dossier/:id/report
+	•	“Compare” → /compare
+	•	Show counts + last updated timestamp if available.
+
+3) Usability / Look requirement
+	•	The landing page must match the visual system of Report/Editor/Compare:
+	•	same typography scale
+	•	consistent cards
+	•	consistent button variants
+	•	No mixed product language (don’t say “Sovereignty” if the app is Lantern investigative).
+
+4) Books (bookkeeping) update
+
+Add a final entry to:
+	•	CHANGELOG.md: “Fixed root route identity; added Library landing; demoted legacy dashboard”
+	•	PRODUCT_PLAN.md: “Post-v1 Hardening: IA/Entry route corrected”
+	•	BOOK_OF_FIXES.md: new incident if needed: “Incident: wrong landing route / product identity mismatch” (symptoms + fix + verification)
+
+5) Verification gates (must rerun)
+	•	npm run build
+	•	npx vitest run
+	•	Manual:
+	•	Load / → shows investigative Lantern landing
+	•	Navigate to Extract → promote → dossier editor → heuristics → report → print preview → markdown export
+	•	Compare → fingerprint displayed → markdown export
+	•	Confirm no finance dashboard appears unless visiting /legacy (if preserved)
+
+Deliverable format
+
+Reply with:
+	•	Files changed
+	•	Proof: screenshot of / showing correct investigative landing
+	•	Test + build outputs
+	•	Note whether /legacy exists
+
+⸻
+
+Decision right now
+
+Engineering-wise: publish-ready (migration + integrity + tests + books).
+Product-wise: not publish-ready until the landing page matches the correct Lantern.
+
+If you want the cleanest positioning: make / the Library. That’s where Lantern “feels real” instantly.
+
+If you paste the directive above to the rep agent, you’ll get the final alignment between what you built and what you see.

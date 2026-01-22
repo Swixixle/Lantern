@@ -102,3 +102,23 @@ All notable changes to the Lantern investigative intelligence platform.
 - [x] 57/57 tests passing (including v1 pack acceptance tests)
 - [x] Build successful
 - [x] No LSP errors
+
+---
+
+## Route Identity Fix - 2026-01-22
+
+### Changed
+- Root route (`/`) now shows **Library** page (investigative Lantern entrypoint)
+- Legacy "Sovereignty" dashboard moved to `/legacy`
+- Quick nav updated: Library, Extract, Compare
+
+### Added
+- `client/src/pages/library.tsx` - New landing page with:
+  - Extract packs section (schema: lantern.extract.pack.v1)
+  - Dossier packs section (schemaVersion: 2)
+  - Quick actions: New Extract, Compare Dossiers
+  - Stats and timestamps for each pack
+
+### Why
+Screenshots showed wrong product identity ("Sovereignty Navigation System" instead of investigative Lantern).
+User must see the correct investigative workflow on landing.

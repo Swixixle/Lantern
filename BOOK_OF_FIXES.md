@@ -136,6 +136,35 @@ Enhanced `migratePack()` to perform full field transformations:
 
 ---
 
+## Incident 005: Wrong Landing Route / Product Identity
+
+**Date:** 2026-01-22
+
+### Symptom
+Screenshots showed "Sovereignty Navigation System" finance dashboard (home buying, savings curves) at root route instead of investigative Lantern.
+
+### Root Cause
+`/` routed to `Dashboard` component (sovereignty finance app) instead of the investigative Lantern.
+
+### Fix Approach
+1. Created `client/src/pages/library.tsx` as investigative Lantern landing page
+2. Updated `App.tsx` routing:
+   - `/` → Library (extracts + dossiers listing)
+   - `/legacy` → Dashboard (preserves old finance app)
+3. Updated quick nav to show Library, Extract, Compare
+
+### Verification
+- [x] `npm run build` - PASS
+- [x] 57/57 tests pass
+- [x] `/` loads Library with investigative workflow actions
+- [x] No finance language on landing
+
+### Files Changed
+- client/src/pages/library.tsx (new)
+- client/src/App.tsx (routing update)
+
+---
+
 ## Bookkeeping Standards
 
 For any future incident:
