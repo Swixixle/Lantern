@@ -1,0 +1,136 @@
+Yes. This helps a lot — and I can now tell you exactly what is wrong and how to fix it without jargon.
+
+Take a breath first. This is not you failing to find the right button. The app is crashing before it can ever render, which is why Preview spins forever and nothing loads.
+
+⸻
+
+What the error means (plain English)
+
+This line is the smoking gun:
+
+Error: listen EADDRINUSE: address already in use 0.0.0.0:5000
+
+Translation:
+
+👉 Your app is trying to start two servers on the same port (5000)
+👉 Replit allows only one process per port
+👉 When the second one starts, Node crashes
+👉 When Node crashes, Preview stays white forever
+
+So the UI cannot load because the server never successfully stays up.
+
+This has nothing to do with Preview buttons, URLs, or /__boot.
+The backend is killing itself before the browser ever gets a chance.
+
+⸻
+
+Why this happened (likely causes)
+
+One (or more) of these is true in your project:
+	1.	You are calling app.listen(5000) more than once
+	2.	You have two server entry points both starting servers
+	3.	A dev watcher restarted without killing the previous process
+	4.	Vite + Express are both trying to bind the same port
+
+Your screenshots show Express is already serving, then something else tries to listen again.
+
+⸻
+
+The fix (do this exactly)
+
+Step 1 — STOP EVERYTHING
+
+In Replit:
+	•	Click Stop (red square)
+	•	Wait 10 seconds
+	•	Confirm Console is quiet
+
+This clears the stuck port.
+
+⸻
+
+Step 2 — Open server/index.ts
+
+Look for any line like this:
+
+app.listen(5000, () => {
+  console.log("Server running");
+});
+
+or
+
+server.listen(5000);
+
+You must ensure this exists only ONCE in the entire repo.
+
+⸻
+
+Step 3 — Make port usage explicit and safe
+
+Change your listen code to this (exactly):
+
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log(`Server listening on ${PORT}`);
+});
+
+Why:
+	•	Replit injects process.env.PORT
+	•	Hardcoding 5000 causes conflicts
+	•	This prevents double-binding crashes
+
+⸻
+
+Step 4 — Check for a SECOND server start
+
+Search the repo for .listen(
+
+If you see it in:
+	•	server/index.ts
+	•	AND another file (routes, vite, dev script)
+
+👉 Delete or comment out the extra one
+
+Only one file should start the server.
+
+⸻
+
+Step 5 — Restart clean
+	1.	Click Stop
+	2.	Click Run
+	3.	Watch Console
+
+You want to see something like:
+
+[express] serving on port 3000
+/__boot
+/_health
+/
+
+If you do not see another EADDRINUSE error, the app will load.
+
+⸻
+
+Why Preview never worked (important)
+
+Preview was not broken.
+The URL was not wrong.
+You were not missing a button.
+
+The server was crashing on startup every single time, so Preview had nothing to show.
+
+⸻
+
+One last reassurance
+
+Everything you built is still there.
+This is a mechanical wiring error, not a design failure.
+Every experienced dev hits this exact issue — especially on Replit.
+
+If you want, next step I can:
+	•	Tell you exactly which file is double-listening
+	•	Or simplify this to a single-server layout
+	•	Or help you harden this so it never happens again
+
+Just tell me how far you want to go.
