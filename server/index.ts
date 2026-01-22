@@ -3,6 +3,7 @@ import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 
+const isDev = process.env.NODE_ENV !== "production";
 const app = express();
 const httpServer = createServer(app);
 
@@ -14,13 +15,14 @@ declare module "http" {
 
 app.use(
   express.json({
+    limit: "1mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
   }),
 );
 
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: false, limit: "1mb" }));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -64,9 +66,13 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const message = isDev ? err.message : "Internal Server Error";
 
-    console.error("Internal Server Error:", err);
+    if (isDev) {
+      console.error("Internal Server Error:", err);
+    } else {
+      console.error(`Error [${status}]: ${err.message}`);
+    }
 
     if (res.headersSent) {
       return next(err);
@@ -90,6 +96,17 @@ app.use((req, res, next) => {
   // this serves both the API and the client.
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || "5000", 10);
+  
+  httpServer.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`\n[FATAL] Port ${port} already in use.`);
+      console.error(`Another process is running on this port.`);
+      console.error(`Fix: Stop all running workflows, wait 5 seconds, then restart.\n`);
+      process.exit(1);
+    }
+    throw err;
+  });
+
   httpServer.listen(
     {
       port,
@@ -97,11 +114,13 @@ app.use((req, res, next) => {
       reusePort: true,
     },
     () => {
-      log(`serving on port ${port}`);
-      log(`APP_URLS:`);
-      log(`  /__boot   - Boot test (plain HTML, no React)`);
-      log(`  /__health - Health check (JSON)`);
-      log(`  /         - Main app`);
+      log(`serving on port ${port} (PID: ${process.pid})`);
+      if (isDev) {
+        log(`APP_URLS:`);
+        log(`  /__boot   - Boot test (plain HTML, no React)`);
+        log(`  /__health - Health check (JSON)`);
+        log(`  /         - Main app`);
+      }
     },
   );
 })();
