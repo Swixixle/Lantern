@@ -1,0 +1,197 @@
+Below is a clean, unambiguous directive you can give directly to the agent.
+It does two things:
+	1.	Clearly instructs the agent what to build and what not to build
+	2.	Forces the agent to return a full map of the system so you can verify nothing is drifting, bloating, or mutating intent
+
+This is written in governance / systems language, not vibes.
+
+⸻
+
+DIRECTIVE TO AGENT
+
+Subject: Add “How Lantern Works” Reference + Produce System Map
+
+Objective
+
+Add a non-intrusive, reference-only “How Lantern Works” section to the UI without altering Lantern’s epistemic posture, workflows, or analytical constraints.
+
+In parallel, produce a complete system map documenting how Lantern currently works end-to-end.
+
+This is a clarification and protection task, not a feature expansion.
+
+⸻
+
+PART 1 — “HOW LANTERN WORKS” REFERENCE PANEL
+
+Placement
+	•	Add a hamburger menu (☰) item labeled “How Lantern Works”
+	•	This must not appear in the primary workflow, editor, or report surface
+	•	It must be accessible but optional
+
+⸻
+
+Nature of the Content
+
+This section is a reference manual, not onboarding.
+
+It must:
+	•	Explain method, limits, and safeguards
+	•	Reduce misinterpretation
+	•	Teach restraint, not capability
+
+It must not:
+	•	Guide users toward conclusions
+	•	Encourage analysis
+	•	Simplify or gamify
+	•	Introduce step-by-step “success paths”
+
+Think: laboratory manual, legal appendix, instrument documentation.
+
+⸻
+
+Required Sections (Exact)
+
+1. What Lantern Is (and Is Not)
+	•	Declarative statements only
+	•	Explicitly state:
+	•	Lantern records claims and evidence
+	•	Lantern applies bounded heuristics
+	•	Lantern does not determine truth, intent, or guilt
+	•	Lantern may refuse analysis when evidence is insufficient
+
+2. Core Concepts
+Define clearly and minimally:
+	•	Extract Pack
+	•	Dossier
+	•	Entity
+	•	Claim
+	•	Claim Scope (Utterance vs Content)
+	•	Evidence
+	•	Heuristic
+
+No metaphors. No examples beyond one sentence if needed.
+
+3. Heuristics (With Limits)
+For each heuristic:
+	•	Influence Hubs
+	•	Funding Gravity
+	•	Enforcement Map
+	•	Sensitivity / Robustness
+
+Each must include:
+	•	What it measures
+	•	What it explicitly does not imply
+
+4. Limits & Safeguards
+Explain:
+	•	Evidence density thresholds
+	•	“Insufficient Data” gating
+	•	Migration logs
+	•	Sensitivity checks
+	•	Comparison sufficiency rules
+	•	Cryptographic fingerprints
+
+Emphasize that refusal is correct behavior.
+
+5. Responsible Use
+State plainly:
+	•	Lantern is an evidentiary record, not an accusation engine
+	•	Outputs require interpretation under scrutiny
+	•	Misuse is outside system intent
+
+⸻
+
+Visual / UX Constraints
+	•	Neutral styling only
+	•	No animations
+	•	No progress indicators
+	•	No calls to action
+	•	Scroll-based reading is acceptable
+	•	This panel should feel boring on purpose
+
+⸻
+
+PART 2 — REQUIRED SYSTEM MAP (MANDATORY)
+
+In addition to implementing the UI reference panel, the agent must produce a written system map delivered as a document or markdown file.
+
+The Map Must Include:
+
+A. High-Level Architecture
+	•	Pages and routes
+	•	Major modules
+	•	Data flow between them
+
+B. Data Lifecycle
+	•	Extract → Dossier → Analysis → Report → Export
+	•	Where migrations occur
+	•	Where integrity checks occur
+	•	Where refusal / gating occurs
+
+C. Schema & Versioning
+	•	All pack types
+	•	Discriminators used
+	•	Migration strategy
+	•	Backward compatibility handling
+
+D. Heuristic Pipeline
+For each heuristic:
+	•	Inputs
+	•	Thresholds
+	•	Outputs
+	•	Failure modes
+
+E. Integrity & Safety Layers
+	•	Report fingerprinting
+	•	Comparison fingerprinting
+	•	Migration logs
+	•	Sensitivity analysis
+
+F. UX Boundaries
+Explicitly list:
+	•	What users can do
+	•	What users cannot do
+	•	Where Lantern refuses action
+
+⸻
+
+Output Requirements for the Map
+	•	Plain language
+	•	Structured sections
+	•	No marketing tone
+	•	Must be suitable for:
+	•	internal audit
+	•	legal review
+	•	future maintainers
+
+⸻
+
+Acceptance Criteria (Non-Negotiable)
+
+The task is complete only when:
+	•	“How Lantern Works” exists and does not alter workflows
+	•	No new analytical capability is added
+	•	No heuristics are loosened
+	•	The system map fully reflects the current implementation
+	•	You (the human) can read the map and say:
+“Yes, this matches what we built.”
+
+⸻
+
+Framing Reminder (for the agent)
+
+Lantern is not a tool for persuasion.
+It is a measuring instrument for evidentiary overreach.
+
+Clarity protects the system.
+Ambiguity invites abuse.
+
+⸻
+
+If you want, next I can:
+	•	Write the exact copy for each tutorial section
+	•	Review the system map the agent returns and sanity-check it
+	•	Help you decide whether this reference should be exportable / printable
+	•	Or help you lock Lantern into a posture that courts, journalists, or historians can understand
+
+Just tell me where to focus.
