@@ -1,6 +1,25 @@
 # LANTERN UX GOVERNANCE
 
-**Role Definition**: Lantern is an investigative intelligence instrument, not a productivity app, dashboard, planner, or assistant.
+> **Lantern is an Evidentiary Record System, not an insight engine.**
+>
+> All UI language must:
+> - Describe process, not conclusions
+> - Surface constraints, not confidence
+> - Preserve traceability over persuasion
+>
+> The system must never:
+> - Assert truth
+> - Hide insufficiency
+> - Collapse distinction between utterance and fact
+> - Produce outputs that cannot survive adversarial review
+>
+> If a feature cannot be explained as:
+> *"What was recorded, under what constraints, with what limits"*
+> it does not belong in Lantern.
+
+---
+
+**Role Definition**: Lantern is an evidentiary record system, not a productivity app, dashboard, planner, or assistant.
 
 Lantern's purpose is **epistemic containment**:
 - To record claims
