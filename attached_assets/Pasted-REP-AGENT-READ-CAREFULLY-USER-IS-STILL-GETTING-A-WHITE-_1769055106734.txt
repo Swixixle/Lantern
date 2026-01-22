@@ -1,0 +1,147 @@
+REP AGENT — READ CAREFULLY. USER IS STILL GETTING A WHITE SCREEN EVEN IN “OPEN IN NEW TAB.” STOP CLAIMING “FIXED” UNTIL WE HAVE HARD EVIDENCE.
+
+0) Define the failure precisely
+
+Symptom: Blank white page in Replit Preview and also in external (“new tab”) URL. That means either JS isn’t executing or app crashes immediately or assets aren’t loading.
+
+We need diagnostics first, then fix. Do not edit blindly.
+
+⸻
+
+1) Collect the minimum proof pack (NON-NEGOTIABLE)
+
+Have the user do this in the external tab (not the embedded preview):
+
+A) Open DevTools
+	•	Mac: Cmd + Option + I
+	•	Go to Console
+	•	Screenshot whatever is there (errors/warnings)
+
+B) Network check
+	•	DevTools → Network
+	•	Hard refresh: Cmd+Shift+R
+	•	In Network search filter box type: main and vite
+	•	We need to know:
+	•	Is @vite/client loading (Status 200)?
+	•	Is src/main.tsx (or main.ts) loading (Status 200)?
+	•	Any 404, 500, blocked, CORS, MIME type errors?
+
+C) View Source sanity check
+	•	Right click page → View Page Source
+	•	Confirm we see: <div id="root"></div>
+	•	Confirm the dev script is present:
+	•	Vite dev usually injects scripts; if you’re serving built assets, you should see /assets/*.js
+
+Agent: DO NOT PROCEED until you have either console output or network status.
+
+⸻
+
+2) Add an unmistakable “BOOT PROBE” (so we know where it dies)
+
+Make these changes now; they’re safe and reversible.
+
+A) index.html (root of project)
+
+Add inside <body> above the root div:
+
+<div id="boot-probe" style="position:fixed;top:8px;left:8px;z-index:9999;color:#0f0;background:#000;padding:6px 8px;font:12px monospace;">
+  BOOT-PROBE: index.html loaded
+</div>
+
+B) client/src/main.tsx (or wherever React mounts)
+
+At the very top:
+
+console.log("BOOT-PROBE: main.tsx executed");
+
+After the createRoot(...).render(...) call:
+
+console.log("BOOT-PROBE: React render called");
+
+Interpretation
+	•	If user sees the green “BOOT-PROBE” box but no console logs → JS bundle not loading.
+	•	If console logs appear but UI blank → React crash or CSS hiding everything.
+	•	If neither appears → wrong server route / wrong HTML being served.
+
+⸻
+
+3) Confirm server is actually serving the right thing (Replit specifics)
+
+In Replit Shell, run:
+
+curl -I http://localhost:5000
+curl -s http://localhost:5000 | head -n 40
+
+We need to see:
+	•	200 OK
+	•	HTML contains id="root" and our BOOT-PROBE text
+
+If it doesn’t, you are not serving the React app at /.
+
+⸻
+
+4) The top 5 actual causes (fix in this order)
+
+Cause 1: Wrong port / host binding
+
+Ensure dev server binds correctly:
+	•	If Vite is used, set:
+
+// vite.config.ts
+export default defineConfig({
+  server: { host: true, port: 5000, strictPort: true },
+});
+
+And ensure Replit starts the correct command.
+
+Cause 2: Serving dist but running dev code (or vice versa)
+
+Pick ONE mode:
+
+Dev mode
+	•	Start Vite dev server and do NOT serve dist.
+
+Prod mode
+	•	Build to dist and serve dist from Express.
+	•	Ensure Express has:
+	•	app.use(express.static(distPath))
+	•	app.get("*", send index.html) for SPA routing
+
+Cause 3: MIME type / module loading error
+
+If Network shows JS requests returning HTML, you’ll get:
+	•	“Failed to load module script… MIME type text/html”
+Fix your static routing. Your assets path is wrong.
+
+Cause 4: React Router basename / bad route redirect loop
+
+If you have Router misconfigured you can get blank.
+	•	Temporarily render a plain <div>Router bypass OK</div> to confirm.
+
+Cause 5: Runtime exception
+
+If Console shows an exception, fix that exact line first. Do not refactor.
+
+⸻
+
+5) Output requirement (what you must report back)
+
+Reply with:
+	1.	External tab Console screenshot
+	2.	External tab Network screenshot filtered for main/vite
+	3.	Result of:
+	•	curl -I localhost:5000
+	•	first 40 lines of curl -s localhost:5000
+	4.	Whether “BOOT-PROBE: index.html loaded” box appears
+
+Only then propose the fix. Anything else is guessing.
+
+⸻
+
+Note to user (do not gaslight)
+
+Tell the user explicitly:
+	•	“Passing tests does not prove the browser bundle is loading.”
+	•	“White screen means frontend boot is failing; we’re going to instrument and prove where.”
+
+That’s the directive.
