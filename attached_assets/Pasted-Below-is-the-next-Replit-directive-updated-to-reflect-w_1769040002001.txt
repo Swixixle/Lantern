@@ -1,0 +1,163 @@
+Below is the next Replit directive, updated to reflect where you are right now and explicitly including bookkeeping (“books”) and usability/look requirements. This is written as an instruction packet you can paste to the rep agent.
+
+⸻
+
+Replit Directive: Post-M12 Stabilization + UX Polish + Bookkeeping Discipline
+
+Context
+
+Lantern is back to a stable running state:
+	•	Build passes, workflow running.
+	•	Corruption in lantern-extract.tsx resolved.
+	•	Explicit schema discriminators are in use:
+	•	Extract pack: schema === "lantern.extract.pack.v1"
+	•	Dossier pack: schemaVersion === 2
+	•	Comparison integrity fingerprints (M12) are implemented.
+	•	All modules M1–M12 are complete.
+
+Objective
+
+Do a stabilization + presentation pass so the tool is:
+	1.	technically defensible (type guards + tests + deterministic hashes) and
+	2.	visually credible (report/compare/editor “looks intentional,” print/export readable), and
+	3.	properly documented (bookkeeping so changes are traceable, reversible, auditable).
+
+⸻
+
+A) BOOKS (Bookkeeping / Change Accounting) — REQUIRED
+
+This is non-negotiable: every edit must be reflected in “the books.”
+
+A1. Add / update these artifacts
+	1.	CHANGELOG.md
+	•	Append an entry for each change set (date + summary + files touched).
+	•	Include “WHY” in one sentence per change (not just “what”).
+	2.	PRODUCT_PLAN.md
+	•	Confirm M1–M12 are checked off.
+	•	Add a new section “Post-v1 Hardening” with sub-items:
+	•	UX polish (Report/Compare)
+	•	Print layout verification
+	•	Export formatting hardening
+	•	Type guards cleanup (done)
+	•	CI gates (optional if no CI)
+	3.	BOOK_OF_FIXES.md (create if missing)
+	•	Purpose: permanent record of high-risk incidents and remediation.
+	•	Add entries for:
+	•	“lantern-extract.tsx corruption incident”
+	•	symptom
+	•	root cause (duplicate import block / pasted code)
+	•	fix approach
+	•	verification gates run (build/tests/manual)
+	•	“type guard upgrade”
+	•	old pattern: "pack_id" in p
+	•	new pattern: explicit schema literals
+
+A2. Bookkeeping rule
+
+For any PR/commit batch:
+	•	list files changed
+	•	list tests run
+	•	list manual checks performed
+	•	note any behavior changes visible to users
+
+⸻
+
+B) TECHNICAL HARDENING — REQUIRED
+
+B1. Centralize type guards
+
+In client/src/lib/storage.ts (or a dedicated client/src/lib/typeGuards.ts), ensure type guards are exported and used consistently:
+	•	isExtractPack(p): p is LanternPack using schema === "lantern.extract.pack.v1"
+	•	isDossierPack(p): p is Pack using schemaVersion === 2
+
+Then update any remaining structural checks across the codebase to use these guards.
+
+B2. Determinism check for integrity hashes
+
+Verify:
+	•	Report fingerprints do not change on refresh unless pack contents or findings change.
+	•	Comparison fingerprints do not change on refresh unless either source fingerprint changes or the comparison result changes.
+
+If fingerprints change on refresh, remove non-canonical fields from hash inputs (timestamps, UI state, etc.).
+
+⸻
+
+C) USABILITY + LOOK (Presentation Hardening) — REQUIRED
+
+This is the part you explicitly asked me not to forget.
+
+C1. Report view polish (dossier-report.tsx)
+
+Goal: report should look like a professional artifact.
+	•	Standardize section layout:
+	1.	Section title
+	2.	One-sentence “what this measures”
+	3.	Content (tables/lists)
+	4.	Receipt footer (counts + threshold status)
+	•	Make “Interpretation Limits” a consistent callout (not a wall of text).
+	•	Ensure “Insufficient Data” blocks are visually distinct and readable.
+	•	Ensure “Robustness & Stability Checks” matches the same visual language (badges + concise explanation).
+	•	Print CSS:
+	•	ensure nav/buttons are hidden (print:hidden)
+	•	ensure tables wrap, don’t overflow
+	•	ensure margins and typography look good in print preview
+
+C2. Comparison view polish (dossier-comparison.tsx)
+
+Goal: comparison should be scannable and not imply identity certainty.
+	•	Pack selectors must be visually clear (“Pack A” vs “Pack B”).
+	•	Show top-level comparison stats in a row of cards:
+	•	overlap count
+	•	Jaccard %
+	•	alignment count (only for sufficient heuristics)
+	•	Shared entity table must include:
+	•	match badge: Exact ID vs Name Match
+	•	explicit warning note for Name Match (“potential match; verify manually”)
+	•	Add “Analysis Unavailable” blocks when heuristic sufficiency gating disables alignment.
+
+C3. Editor polish (dossier-editor.tsx)
+	•	Ensure claim creation clearly displays:
+	•	claimType
+	•	claimScope (utterance/content) with short helper text
+	•	Evidence picker:
+	•	search box visually consistent
+	•	selected evidence count clearly shown
+	•	Copy ID controls:
+	•	unobtrusive but usable
+	•	consistent iconography
+
+⸻
+
+D) VERIFICATION GATES — MUST RUN
+
+Before declaring completion, run and report:
+	1.	Build
+
+	•	npm run build
+
+	2.	Tests
+
+	•	npx vitest run
+
+	3.	Manual sanity
+
+	•	Extract → Promote → Editor
+	•	Run heuristics (including insufficient gating)
+	•	Open Report → Print Preview
+	•	Markdown export (Report)
+	•	Compare two dossiers → fingerprint visible → export comparison markdown
+
+⸻
+
+Deliverable format (what to post back)
+
+When complete, respond with:
+	1.	What changed (bulleted, grouped by Bookkeeping / Technical / UX)
+	2.	Files touched
+	3.	Commands run + results
+	4.	Screens / quick notes on print preview correctness (no need for images; just confirm behaviors)
+	5.	Any known limitations (explicit)
+
+⸻
+
+If you paste that to the rep agent, it should keep the work grounded: books balanced, UX credible, integrity preserved.

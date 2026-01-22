@@ -1,119 +1,91 @@
 # Lantern Product Plan
 
-**Phase**: 2 (Productization)
-**Status**: Draft
-**Date**: January 21, 2026
+**Phase**: 2 (Productization) → **v1 Complete**
+**Status**: v1 Feature Complete
+**Date**: January 22, 2026
 
 ---
 
-## 1. Product Definition (MVP)
+## 1. Product Definition
 
-Lantern is a structured knowledge extraction tool that converts unstructured text into rigorous, verifiable data points (Entities, Quotes, Metrics, Timeline) with strict provenance tracking.
+Lantern is an investigative journalism intelligence platform that enables analysts to curate dossiers, apply Shadow-Caste heuristics to detect structural patterns, and generate publication-ready reports with rigorous epistemic safety controls and cryptographic integrity verification.
 
-**Target User**: Data Journalists, Financial Analysts, and Researchers who need to audit unstructured sources.
+**Target User**: Investigative Journalists, Financial Analysts, and Researchers who need rigorous, auditable analysis.
 
-### Core Features (MVP)
-1.  **Text Ingestion**: Simple paste/input of raw text.
-2.  **Deterministic Extraction**: Rule-based extraction of 4 key types (Entities, Quotes, Metrics, Dates).
-3.  **Provenance Tracking**: Every extracted item links back to its exact character offset in the source text.
-4.  **Local Library**: Save and load "Extraction Packs" to local storage.
-5.  **Diff Engine**: Compare two packs to see exactly what changed (Added/Removed/Modified items).
-6.  **Quality Dashboard**: Built-in regression testing against golden fixtures to ensure engine stability.
-
-### Non-Goals (v1)
-*   User Accounts / Cloud Sync (Local-first for now).
-*   PDF/URL parsing (Text-only input).
-*   LLM-based generative extraction (Strict heuristics only for v1 reliability).
+### Core Features (v1 Complete)
+1.  **Text Extraction**: Structured extraction from unstructured text (Entities, Quotes, Metrics, Timeline)
+2.  **Dossier Curation**: Full CRUD for entities, edges, claims, evidence
+3.  **Shadow-Caste Heuristics**: Influence Hubs, Funding Gravity, Enforcement Map
+4.  **Epistemic Safety**: Evidence density thresholds, interpretation limits, disclaimers
+5.  **Report Generation**: Publication-ready reports with cryptographic fingerprints
+6.  **Cross-Dossier Comparison**: Entity overlap, structural alignment, comparison integrity
 
 ---
 
-## 2. Architecture Decision Record (ADR)
+## 2. Module Status (M1-M12)
+
+### Completed Modules
+
+| Module | Name | Status | Description |
+|--------|------|--------|-------------|
+| M1 | Pack Schema & Storage | ✅ DONE | IndexedDB persistence, Pack v2 schema |
+| M2 | Dossier Editor | ✅ DONE | Entity, edge, claim, evidence CRUD |
+| M3 | Heuristic Analysis | ✅ DONE | Influence, Funding, Enforcement heuristics |
+| M4 | Evidence Density | ✅ DONE | Minimum thresholds, insufficient data gating |
+| M5 | Report Generation | ✅ DONE | Structured report view |
+| M6 | Markdown Export | ✅ DONE | Full report export with YAML frontmatter |
+| M7 | Interpretation Limits | ✅ DONE | Disclaimers, "what this doesn't prove" |
+| M8 | Migration Transparency | ✅ DONE | Schema version tracking in reports |
+| M9 | Print Layout | ✅ DONE | Print-optimized CSS |
+| M10 | Claim Scope | ✅ DONE | utterance vs content attribution |
+| M11 | Robustness Checks | ✅ DONE | Sensitivity analysis, stability classification |
+| M12 | Comparison Integrity | ✅ DONE | SHA-256 fingerprints, tamper-evidence |
+
+---
+
+## 3. Post-v1 Hardening (In Progress)
+
+### Technical Hardening
+- [x] Type guards cleanup (isExtractPack, isDossierPack)
+- [ ] Determinism verification for fingerprints
+- [ ] CI gates (eslint + tsc + vitest)
+
+### UX Polish
+- [ ] Report view: standardize section layout, print CSS refinement
+- [ ] Comparison view: stats cards, match badges, unavailable blocks
+- [ ] Editor view: claim scope helpers, evidence picker refinement
+
+### Documentation
+- [x] CHANGELOG.md created
+- [x] BOOK_OF_FIXES.md created (incident tracking)
+- [x] PRODUCT_PLAN.md updated
+
+---
+
+## 4. Architecture Decision Record
 
 ### Client/Server Split
-*   **Decision**: **Client-Heavy (Thick Client)**.
-*   **Rationale**: The current extraction engine (`lanternExtract.ts`) is purely functional and synchronous. Running it in the browser ensures zero latency, offline capability, and privacy (data never leaves the device).
-*   **Future Migration**: The `server/` scaffold exists. We will eventually move storage to the backend (Postgres), but the *extraction logic* should remain shared or client-side to maintain the "local-first" feel.
+- **Decision**: Client-Heavy (Thick Client)
+- **Rationale**: All analysis runs in-browser for zero latency, offline capability, and privacy
 
 ### Persistence Strategy
-*   **Current**: `localStorage` (Browser).
-*   **Risk**: High data loss risk if cache cleared.
-*   **Mitigation (M1)**: Add "Export to JSON" and "Import from JSON" to allow users to back up their work to disk.
-*   **Long-term**: Postgres via Drizzle (Server-side).
+- **Current**: IndexedDB (Browser)
+- **Future**: Optional Postgres backend
 
-### Versioning
-*   **Schema**: Packs use a semantic version schema (`lantern.extract.pack.v1`).
-*   **Compatibility**: Future engine updates (v0.2+) must include migration logic if the Pack schema changes.
-
----
-
-## 3. Build Plan (Gated Milestones)
-
-### M0: Baseline Stable (COMPLETED)
-*   **Goal**: App boots, extracts, saves (local), and passes smoke tests.
-*   **Status**: **Green**. `AUDIT_REPORT.md` confirms integrity.
-
-### M1: Data Safety & Portability (COMPLETED)
-*   **Goal**: Prevent data loss via file backups.
-*   **Deliverables**:
-    *   [x] `Export Pack` button (Download JSON).
-    *   [x] `Import Pack` button (Upload JSON).
-    *   [x] `Clear Library` utility.
-*   **Tests**: Verify import restores exact hash ID.
-
-### M2: Persistence & Schema Evolution (IN PROGRESS)
-*   **Goal**: Durable, versioned storage (IndexedDB) with pack portability.
-*   **Deliverables**:
-    *   [ ] Persistence Engine (IndexedDB + Coalescing).
-    *   [ ] Schema Migrations (v1 baseline).
-    *   [ ] Pack Portability (Export Selected / Import with Conflict Resolution).
-    *   [ ] UI Status (Saved/Saving).
-*   **Tests**: Migration unit tests, Persistence round-trip smoke test.
-
-### M3: Heuristic Reliability (QUEUED)
-*   **Goal**: Reduce noise in extraction.
-*   **Deliverables**:
-    *   [ ] Improved Metric regex (handle currency symbols like €, £).
-    *   [ ] Entity filter (ignore common stopwords/verbs mistakenly capitalized).
-    *   [ ] Quote attribution (basic "said X" proximity matching).
-*   **Tests**: Add 3 new edge-case fixtures to `client/src/fixtures/`.
-
-### M3: Quality Harness V2
-*   **Goal**: Formalize the regression suite.
-*   **Deliverables**:
-    *   [ ] Visual "Diff" view for regression failures.
-    *   [ ] Performance benchmark (time per 1k chars).
-*   **Tests**: CI-style script to run quality checks on pre-commit.
-
-### M4: Audit Generation
-*   **Goal**: "Show your work" exports.
-*   **Deliverables**:
-    *   [ ] Generate Markdown report of extraction (Provenance Table).
-    *   [ ] "Copy to Clipboard" formatted citation.
-
-### M5: Production Hardening
-*   **Goal**: Ready for public URL.
-*   **Deliverables**:
-    *   [ ] Error Boundary for UI crashes.
-    *   [ ] Input character limit (prevent browser freeze).
-    *   [ ] Toast notifications for actions.
+### Type Discrimination
+- **Pattern**: Explicit schema literals via type guards
+- **Extract Pack**: `schema === "lantern.extract.pack.v1"`
+- **Dossier Pack**: `schemaVersion === 2`
 
 ---
 
-## 4. Backlog Triage
+## 5. Known Limitations (v1)
 
-Based on the Audit (Jan 21, 2026), we have cleaned the backlog:
-
-### KEEP (High Priority)
-*   `client/src/lib/lanternExtract.ts`: Core asset. Invest heavily here.
-*   `client/src/pages/lantern-extract.tsx`: Main UI. Refine UX.
-
-### DOWNGRADE (Low Priority)
-*   `server/storage.ts`: `MemStorage` is insufficient. Don't build on it until we switch to Postgres.
-*   `shared/schema.ts`: Keep for reference, but unused until M6 (Backend Sync).
-
-### DELETE (Noise)
-*   Any unused UI components in `client/src/components/ui/` (Clean up as we go).
+1. **No cloud sync**: Local-first only
+2. **Text-only input**: No PDF/URL parsing
+3. **Heuristic-only**: No LLM-based extraction
+4. **Browser storage**: Data loss risk if cache cleared (mitigated by JSON export)
 
 ---
 
-**Next Step**: Begin **M1 (Data Safety)**.
+**Next Step**: Complete Post-v1 Hardening (UX Polish + Verification Gates)
