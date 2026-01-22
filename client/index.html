@@ -25,5 +25,10 @@
     </div>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      console.log("BOOT-PROBE: inline script executed");
+      var el = document.getElementById("boot-probe");
+      if (el) el.textContent = "BOOT-PROBE: inline JS executed";
+    </script>
   </body>
 </html>

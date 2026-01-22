@@ -1,0 +1,123 @@
+REP AGENT — YOU’RE CLOSE, BUT YOUR CURRENT “SERVER IS WORKING” CLAIM IS NOT AN END STATE. A white screen with “Loading your page…” means the browser is failing to finish the client boot. We now have proof the HTML is correct. Next we must prove (1) non-module JS executes, (2) module JS executes, (3) React mounts, in that order.
+
+Below is the exact next directive. Do not skip steps. Do not claim fixed until Step 4 passes.
+
+⸻
+
+DIRECTIVE: 4-STEP BOOT CHAIN (PROVE WHERE IT DIES)
+
+Step 1 — Prove the browser is executing any JS in that external tab
+
+In index.html (root), add this right before the closing </body>:
+
+<script>
+  console.log("BOOT-PROBE: inline script executed");
+  const el = document.getElementById("boot-probe");
+  if (el) el.textContent = "BOOT-PROBE: inline JS executed";
+</script>
+
+Expected: In the external tab, the green box text changes to “inline JS executed” AND Console shows that log.
+
+If this does NOT happen, it’s not a React/Vite problem; it’s the browser context (extensions, privacy settings, cached old frame, blocked scripts, etc.). Then jump to Step 1b below.
+
+⸻
+
+Step 2 — Prove Vite module boot is executing
+
+In the entry module you are actually loading (/src/main.tsx per your HTML), add at the very first line:
+
+console.log("BOOT-PROBE: main.tsx executed");
+
+Also add a hard DOM mutation (no React needed):
+
+const boot = document.getElementById("boot-probe");
+if (boot) boot.textContent = "BOOT-PROBE: main.tsx executed";
+
+Expected: Console log + green box updates.
+
+If inline script worked but this does NOT, it’s a module load failure (MIME, 404, unexpected HTML response, import crash before log, etc.). Proceed to Step 3.
+
+⸻
+
+Step 3 — Identify the exact failure mode (Console + Network are mandatory)
+
+From the external tab DevTools:
+
+Console
+	•	Screenshot the first error (usually enough)
+	•	Common signatures:
+	•	Unexpected token < → JS request returned HTML (routing/static mis-serve)
+	•	Failed to load module script / MIME type → same root cause
+	•	ERR_CONNECTION / websocket failures → HMR channel blocked (can still run though)
+	•	runtime exception stack trace → broken import/code
+
+Network
+	•	Filter: main, vite, client, react-refresh
+	•	Screenshot showing status codes + content-type for:
+	•	/@vite/client
+	•	/src/main.tsx?...
+	•	the first failing request (red)
+
+No screenshots = no further guessing.
+
+⸻
+
+Step 4 — Prove React mount (minimal render)
+
+Temporarily replace the React render with the simplest possible mount.
+
+In main.tsx, after your logs:
+
+const root = document.getElementById("root");
+if (root) {
+  root.innerHTML = `
+    <div style="padding:16px;font:16px monospace;color:#0f0;background:#000">
+      BOOT-PROBE: root mounted (no React)
+    </div>
+  `;
+}
+
+If this displays, the browser is fine and the failure is inside React/router/app imports. Then we restore React and bisect.
+
+⸻
+
+Step 1b — If inline script doesn’t execute (browser context issue)
+
+Have the user try ONE of these and report which changes behavior:
+	1.	Open the external URL in an incognito/private window
+	2.	Disable extensions/adblockers for Replit domain
+	3.	Try Chrome if currently using Safari (Vite HMR + Safari can be finicky)
+	4.	Hard refresh + clear site data (DevTools → Application/Storage → Clear)
+
+But still: we need the inline script result to proceed.
+
+⸻
+
+MOST LIKELY ROOT CAUSES (based on your repo tree)
+
+You have both src/ and client/src/. If index.html points to /src/main.tsx but your actual app entry lives in client/src/main.tsx, you will get weird half-working states depending on what exists in root src/. Your “server says main.tsx returns 200” doesn’t prove it’s the right main.
+
+So add this immediately to the main.tsx that’s actually being served:
+
+console.log("BOOT-PROBE: main.tsx path =", import.meta.url);
+
+This tells us which file is being executed.
+
+⸻
+
+REQUIRED OUTPUT BACK TO YOU
+
+Agent must return:
+	1.	External tab Console screenshot
+	2.	External tab Network screenshot (filtered)
+	3.	Whether boot-probe text changed at each step:
+	•	“index.html loaded”
+	•	“inline JS executed”
+	•	“main.tsx executed”
+	•	“root mounted (no React)”
+
+No claims of “fixed” until all four are green.
+
+⸻
+
+If you paste this to the rep agent verbatim, they’ll be forced to stop hand-waving and give you the single missing thing: where the boot chain breaks.
