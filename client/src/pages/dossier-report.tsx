@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { Pack } from "@/lib/schema/pack_v1";
-import { persistence } from "@/lib/storage";
+import { persistence, isDossierPack } from "@/lib/storage";
 import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
 import { computeFundingGravity } from "@/lib/heuristics/fundingGravity";
 import { computeEnforcementMap } from "@/lib/heuristics/enforcementMap";
@@ -33,7 +33,7 @@ export default function DossierReport() {
     const load = async () => {
       const lib = await persistence.loadLibrary();
       if (!lib || !id) return;
-      const found = lib.packs.find(p => "packId" in p && p.packId === id) as Pack;
+      const found = lib.packs.find(p => isDossierPack(p) && p.packId === id) as Pack;
       
       if (found) {
           setPack(found);

@@ -78,6 +78,36 @@ const existing = savedPacks.find(p => isExtractPack(p) ? p.pack_id : p.packId);
 
 ---
 
+## Incident 003: Type Guard Regression (v1 Pack Orphaning)
+
+**Date:** 2026-01-22
+
+### Symptom
+Architect review flagged that `isDossierPack` returning true only for schemaVersion === 2 would orphan legacy v1 packs (they would fail both guards and not be migrated or displayed).
+
+### Root Cause
+Type guard was too strict - checked for exact schemaVersion match instead of detecting "is a dossier pack" semantically.
+
+### Fix Approach
+Changed `isDossierPack` to detect dossier packs by presence of `packId` AND absence of extract schema:
+```typescript
+export function isDossierPack(p: AnyPack): p is Pack {
+  return "packId" in p && !("schema" in p && (p as any).schema === "lantern.extract.pack.v1");
+}
+```
+
+This correctly identifies both v1 and v2 dossier packs for migration.
+
+### Verification
+- [x] `npm run build` - PASS
+- [x] 46/46 tests pass
+- [x] v1 packs will be detected and migrated by storage.loadLibrary()
+
+### Files Changed
+- client/src/lib/storage.ts
+
+---
+
 ## Bookkeeping Standards
 
 For any future incident:

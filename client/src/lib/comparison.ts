@@ -3,6 +3,22 @@ import { computeFundingGravity } from "./heuristics/fundingGravity";
 import { computeEnforcementMap } from "./heuristics/enforcementMap";
 import { computeInfluenceHubs } from "./heuristics/influenceHubs";
 import { FindingStatus } from "./heuristics/types";
+import { persistence, isDossierPack } from "./storage";
+
+export async function listPacks(): Promise<{id: string, name: string}[]> {
+    const lib = await persistence.loadLibrary();
+    if (!lib) return [];
+    return lib.packs
+        .filter(isDossierPack)
+        .map(p => ({ id: p.packId, name: p.subjectName }));
+}
+
+export async function loadPack(packId: string): Promise<Pack | null> {
+    const lib = await persistence.loadLibrary();
+    if (!lib) return null;
+    const found = lib.packs.find(p => isDossierPack(p) && p.packId === packId);
+    return found && isDossierPack(found) ? found : null;
+}
 
 export interface EntityMatch {
     name: string;
@@ -151,8 +167,8 @@ export function comparePacks(packA: Pack, packB: Pack): ComparisonResult {
     );
 
     return {
-        packA: { id: packA.packId, name: packA.subjectName, date: packA.createdAt },
-        packB: { id: packB.packId, name: packB.subjectName, date: packB.createdAt },
+        packA: { id: packA.packId, name: packA.subjectName, date: packA.timestamps.created },
+        packB: { id: packB.packId, name: packB.subjectName, date: packB.timestamps.created },
         generatedAt: new Date().toISOString(),
         sharedEntities,
         overlapScore,

@@ -11,7 +11,7 @@ import {
   Evidence,
   Claim
 } from "@/lib/schema/pack_v1";
-import { persistence, debouncedSave, type StorageStatus } from "@/lib/storage";
+import { persistence, debouncedSave, type StorageStatus, isDossierPack } from "@/lib/storage";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,8 +117,8 @@ export default function DossierEditor() {
   const [newEntity, setNewEntity] = useState<{name: string, type: string}>({ name: "", type: "person" });
   const [newEdge, setNewEdge] = useState<{from: string, to: string, type: string}>({ from: "", to: "", type: "affiliated_with" });
   const [newEvidence, setNewEvidence] = useState<Partial<Evidence>>({ title: "", sourceType: "News", date: new Date().toISOString().split('T')[0] });
-  const [newClaim, setNewClaim] = useState<{text: string, type: string, confidence: number, evidenceIds: Set<string>}>({ 
-    text: "", type: "allegation", confidence: 0.8, evidenceIds: new Set() 
+  const [newClaim, setNewClaim] = useState<{text: string, type: string, scope: string, confidence: number, evidenceIds: Set<string>}>({ 
+    text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() 
   });
   const [evidenceSearch, setEvidenceSearch] = useState("");
 
@@ -145,7 +145,7 @@ export default function DossierEditor() {
             setNewEntity({ name: "", type: "person" });
             setNewEdge({ ...newEdge, from: "", to: "" });
             setNewEvidence({ title: "", sourceType: "News", date: new Date().toISOString().split('T')[0] });
-            setNewClaim({ text: "", type: "allegation", confidence: 0.8, evidenceIds: new Set() });
+            setNewClaim({ text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() });
             setEvidenceSearch("");
         }
     };
@@ -160,6 +160,7 @@ export default function DossierEditor() {
       setNewClaim({
           text: `Claim based on ${ev.title}...`,
           type: "fact",
+          scope: "content",
           confidence: 0.9,
           evidenceIds: new Set([ev.id])
       });
@@ -173,9 +174,9 @@ export default function DossierEditor() {
       const lib = await persistence.loadLibrary();
       if (!lib || !id) return;
       
-      const found = lib.packs.find(p => "packId" in p && p.packId === id);
-      if (found && "packId" in found) { // Type guard
-         setPack(found as Pack);
+      const found = lib.packs.find(p => isDossierPack(p) && p.packId === id);
+      if (found && isDossierPack(found)) {
+         setPack(found);
       } else {
          alert("Dossier not found");
          setLocation("/extract");
@@ -193,7 +194,7 @@ export default function DossierEditor() {
     persistence.loadLibrary().then(lib => {
         if (!lib) return;
         const newPacks = lib.packs.map(p => 
-            ("packId" in p && p.packId === updatedPack.packId) ? updatedPack : p
+            (isDossierPack(p) && p.packId === updatedPack.packId) ? updatedPack : p
         );
         debouncedSave({ packs: newPacks }, setStorageStatus);
     });
@@ -285,6 +286,7 @@ export default function DossierEditor() {
           id: uuidv4(),
           text: newClaim.text,
           claimType: newClaim.type as any,
+          claimScope: newClaim.scope as "utterance" | "content",
           confidence: newClaim.confidence,
           evidenceIds: Array.from(newClaim.evidenceIds),
           counterEvidenceIds: [],
@@ -293,7 +295,7 @@ export default function DossierEditor() {
       
       const updated = { ...pack, claims: [...pack.claims, claim] };
       saveDossier(updated);
-      setNewClaim({ text: "", type: "allegation", confidence: 0.8, evidenceIds: new Set() });
+      setNewClaim({ text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() });
   };
 
   const deleteClaim = (cId: string) => {
@@ -537,7 +539,7 @@ export default function DossierEditor() {
                         <Textarea value={newClaim.text} onChange={e => setNewClaim({...newClaim, text: e.target.value})} placeholder="Assert a fact, allegation, or inference..." />
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-3 gap-4">
                         <div className="space-y-2">
                              <Label className="text-xs font-mono uppercase">Type</Label>
                              <Select value={newClaim.type} onValueChange={v => setNewClaim({...newClaim, type: v})}>
@@ -546,6 +548,21 @@ export default function DossierEditor() {
                                    {ClaimTypeEnum.options.map(o => <SelectItem key={o} value={o}>{o.toUpperCase()}</SelectItem>)}
                                 </SelectContent>
                              </Select>
+                        </div>
+                        <div className="space-y-2">
+                             <Label className="text-xs font-mono uppercase">Scope</Label>
+                             <Select value={newClaim.scope || "content"} onValueChange={v => setNewClaim({...newClaim, scope: v})}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                   <SelectItem value="content">Content</SelectItem>
+                                   <SelectItem value="utterance">Utterance</SelectItem>
+                                </SelectContent>
+                             </Select>
+                             <p className="text-[10px] text-muted-foreground">
+                                {(newClaim.scope || "content") === "utterance" 
+                                    ? "\"X said Y\" - attributing speech, not endorsing truth" 
+                                    : "\"Y is true\" - asserting factual content"}
+                             </p>
                         </div>
                          <div className="space-y-2">
                              <Label className="text-xs font-mono uppercase">Confidence (0.0 - 1.0)</Label>

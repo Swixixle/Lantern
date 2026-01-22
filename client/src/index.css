@@ -104,3 +104,52 @@
     @apply font-mono tracking-tight;
   }
 }
+
+/* Print Styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: avoid;
+  }
+  
+  table th, table td {
+    padding: 4px 8px !important;
+    border: 1px solid #ccc !important;
+    word-wrap: break-word !important;
+    max-width: 200px !important;
+  }
+  
+  section {
+    page-break-inside: avoid;
+  }
+  
+  .break-before-page {
+    page-break-before: always;
+  }
+  
+  .break-inside-avoid {
+    page-break-inside: avoid;
+  }
+  
+  a {
+    text-decoration: underline !important;
+    color: black !important;
+  }
+  
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+}

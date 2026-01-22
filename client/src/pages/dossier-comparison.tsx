@@ -1,3 +1,5 @@
+import { useState, useEffect } from "react";
+import { useLocation } from "wouter";
 import { generateComparisonMarkdown } from "@/lib/comparison-export";
 import { downloadFile } from "@/lib/export";
 import { Button } from "@/components/ui/button";
@@ -11,6 +13,7 @@ import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
 import { computeFundingGravity } from "@/lib/heuristics/fundingGravity";
 import { computeEnforcementMap } from "@/lib/heuristics/enforcementMap";
 import { CopyID } from "@/components/copy-id";
+import { listPacks, loadPack, comparePacks, ComparisonResult } from "@/lib/comparison";
 
 export default function DossierComparison() {
     const [, setLocation] = useLocation();

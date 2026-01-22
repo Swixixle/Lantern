@@ -40,7 +40,7 @@ describe("Converter: Extract -> Dossier", () => {
     it("should create a valid PackV1 dossier", () => {
         const dossier = createDossierFromExtract(mockExtract, { subjectName: "Elon Musk Dossier" });
         
-        expect(dossier.schemaVersion).toBe(1);
+        expect(dossier.schemaVersion).toBe(2);
         expect(dossier.packType).toBe("public_figure");
         expect(dossier.subjectName).toBe("Elon Musk Dossier");
         expect(dossier.entities).toHaveLength(3); // Only included ones

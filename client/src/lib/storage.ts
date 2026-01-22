@@ -14,7 +14,8 @@ export function isExtractPack(p: AnyPack): p is LanternPack {
 }
 
 export function isDossierPack(p: AnyPack): p is Pack {
-  return "schemaVersion" in p && (p as Pack).schemaVersion === 2;
+  // Detect both v1 and v2 dossier packs (packId present + NOT an extract pack)
+  return "packId" in p && !("schema" in p && (p as any).schema === "lantern.extract.pack.v1");
 }
 
 const DB_NAME = "lantern-db";
@@ -82,11 +83,10 @@ export const persistence = {
       
       // Migrate Packs Content (V1 -> V2)
       const migratedPacks = migratedRecord.library.packs.map(p => {
-          if ("packId" in p) {
-              // It's a Dossier Pack (PackV1/V2), run migration
+          if (isDossierPack(p)) {
               return migratePack(p);
           }
-          return p; // LanternPack (Extract) doesn't need migration yet
+          return p;
       });
 
       return { packs: migratedPacks };
