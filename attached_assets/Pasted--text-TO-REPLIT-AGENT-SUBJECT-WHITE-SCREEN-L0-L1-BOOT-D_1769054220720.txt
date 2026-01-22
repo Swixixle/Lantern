@@ -1,0 +1,110 @@
+```text
+TO: REPLIT AGENT
+SUBJECT: WHITE SCREEN — L0/L1 BOOT DIAGNOSTIC (NO FIXES YET)
+
+CONTEXT (TEAM):
+- Only three roles are active: User (principal), ChatGPT (systems interpreter), Replit Agent (executor).
+- Do NOT propose new features or refactors. This is purely boot diagnosis.
+- Do NOT “fix as you go.” Collect evidence first, then we’ll choose the smallest patch.
+
+GOAL:
+We have a white screen even with the App.tsx canary. Determine whether React is failing to mount, Vite entry is broken, CSS/HTML is masking output, or a runtime error occurs pre-mount.
+
+REPLY REQUIREMENT (NON-NEGOTIABLE):
+Your entire reply MUST be inside ONE triple-backtick fenced code block. No text outside.
+Use the exact template below.
+
+────────────────────────────────────────────────────────
+STEP 0 — CONFIRM SERVER / ROUTE
+1) Run:
+   - `npm run dev:client`
+2) Capture:
+   - Terminal output (first ~60 lines, and any errors)
+   - The exact preview URL you are using
+
+REPORT:
+- Whether Vite shows “ready in …ms” and which port.
+
+────────────────────────────────────────────────────────
+STEP 1 — CHECK BROWSER CONSOLE (MOST IMPORTANT)
+In the Preview pane (or “Open in new tab”):
+1) Open DevTools Console.
+2) Hard refresh (Ctrl+Shift+R).
+3) Copy the FIRST error stack you see (topmost red error) + any “Failed to load module script” / “net::ERR” lines.
+
+REPORT:
+- Paste exact console errors, unedited.
+
+────────────────────────────────────────────────────────
+STEP 2 — VERIFY INDEX.html + ENTRY SCRIPT
+Open these files and paste their relevant parts:
+
+A) `client/index.html` (or `index.html` if that’s the actual path):
+- Paste the `<div id="root">` line (or whatever mount element exists)
+- Paste the `<script type="module" src="...">` entry line(s)
+
+B) The entry file referenced by index.html (usually `client/src/main.tsx` or `client/src/main.ts`):
+- Paste the section that calls `createRoot(...)` / `ReactDOM.createRoot(...)`
+- Confirm the mount selector matches the index.html root element
+
+REPORT:
+- If selector mismatch exists (e.g. '#root' vs '#app'), flag it.
+
+────────────────────────────────────────────────────────
+STEP 3 — VERIFY THE CANARY IS REALLY THE APP (ROUTING BYPASS)
+We need to ensure the canary is not hidden behind routing or conditional rendering.
+
+1) In `client/src/main.tsx` (or the entry file), TEMPORARILY bypass routing:
+   - Render a minimal inline element above App:
+     Example:
+       `document.body.style.background = "#111";`
+       `document.body.insertAdjacentHTML("afterbegin", "<div id='boot-probe' style='color:white;padding:16px;font-family:monospace'>BOOT-PROBE: main.tsx executed</div>");`
+
+2) DO NOT commit a complex change. This is a temporary probe.
+
+3) Reload the preview.
+
+REPORT:
+- Do you see “BOOT-PROBE: main.tsx executed”?
+- If NO: entry not executing (wrong HTML served, build config issue, or script load failure).
+- If YES but still no React: React mount failure after entry executes.
+
+(If you prefer not to touch files, you can skip this step ONLY if Step 1 already shows a definitive module-load error.)
+
+────────────────────────────────────────────────────────
+STEP 4 — NETWORK / MODULE LOAD FAILURES
+If console shows 404/500/module errors:
+1) Open DevTools Network tab.
+2) Hard refresh.
+3) Identify any red requests (failed):
+   - JS/TS modules
+   - CSS
+   - @vite/client
+4) Paste:
+   - failing URL
+   - status code
+   - response snippet if available
+
+────────────────────────────────────────────────────────
+STOP CONDITION:
+After Steps 0–4, STOP. Do NOT fix anything beyond the temporary BOOT-PROBE (and if you add it, keep it clearly marked so we can revert cleanly).
+
+OUTPUT FORMAT (COPY EXACTLY):
+STATUS: PASS|FAIL (Boot probe visible? React mounted?)
+STEP0_TERMINAL:
+<terminal excerpt>
+STEP1_CONSOLE_ERRORS:
+<exact console errors>
+STEP2_INDEX_HTML:
+<root div + script src lines>
+STEP2_ENTRY_FILE:
+<createRoot snippet>
+STEP3_BOOT_PROBE:
+<YES/NO + what displayed>
+STEP4_NETWORK:
+<failed requests or "none">
+HYPOTHESIS (ONE LINE ONLY):
+<your single best guess based strictly on evidence>
+
+END.
+```
