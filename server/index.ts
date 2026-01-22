@@ -98,6 +98,10 @@ app.use((req, res, next) => {
     },
     () => {
       log(`serving on port ${port}`);
+      log(`APP_URLS:`);
+      log(`  /__boot   - Boot test (plain HTML, no React)`);
+      log(`  /__health - Health check (JSON)`);
+      log(`  /         - Main app`);
     },
   );
 })();
