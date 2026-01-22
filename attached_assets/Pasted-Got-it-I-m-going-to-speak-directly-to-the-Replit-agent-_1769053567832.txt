@@ -1,0 +1,181 @@
+Got it. I’m going to speak directly to the Replit agent now, in clear, non-theoretical, execution-grade instructions. This is not analysis, this is a handoff.
+
+You can literally copy-paste the block below to the agent.
+
+⸻
+
+DIRECTIVE TO REPLIT AGENT — READ CAREFULLY
+
+Context
+	•	This is a Vite + React app.
+	•	Build succeeds.
+	•	Dev server runs.
+	•	Preview (both embedded and external tab) shows a white screen.
+	•	No console errors.
+	•	This is not acceptable. We need deterministic diagnosis, not reassurance.
+
+⸻
+
+OBJECTIVE
+
+Identify why the React app is not mounting and restore a visible render at /.
+
+⸻
+
+STEP 1 — VERIFY ENTRYPOINT EXECUTION (MANDATORY)
+
+Open client/src/main.tsx (or equivalent).
+
+Confirm this exact sequence:
+
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
+import "./index.css";
+
+console.log("MAIN.TSX EXECUTED");
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
+
+If “MAIN.TSX EXECUTED” does not appear in browser console:
+	•	The bundle is not executing.
+	•	This is a Vite config / index.html issue.
+	•	STOP and fix before proceeding.
+
+⸻
+
+STEP 2 — VERIFY ROOT ELEMENT EXISTS
+
+Open client/index.html.
+
+Confirm exactly:
+
+<div id="root"></div>
+
+No conditionals. No duplication. No templating.
+
+If missing or altered → that is the bug.
+
+⸻
+
+STEP 3 — FORCE A CANARY RENDER (NON-NEGOTIABLE)
+
+Open client/src/App.tsx.
+
+Temporarily replace the entire file with:
+
+export default function App() {
+  console.log("APP MOUNTED");
+  return (
+    <div style={{ color: "white", padding: 40 }}>
+      Lantern Boot Test
+    </div>
+  );
+}
+
+Reload the external preview URL.
+
+Outcomes:
+	•	If this text renders → routing/components are blocking render.
+	•	If this does NOT render → React is not mounting at all.
+
+Report which case applies.
+
+⸻
+
+STEP 4 — IF APP MOUNTS, ISOLATE ROUTER FAILURE
+
+If Step 3 renders, then:
+	•	Restore App.tsx
+	•	Temporarily comment out all routes except one static route
+
+Example:
+
+<Routes>
+  <Route path="/" element={<LibraryPage />} />
+</Routes>
+
+No redirects.
+No guards.
+No schema checks.
+
+If this renders → one of the removed routes or guards is breaking hydration.
+
+⸻
+
+STEP 5 — CHECK FOR SILENT RUNTIME BLOCKERS
+
+Search entire repo for:
+	•	crypto.subtle
+	•	window
+	•	document
+	•	localStorage
+	•	indexedDB
+
+If any are executed at import time (top-level), they can silently break hydration in Vite.
+
+Move them inside useEffect.
+
+⸻
+
+STEP 6 — VERIFY VITE BASE + ROUTER MODE
+
+Open vite.config.ts.
+
+Confirm:
+	•	No base misconfiguration
+	•	Router uses BrowserRouter, not HashRouter, unless base is set
+
+Mismatch here = white screen, no error.
+
+⸻
+
+DELIVERABLES BACK TO USER
+
+Respond with:
+	1.	Exact failing step number
+	2.	Exact file + line causing failure
+	3.	Minimal fix applied
+	4.	Confirmation that “Lantern Boot Test” rendered
+	5.	Confirmation that real UI renders after restore
+
+No speculation. No “should”. No reassurance.
+
+⸻
+
+IMPORTANT CONSTRAINT
+
+Do not modify:
+	•	integrity logic
+	•	migration logic
+	•	heuristics
+	•	schema guards
+
+This is a boot failure, not a data failure.
+
+⸻
+
+END DIRECTIVE
+
+⸻
+
+Now, to you (not the agent)
+
+You did everything right.
+
+What you’re seeing is classic React/Vite boot failure behavior:
+	•	white screen
+	•	no errors
+	•	build passes
+	•	agent keeps saying “it should work”
+
+This is not your fault and not a sign the system is fragile.
+
+Once the agent follows the above in order, this will surface in minutes.
+
+Stay put.
+Let the agent execute.
