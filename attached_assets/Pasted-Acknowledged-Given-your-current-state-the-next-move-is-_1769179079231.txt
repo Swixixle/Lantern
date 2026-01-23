@@ -1,0 +1,160 @@
+Acknowledged. Given your current state, the next move is to produce objective PASS/FAIL evidence for Invariants 2, 4, 5 and, if any fail, apply the smallest correct patch in Replit.
+
+Below is a verification checklist + acceptance criteria + typical fixes for each invariant. You can run these verbatim and paste back the observed outcomes (screenshots/log snippets are fine).
+
+⸻
+
+Invariant 2 — Refresh mid-extract UI behavior
+
+What “PASS” means
+
+If the user refreshes (or closes/reopens) while a large extract job is in progress, the Library UI must:
+	1.	Rehydrate the in-flight job state (from server/job status), and
+	2.	Show a stable, non-misleading status (e.g., “Running”, “Queued”, “Resuming…”), and
+	3.	Not regress into “idle/ready/exportable” if the extract is not done, and
+	4.	Not lose the ability to retrieve the final result when the job completes.
+
+Verification steps (do exactly this)
+	1.	Start a large extract (durable server job).
+	2.	While it’s clearly “running/queued”, do a hard refresh.
+	3.	Observe:
+	•	Does the UI still show an in-progress state?
+	•	Does it show a job id (if your UI exposes it) or at least a consistent status?
+	4.	Wait until the job completes (without restarting server).
+	5.	Confirm results appear and export becomes available.
+
+Failure modes to watch for
+	•	Refresh resets to “Extract” enabled as if nothing is running
+	•	Export buttons appear early (before completion)
+	•	UI shows stale “Completed” while server says running (or vice versa)
+	•	Client errors on rehydrate (“job not found”, null deref)
+
+Typical minimal fix (pattern)
+
+On page load / pack load:
+	•	Fetch server job status for that pack’s active extract job id (or ask server “current extract status for pack X”).
+	•	Derive UI state from server truth:
+	•	idle | queued | running | succeeded | failed
+	•	If there is a job in queued/running, disable export and show status.
+
+If you paste the relevant snippet where Library loads pack state and decides which buttons to enable, I’ll give you the exact patch.
+
+⸻
+
+Invariant 4 — Export buttons + console
+
+This invariant is usually two things:
+	1.	Export controls are only enabled when the extract is truly ready, and
+	2.	Export never throws console errors (or silent failures).
+
+What “PASS” means
+	•	No export buttons are enabled unless:
+	•	extract status is succeeded, and
+	•	required payload(s) exist (e.g., extracted data, file handle, signed URL, etc.)
+	•	Clicking any export button produces:
+	•	a real export artifact (download / file / link), and
+	•	no console errors, and ideally no warnings indicative of broken state
+	•	If export is unavailable, the UI shows a clear reason (e.g., “Run extract to enable export”, “Extract in progress”, “No results yet”).
+
+Verification steps
+	1.	Open devtools console (preserve log on).
+	2.	Test export states:
+	•	Before running extract: export buttons should be disabled or hidden.
+	•	While extract running: disabled/hidden; clicking should do nothing (or show a toast), but must not error.
+	•	After completion: enabled; clicking triggers actual export.
+	3.	Attempt “edge” clicks:
+	•	double click export quickly
+	•	export immediately after completion transition
+	4.	Review console: confirm 0 errors related to export.
+
+Common failure modes
+	•	Button enabled but handler assumes result !== null
+	•	Export tries to read from local pack when results are server-side
+	•	Export relies on stale in-memory state lost on refresh
+	•	“Cannot read properties of undefined” in export handler
+
+Typical minimal fix (pattern)
+
+Create a single computed gate:
+
+const canExport =
+  extractStatus === "succeeded" &&
+  !!extractResultRef; // whatever your canonical result handle is
+
+Then:
+	•	disabled={!canExport}
+	•	export handler begins with a hard guard:
+
+if (!canExport) return; // or toast + return
+
+If you show me the export button block and handlers in client/src/pages/library.tsx, I’ll produce a precise diff.
+
+⸻
+
+Invariant 5 — Rendering guardrail
+
+This is typically: “the UI must not attempt to render large/undefined/partial extract payloads in a way that freezes the page, throws, or corrupts view state,” especially across refresh and job transitions.
+
+What “PASS” means
+	•	The Library page never hard-crashes during these transitions:
+	•	no extract → extracting → extracted
+	•	refresh mid-extract
+	•	failed extract
+	•	huge extract result
+	•	If results are huge:
+	•	UI renders a bounded preview (or virtualization) rather than dumping megabytes into the DOM
+	•	If result is missing/partial:
+	•	UI renders a safe placeholder instead of dereferencing null
+
+Verification steps
+	1.	Load a pack with no extract results.
+	•	Ensure no console errors.
+	2.	Run a large extract.
+	•	While running, navigate around the page (tabs/sections).
+	3.	After completion:
+	•	Confirm render time is reasonable.
+	•	Confirm no “page unresponsive” hangs.
+	4.	Refresh after completion:
+	•	Confirm the page renders without long blocking.
+
+Common failure modes
+	•	Rendering raw JSON or large arrays without virtualization
+	•	A component assumes extract.data.items.map(...) but extract.data is null
+	•	A useEffect loop that re-renders indefinitely when status changes
+	•	Rendering triggers expensive derived computations on every render
+
+Typical minimal fix (pattern)
+	•	Add explicit “render guardrails”:
+	•	Conditional rendering by status
+	•	Hard caps on preview sizes
+	•	Memoize heavy transforms
+
+Example pattern:
+
+if (extractStatus === "running" || extractStatus === "queued") {
+  return <ExtractProgress ... />;
+}
+
+if (extractStatus !== "succeeded") {
+  return <EmptyState ... />;
+}
+
+// succeeded
+return <ResultsView previewLimit={200} ... />;
+
+If you currently render results inline in the Library page, I strongly recommend isolating into a ResultsView and enforcing a preview limit / virtualization.
+
+⸻
+
+What I need from you (choose the quickest)
+
+Paste one of the following:
+	1.	Your observed outcomes for each invariant (PASS/FAIL + what you saw), or
+	2.	The relevant code blocks from client/src/pages/library.tsx covering:
+	•	extract state derivation / status fetch
+	•	export buttons + handlers
+	•	results rendering section
+
+With that, I will:
+	•	declare PASS/FAIL for 2/4/5 against the criteria above, and
+	•	provide the exact minimal code edits (diff-style) to close any failures.
