@@ -295,7 +295,7 @@ export default function LanternExtract() {
       pdf.line(20, y, pageWidth - 20, y);
       y += 12;
       
-      const trustInfo = pack.trust || { pack_confidence: 0, confidence_threshold: 0.5, sanitation_pass: false };
+      const trustInfo = pack.trust || { pack_confidence: 0, confidence_threshold: 0.5, sanitation_pass: false, schema_version: pack.schema, confidence_model: 'heuristic' };
       const packConfPercent = Math.round(trustInfo.pack_confidence * 100);
       
       pdf.setFontSize(10);

@@ -96,7 +96,7 @@ export type LanternPack = {
   source: { title: string; author: string; publisher: string; url: string; published_at: string; source_type: string; retrieved_at: string };
   items: { entities: EntityItem[]; quotes: QuoteItem[]; metrics: MetricItem[]; timeline: TimelineItem[] };
   stats: EngineStats;
-  trust: TrustMetadata;
+  trust?: TrustMetadata;
 };
 
 export type ExtractionOptions = {
