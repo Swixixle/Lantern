@@ -1,0 +1,134 @@
+Understood. I will speak **directly to the Replit agent** now.
+This is the cleanest, lowest-friction way to move forward.
+
+Paste **exactly this** to the agent. It does two things at once:
+
+1. asks for the **minimum safe information** I need to audit (no secrets),
+2. instructs him to **fix the red “could not upload” banner** concretely.
+
+---
+
+**Replit Agent — Required: Safe Audit Snapshot + Fix Red Upload Failure**
+
+You are now coordinating with an external reviewer. You must provide **only safe, non-sensitive information** and fix a concrete bug.
+
+### PART 1 — Provide a SAFE audit snapshot (no secrets, no Canon)
+
+I need you to identify and share **only** what is safe to review externally.
+
+**Do NOT include:**
+
+* `.env`, credentials, tokens, keys
+* Canon text, formulas, thresholds, scoring logic
+* user data, uploads, logs
+* build output, `node_modules`, `.git`
+
+**Provide instead:**
+
+1. **Repo structure**
+
+   * A directory tree (paths only, no contents) to depth ~4
+   * Excluding sensitive/build folders
+
+2. **Runtime + wiring**
+
+   * `package.json`
+   * `.replit`
+   * Identify frontend entry (e.g. `client/src/main.tsx`)
+   * Identify backend entry (e.g. `server/index.ts`)
+
+3. **Routes overview**
+
+   * A short list of API routes (method + path)
+   * File paths where they are implemented
+
+4. **Upload-related files**
+
+   * Frontend file that renders the upload (paperclip) UI
+   * Backend file where upload *should* be handled (even if broken)
+
+If something is risky to share, exclude it and explain why.
+
+This is a **structural snapshot**, not a content dump.
+
+---
+
+### PART 2 — Fix the red “could not upload” banner (execute)
+
+Current user-visible behavior:
+
+* Clicking the upload (paperclip) button shows a red banner: **“could not upload”**
+* Paste-text ingestion works
+* Upload fails every time
+
+You must:
+
+1. **Identify the exact cause** of the failure
+
+   * Missing backend route?
+   * Route exists but wrong path?
+   * Wrong `FormData` field name?
+   * File type rejection?
+   * PDF parsing not implemented?
+   * CORS / proxy mismatch?
+
+2. **Fix it so a normal text-based PDF uploads successfully**
+
+   * Implement or correct backend route (e.g. `POST /api/upload/pdf`)
+   * Accept one PDF file
+   * Validate type + size
+   * Extract text using `pdf-parse` (or equivalent)
+   * Return `{ filename, text, charCount }`
+
+3. **Improve error signaling**
+   Replace the generic red banner with specific messages:
+
+   * 404 → “Upload service unavailable”
+   * 415 → “Unsupported file type”
+   * 422 → “PDF appears scanned; OCR not implemented”
+   * 413/400 → “File too large”
+   * 500 → “Server error during upload”
+
+4. **Confirm frontend wiring**
+
+   * Ensure the upload button actually sends `FormData`
+   * Ensure it hits the correct endpoint
+   * Ensure success response populates the existing paste textbox
+
+---
+
+### PART 3 — Report back (required)
+
+Reply with:
+
+1. The **exact reason** the red banner occurred (one sentence)
+2. The **files changed** (paths)
+3. The **backend route code** (upload handler only)
+4. The **frontend upload handler snippet**
+5. Manual test results:
+
+   * Upload a valid PDF → succeeds
+   * Upload invalid file → correct error message
+
+---
+
+### Constraints (non-negotiable)
+
+* Do NOT add secrets
+* Do NOT modify Canon logic
+* Do NOT dump proprietary content
+* Keep changes isolated to Lantern ingestion
+
+Proceed now. Be concrete. No abstractions.
+
+---
+
+Once he replies, paste his response here.
+I will:
+
+* sanity-check the fix,
+* confirm the upload path is correct,
+* tell you if anything is still missing,
+* and give you the shortest path to “Lantern fully usable for journalism + court opinions.”
+
+You’re doing this exactly the right way.

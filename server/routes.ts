@@ -7,10 +7,7 @@ import { createHash } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { join, extname } from "path";
 import multer from "multer";
-import { createRequire } from "module";
-const require = createRequire(import.meta.url);
-const pdfParseModule = require("pdf-parse");
-const pdfParseLib = pdfParseModule.default ?? pdfParseModule;
+import PDFParser from "pdf2json";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -188,8 +185,37 @@ export async function registerRoutes(
       }
       
       try {
-        const pdfData = await pdfParseLib(file.buffer);
-        const text = pdfData.text?.trim() || "";
+        const pdfParser = new PDFParser(null, true);
+        
+        const parseResult = await new Promise<{ text: string; pages: number }>((resolve, reject) => {
+          pdfParser.on("pdfParser_dataError", (errData: any) => {
+            reject(new Error(errData.parserError || "PDF parsing failed"));
+          });
+          
+          pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
+            const pages = pdfData.Pages || [];
+            let text = "";
+            
+            for (const page of pages) {
+              const texts = page.Texts || [];
+              for (const textItem of texts) {
+                const runs = textItem.R || [];
+                for (const run of runs) {
+                  if (run.T) {
+                    text += decodeURIComponent(run.T) + " ";
+                  }
+                }
+              }
+              text += "\n";
+            }
+            
+            resolve({ text: text.trim(), pages: pages.length });
+          });
+          
+          pdfParser.parseBuffer(file.buffer);
+        });
+        
+        const text = parseResult.text;
         
         if (text.length < MIN_TEXT_LENGTH) {
           return res.status(422).json({
@@ -206,7 +232,7 @@ export async function registerRoutes(
         res.json({
           filename: file.originalname,
           text,
-          pages: pdfData.numpages,
+          pages: parseResult.pages,
           charCount: text.length
         });
       } catch (parseError: any) {
