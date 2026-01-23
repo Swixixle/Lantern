@@ -7,7 +7,10 @@ import { createHash } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { join, extname } from "path";
 import multer from "multer";
-import * as pdfParse from "pdf-parse";
+import { createRequire } from "module";
+const require = createRequire(import.meta.url);
+const pdfParseModule = require("pdf-parse");
+const pdfParseLib = pdfParseModule.default ?? pdfParseModule;
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -185,7 +188,7 @@ export async function registerRoutes(
       }
       
       try {
-        const pdfData = await (pdfParse as any).default(file.buffer);
+        const pdfData = await pdfParseLib(file.buffer);
         const text = pdfData.text?.trim() || "";
         
         if (text.length < MIN_TEXT_LENGTH) {
