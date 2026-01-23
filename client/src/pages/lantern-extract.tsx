@@ -38,6 +38,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import jsPDF from "jspdf";
 import { extract, computePackId, diffPacks, scoreExtraction, LanternPack, ExtractionOptions, PackDiff, QualityReport } from "@/lib/lanternExtract";
+import type { ExtractRequest, WorkerMessage } from "@/workers/extraction.worker";
+import ExtractionWorker from "@/workers/extraction.worker?worker";
 import { persistence, debouncedSave, type StorageStatus, type LibraryState, AnyPack, isExtractPack, isDossierPack } from "@/lib/storage";
 import { cn } from "@/lib/utils";
 import fixtures from "@/fixtures/metric_and_attribution_edge_cases.json";
@@ -72,9 +74,12 @@ export default function LanternExtract() {
   const [extractionStatus, setExtractionStatus] = useState<"idle" | "running" | "completed" | "failed" | "timeout">("idle");
   const [extractionElapsed, setExtractionElapsed] = useState(0);
   const [extractionError, setExtractionError] = useState<string | null>(null);
+  const [extractionPhase, setExtractionPhase] = useState<string>("");
+  const [extractionProgress, setExtractionProgress] = useState<number>(0);
   const extractionStartTime = useRef<number>(0);
   const extractionTimer = useRef<NodeJS.Timeout | null>(null);
   const sourceTextRef = useRef<string>("");
+  const workerRef = useRef<Worker | null>(null);
 
   const [sourceText, setSourceText] = useState("");
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -131,6 +136,11 @@ export default function LanternExtract() {
   const [extractOptions, setExtractOptions] = useState<ExtractionOptions>({ mode: "balanced" });
   const [pack, setPack] = useState<LanternPack | null>(null);
   
+  // Persistence keys for recovery
+  const DRAFT_SOURCE_KEY = "lantern_draft_source";
+  const DRAFT_META_KEY = "lantern_draft_meta";
+  const DRAFT_EXTRACTING_KEY = "lantern_extracting";
+
   // Init Load
   useEffect(() => {
     const load = async () => {
@@ -140,15 +150,37 @@ export default function LanternExtract() {
         } else {
             setSavedPacks([]); 
         }
+        
+        // Recovery: Check if there's a draft from a crashed extraction
+        const wasExtracting = localStorage.getItem(DRAFT_EXTRACTING_KEY);
+        const savedSource = localStorage.getItem(DRAFT_SOURCE_KEY);
+        const savedMeta = localStorage.getItem(DRAFT_META_KEY);
+        
+        if (wasExtracting === "true" && savedSource) {
+          console.log("[Recovery] Found draft source text from interrupted extraction");
+          setSourceText(savedSource);
+          if (savedMeta) {
+            try {
+              setMetadata(JSON.parse(savedMeta));
+            } catch (e) {}
+          }
+          setExtractionStatus("failed");
+          setExtractionError("Previous extraction was interrupted. Your source text has been recovered. You can try again.");
+          localStorage.removeItem(DRAFT_EXTRACTING_KEY);
+        }
     };
     load();
   }, []);
 
-  // Cleanup extraction timer on unmount
+  // Cleanup extraction timer and worker on unmount
   useEffect(() => {
     return () => {
       if (extractionTimer.current) {
         clearInterval(extractionTimer.current);
+      }
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
       }
     };
   }, []);
@@ -158,80 +190,130 @@ export default function LanternExtract() {
     sourceTextRef.current = sourceText;
   }, [sourceText]);
 
-  const EXTRACTION_TIMEOUT_MS = 120000;
-  const EXTRACTION_WARNING_MS = 30000;
+  const EXTRACTION_TIMEOUT_MS = 180000;
+  const LARGE_DOC_THRESHOLD = 50000;
 
   const handleExtract = () => {
     if (isExtracting) return;
     
     sourceTextRef.current = sourceText;
     const charCount = sourceText.length;
-    console.log(`[Extraction] Starting extraction of ${charCount} characters at ${new Date().toISOString()}`);
+    const isLargeDoc = charCount > LARGE_DOC_THRESHOLD;
+    
+    console.log(`[Extraction] Starting Web Worker extraction of ${charCount} characters at ${new Date().toISOString()}`);
+    
+    // PERSIST before extraction - survives page refresh
+    localStorage.setItem(DRAFT_SOURCE_KEY, sourceText);
+    localStorage.setItem(DRAFT_META_KEY, JSON.stringify(metadata));
+    localStorage.setItem(DRAFT_EXTRACTING_KEY, "true");
     
     setIsExtracting(true);
     setExtractionStatus("running");
     setExtractionError(null);
     setExtractionElapsed(0);
+    setExtractionPhase(isLargeDoc ? "Preparing large document..." : "Starting...");
+    setExtractionProgress(0);
     extractionStartTime.current = Date.now();
     
+    // Clear any existing timer
     if (extractionTimer.current) {
       clearInterval(extractionTimer.current);
     }
+    
+    // Terminate any existing worker
+    if (workerRef.current) {
+      workerRef.current.terminate();
+    }
+    
+    // Create new worker
+    const worker = new ExtractionWorker();
+    workerRef.current = worker;
+    
+    // Start elapsed time tracker - runs independently on main thread
     extractionTimer.current = setInterval(() => {
       const elapsed = Date.now() - extractionStartTime.current;
       setExtractionElapsed(elapsed);
       
       if (elapsed > EXTRACTION_TIMEOUT_MS) {
         console.error("[Extraction] Timeout after", elapsed, "ms");
+        worker.terminate();
+        workerRef.current = null;
         setExtractionStatus("timeout");
-        setExtractionError("Extraction timed out. Document may be too large for this device.");
+        setExtractionError("Extraction timed out after 3 minutes. Your text has been saved - try a smaller section.");
         setIsExtracting(false);
+        localStorage.removeItem(DRAFT_EXTRACTING_KEY);
         if (extractionTimer.current) clearInterval(extractionTimer.current);
       }
     }, 500);
     
-    setTimeout(() => {
-      try {
-        console.log("[Extraction] Beginning processing...");
-        const startProcess = Date.now();
-        
-        const { items, stats, stable_source_hash, trust } = extract(sourceTextRef.current, extractOptions);
-        
-        const processingTime = Date.now() - startProcess;
-        console.log(`[Extraction] Processing completed in ${processingTime}ms`);
-        
-        const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
-            schema: "lantern.extract.pack.v1",
-            engine: { name: "heuristic", version: "0.1.6-sanitized" },
-            source: { ...metadata, retrieved_at: new Date().toISOString() },
-            items,
-            stats,
-            trust
-        };
-
-        const packId = computePackId(initialPackWithoutId, stable_source_hash);
-        const newPack: LanternPack = {
-          ...initialPackWithoutId,
-          pack_id: packId,
-          hashes: { source_text_sha256: stable_source_hash, pack_sha256: packId }
-        };
-        
+    // Handle worker messages
+    worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
+      const msg = event.data;
+      
+      if (msg.type === 'progress') {
+        setExtractionPhase(msg.phase);
+        setExtractionProgress(msg.percent);
+        console.log(`[Extraction] Progress: ${msg.phase} (${msg.percent}%)`);
+      }
+      
+      if (msg.type === 'result') {
         if (extractionTimer.current) clearInterval(extractionTimer.current);
+        worker.terminate();
+        workerRef.current = null;
         
-        console.log(`[Extraction] Pack created: ${packId.slice(0, 12)}... with ${items.entities.length} entities`);
+        // CLEAR persistence on success
+        localStorage.removeItem(DRAFT_SOURCE_KEY);
+        localStorage.removeItem(DRAFT_META_KEY);
+        localStorage.removeItem(DRAFT_EXTRACTING_KEY);
         
-        setPack(newPack);
+        console.log(`[Extraction] Pack created in ${msg.processingTimeMs}ms with ${msg.pack.items.entities.length} entities`);
+        
+        setPack(msg.pack);
         setStep("extract");
         setExtractionStatus("completed");
         setIsExtracting(false);
-      } catch (err: any) {
-        if (extractionTimer.current) clearInterval(extractionTimer.current);
-        console.error("[Extraction Error]", err);
-        setExtractionStatus("failed");
-        setExtractionError(err?.message || "Unknown error");
-        setIsExtracting(false);
       }
-    }, 100);
+      
+      if (msg.type === 'error') {
+        if (extractionTimer.current) clearInterval(extractionTimer.current);
+        worker.terminate();
+        workerRef.current = null;
+        
+        console.error("[Extraction Error]", msg.message);
+        setExtractionStatus("failed");
+        setExtractionError(msg.message || "Unknown error. Your source text has been saved.");
+        setExtractionPhase("");
+        setIsExtracting(false);
+        localStorage.removeItem(DRAFT_EXTRACTING_KEY);
+      }
+    };
+    
+    worker.onerror = (error) => {
+      if (extractionTimer.current) clearInterval(extractionTimer.current);
+      worker.terminate();
+      workerRef.current = null;
+      
+      console.error("[Extraction Worker Error]", error);
+      setExtractionStatus("failed");
+      setExtractionError("Worker error: " + (error.message || "Unknown error. Your source text has been saved."));
+      setExtractionPhase("");
+      setIsExtracting(false);
+      localStorage.removeItem(DRAFT_EXTRACTING_KEY);
+    };
+    
+    // Send extraction request to worker
+    const request: ExtractRequest = {
+      type: 'extract',
+      text: sourceText,
+      options: extractOptions,
+      metadata
+    };
+    
+    worker.postMessage(request);
+    
+    if (isLargeDoc) {
+      console.log(`[Extraction] Large document detected (${charCount} chars). Using Web Worker for non-blocking extraction.`);
+    }
   };
 
   const handleSave = async () => {
@@ -785,6 +867,18 @@ export default function LanternExtract() {
                     <option>Social</option>
                   </select>
                 </div>
+                {sourceText.length > 50000 && !isExtracting && extractionStatus === "idle" && (
+                  <div className="mt-3 p-3 bg-amber-500/10 border border-amber-500/30 rounded-md">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs font-mono text-amber-500">
+                        <p className="font-semibold">Large Document ({(sourceText.length / 1000).toFixed(0)}K chars)</p>
+                        <p className="mt-1 opacity-80">Extraction may take 1-3 minutes. Your text will be saved automatically if interrupted.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
                 <Button 
                   disabled={!sourceText || isExtracting} 
                   onClick={handleExtract}
@@ -801,27 +895,39 @@ export default function LanternExtract() {
                   )}
                 </Button>
                 
-                {isExtracting && extractionElapsed > 30000 && (
-                  <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0" />
-                      <div className="text-xs font-mono text-yellow-500">
-                        <p className="font-semibold">Long extraction in progress</p>
-                        <p className="mt-1 opacity-80">Large documents may take several minutes. Do not refresh the page.</p>
-                        <p className="mt-1 opacity-60">Elapsed: {Math.floor(extractionElapsed / 1000)}s | Document: {sourceText.length.toLocaleString()} chars</p>
+                {isExtracting && (
+                  <div className="mt-3 p-3 bg-cyan-500/10 border border-cyan-500/30 rounded-md">
+                    <div className="flex flex-col gap-2">
+                      <div className="flex items-center justify-between text-xs font-mono text-cyan-500">
+                        <span>{extractionPhase || "Processing..."}</span>
+                        <span>{extractionProgress}%</span>
                       </div>
+                      <div className="h-1.5 bg-cyan-500/20 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-cyan-500 transition-all duration-300"
+                          style={{ width: `${extractionProgress}%` }}
+                        />
+                      </div>
+                      <p className="text-[10px] font-mono text-cyan-500/60">
+                        Elapsed: {Math.floor(extractionElapsed / 1000)}s | {sourceText.length.toLocaleString()} chars
+                      </p>
+                      {extractionElapsed > 30000 && (
+                        <p className="text-[10px] font-mono text-yellow-500">
+                          Large document - do not refresh. Your text is saved for recovery.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )}
                 
-                {(extractionStatus === "failed" || extractionStatus === "timeout") && (
+                {(extractionStatus === "failed" || extractionStatus === "timeout") && !isExtracting && (
                   <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-md">
                     <div className="flex items-start gap-2">
                       <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
                       <div className="text-xs font-mono text-red-500">
-                        <p className="font-semibold">{extractionStatus === "timeout" ? "Extraction Timeout" : "Extraction Failed"}</p>
+                        <p className="font-semibold">{extractionStatus === "timeout" ? "Extraction Timeout" : "Extraction Issue"}</p>
                         <p className="mt-1 opacity-80">{extractionError}</p>
-                        <p className="mt-1 opacity-60">Your source text is preserved. Try again or use a smaller document.</p>
+                        <p className="mt-2 opacity-60">Your source text is preserved. You can try again.</p>
                       </div>
                     </div>
                   </div>
