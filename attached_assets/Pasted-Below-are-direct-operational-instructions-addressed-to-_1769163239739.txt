@@ -1,0 +1,112 @@
+Below are direct, operational instructions addressed to the agent.
+This is not commentary. This is a task directive. You can paste this verbatim.
+
+⸻
+
+DIRECTIVE TO AGENT — EXTRACTION UI DESYNC / LONG-JOB HANDLING
+
+We are observing a reproducible UX failure during long extractions (e.g., Roe v. Wade with full sanitation + confidence enabled).
+
+Observed behavior (confirmed by user):
+	•	Extraction spinner runs for multiple minutes
+	•	Source Text panel goes blank mid-extraction
+	•	Page remains scrollable and responsive
+	•	No explicit error is shown
+	•	User cannot tell whether:
+	•	extraction is still running
+	•	extraction completed
+	•	or UI lost state
+
+This is not acceptable production behavior.
+
+⸻
+
+REQUIRED DIAGNOSIS (DO NOT SKIP)
+
+You must determine and report back on all three of the following:
+	1.	Backend state
+	•	Does extraction continue after UI blanks?
+	•	Is the job durable if the page refreshes?
+	•	Is there already a job ID or background task abstraction?
+	2.	Frontend cause
+	•	What triggers the Source Text panel to clear?
+	•	state reset?
+	•	component re-mount?
+	•	async race?
+	•	streaming boundary?
+	•	Confirm whether UI assumes synchronous completion.
+	3.	Completion visibility
+	•	When extraction finishes, where does the result land?
+	•	Library?
+	•	DB only?
+	•	lost unless UI catches it?
+
+You must show evidence, not just describe:
+	•	console logs
+	•	network tab screenshot
+	•	or server logs indicating job lifecycle
+
+⸻
+
+REQUIRED FIX (MINIMUM ACCEPTABLE)
+
+Implement job-aware extraction UX.
+
+At minimum, one of the following must exist:
+
+Option A (Preferred)
+	•	Extraction returns a job ID
+	•	UI polls job status
+	•	UI explicitly shows:
+	•	“Running in background”
+	•	“Completed”
+	•	“Failed”
+
+Option B (Acceptable interim)
+	•	Extraction is explicitly blocking
+	•	UI does NOT clear source text until completion
+	•	Spinner is tied to actual backend completion
+	•	Timeout or error state is surfaced
+
+⸻
+
+UX REQUIREMENTS (NON-NEGOTIABLE)
+	•	Source text must never disappear silently
+	•	Spinner must not run indefinitely
+	•	User must always be able to answer:
+“Is this still running, finished, or broken?”
+
+If extraction completes while UI is desynced:
+	•	The resulting pack must appear in Library
+	•	UI must reconcile on refresh
+
+⸻
+
+REPORT BACK REQUIREMENTS (MANDATORY)
+
+When done, you must report back with:
+	1.	Root cause (1–2 sentences)
+	2.	What changed (explicit)
+	3.	Proof:
+	•	screenshot of fixed behavior
+	•	or short screen recording
+	4.	Confirmation of:
+	•	what happens if user refreshes mid-extract
+	•	max safe extract duration
+
+If you cannot fully fix it yet:
+	•	Implement a temporary user-visible warning
+	•	State clearly what is safe to do
+
+⸻
+
+PRIORITY
+
+This issue blocks:
+	•	user trust
+	•	long-document ingestion
+	•	perception of system stability
+
+Treat as P1 UX correctness, not polish.
+
+Report back when complete, with evidence.

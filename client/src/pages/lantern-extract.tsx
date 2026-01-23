@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -69,6 +69,12 @@ export default function LanternExtract() {
   const [determinismStatus, setDeterminismStatus] = useState<"pending" | "pass" | "fail">("pending");
   const [provenanceStatus, setProvenanceStatus] = useState<"pending" | "pass" | "fail">("pending");
   const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionStatus, setExtractionStatus] = useState<"idle" | "running" | "completed" | "failed" | "timeout">("idle");
+  const [extractionElapsed, setExtractionElapsed] = useState(0);
+  const [extractionError, setExtractionError] = useState<string | null>(null);
+  const extractionStartTime = useRef<number>(0);
+  const extractionTimer = useRef<NodeJS.Timeout | null>(null);
+  const sourceTextRef = useRef<string>("");
 
   const [sourceText, setSourceText] = useState("");
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -132,20 +138,67 @@ export default function LanternExtract() {
         if (library) {
             setSavedPacks(library.packs);
         } else {
-            // Initialize empty if needed, or just leave as empty array default
             setSavedPacks([]); 
         }
     };
     load();
   }, []);
 
+  // Cleanup extraction timer on unmount
+  useEffect(() => {
+    return () => {
+      if (extractionTimer.current) {
+        clearInterval(extractionTimer.current);
+      }
+    };
+  }, []);
+
+  // Keep sourceTextRef in sync with sourceText
+  useEffect(() => {
+    sourceTextRef.current = sourceText;
+  }, [sourceText]);
+
+  const EXTRACTION_TIMEOUT_MS = 120000;
+  const EXTRACTION_WARNING_MS = 30000;
+
   const handleExtract = () => {
     if (isExtracting) return;
+    
+    sourceTextRef.current = sourceText;
+    const charCount = sourceText.length;
+    console.log(`[Extraction] Starting extraction of ${charCount} characters at ${new Date().toISOString()}`);
+    
     setIsExtracting(true);
+    setExtractionStatus("running");
+    setExtractionError(null);
+    setExtractionElapsed(0);
+    extractionStartTime.current = Date.now();
+    
+    if (extractionTimer.current) {
+      clearInterval(extractionTimer.current);
+    }
+    extractionTimer.current = setInterval(() => {
+      const elapsed = Date.now() - extractionStartTime.current;
+      setExtractionElapsed(elapsed);
+      
+      if (elapsed > EXTRACTION_TIMEOUT_MS) {
+        console.error("[Extraction] Timeout after", elapsed, "ms");
+        setExtractionStatus("timeout");
+        setExtractionError("Extraction timed out. Document may be too large for this device.");
+        setIsExtracting(false);
+        if (extractionTimer.current) clearInterval(extractionTimer.current);
+      }
+    }, 500);
     
     setTimeout(() => {
       try {
-        const { items, stats, stable_source_hash, trust } = extract(sourceText, extractOptions);
+        console.log("[Extraction] Beginning processing...");
+        const startProcess = Date.now();
+        
+        const { items, stats, stable_source_hash, trust } = extract(sourceTextRef.current, extractOptions);
+        
+        const processingTime = Date.now() - startProcess;
+        console.log(`[Extraction] Processing completed in ${processingTime}ms`);
         
         const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
             schema: "lantern.extract.pack.v1",
@@ -163,15 +216,22 @@ export default function LanternExtract() {
           hashes: { source_text_sha256: stable_source_hash, pack_sha256: packId }
         };
         
+        if (extractionTimer.current) clearInterval(extractionTimer.current);
+        
+        console.log(`[Extraction] Pack created: ${packId.slice(0, 12)}... with ${items.entities.length} entities`);
+        
         setPack(newPack);
         setStep("extract");
+        setExtractionStatus("completed");
         setIsExtracting(false);
       } catch (err: any) {
+        if (extractionTimer.current) clearInterval(extractionTimer.current);
         console.error("[Extraction Error]", err);
-        alert("Extraction failed: " + (err?.message || "Unknown error"));
+        setExtractionStatus("failed");
+        setExtractionError(err?.message || "Unknown error");
         setIsExtracting(false);
       }
-    }, 50);
+    }, 100);
   };
 
   const handleSave = async () => {
@@ -729,16 +789,55 @@ export default function LanternExtract() {
                   disabled={!sourceText || isExtracting} 
                   onClick={handleExtract}
                   className="w-full mt-4 font-mono uppercase bg-cyan-500 text-black hover:bg-cyan-400"
+                  data-testid="button-run-extraction"
                 >
                   {isExtracting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Extracting...
+                      Extracting... ({Math.floor(extractionElapsed / 1000)}s)
                     </>
                   ) : (
                     "Run Extraction"
                   )}
                 </Button>
+                
+                {isExtracting && extractionElapsed > 30000 && (
+                  <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-md">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs font-mono text-yellow-500">
+                        <p className="font-semibold">Long extraction in progress</p>
+                        <p className="mt-1 opacity-80">Large documents may take several minutes. Do not refresh the page.</p>
+                        <p className="mt-1 opacity-60">Elapsed: {Math.floor(extractionElapsed / 1000)}s | Document: {sourceText.length.toLocaleString()} chars</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {(extractionStatus === "failed" || extractionStatus === "timeout") && (
+                  <div className="mt-3 p-3 bg-red-500/10 border border-red-500/30 rounded-md">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs font-mono text-red-500">
+                        <p className="font-semibold">{extractionStatus === "timeout" ? "Extraction Timeout" : "Extraction Failed"}</p>
+                        <p className="mt-1 opacity-80">{extractionError}</p>
+                        <p className="mt-1 opacity-60">Your source text is preserved. Try again or use a smaller document.</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {extractionStatus === "completed" && step === "input" && (
+                  <div className="mt-3 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-md">
+                    <div className="flex items-start gap-2">
+                      <Check className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-xs font-mono text-emerald-500">
+                        <p className="font-semibold">Extraction Completed</p>
+                        <p className="mt-1 opacity-80">Processed in {Math.floor(extractionElapsed / 1000)}s</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
