@@ -34,6 +34,21 @@ Two discriminated pack types coexist in the library:
 - Produces entities, quotes, metrics, and timeline events
 - Enforces provenance validation: "No offset, no item"
 - Stable IDs via SHA-256 hashing of content + offsets
+- **Sanitation Pass** (v0.1.6): Entity denylist, type classification, confidence scoring
+
+**Entity Sanitizer** (`client/src/lib/heuristics/entities/entitySanitizer.ts`)
+- 120+ word denylist blocking stopwords, temporal phrases, citation scaffolding
+- Entity type classification: Person, Organization, Location, Event, Product
+- Confidence scoring per entity: span_length + ontology_match + canonical_frequency
+- Canonical collapse: deduplicates exact position matches
+- Reclassification: Temporal phrases → Timeline events
+
+**Trust Contract** (Pack Metadata)
+- `schema_version`: Pack schema identifier
+- `confidence_model`: Scoring formula used
+- `sanitation_pass`: Boolean indicating sanitation applied
+- `pack_confidence`: Aggregate confidence score (0-1)
+- `confidence_threshold`: Minimum confidence for inclusion (default 0.5)
 
 **Heuristics System** (`client/src/lib/heuristics/`)
 - Influence Hubs: Degree centrality analysis
