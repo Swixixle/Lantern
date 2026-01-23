@@ -66,33 +66,7 @@ export default function LanternExtract() {
   const [quotePage, setQuotePage] = useState(1);
   const [metricPage, setMetricPage] = useState(1);
   const [timelinePage, setTimelinePage] = useState(1);
-  
-  // Reset pagination when pack changes and clamp pages to valid range
   const packIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!pack) return;
-    
-    // Reset pages on pack change
-    if (pack.pack_id !== packIdRef.current) {
-      packIdRef.current = pack.pack_id;
-      setEntityPage(1);
-      setQuotePage(1);
-      setMetricPage(1);
-      setTimelinePage(1);
-      return;
-    }
-    
-    // Clamp pages to valid ranges (handles data changes)
-    const entityMax = Math.max(1, Math.ceil(pack.items.entities.length / PAGE_SIZE));
-    const quoteMax = Math.max(1, Math.ceil(pack.items.quotes.length / PAGE_SIZE));
-    const metricMax = Math.max(1, Math.ceil(pack.items.metrics.length / PAGE_SIZE));
-    const timelineMax = Math.max(1, Math.ceil(pack.items.timeline.length / PAGE_SIZE));
-    
-    if (entityPage > entityMax) setEntityPage(entityMax);
-    if (quotePage > quoteMax) setQuotePage(quoteMax);
-    if (metricPage > metricMax) setMetricPage(metricMax);
-    if (timelinePage > timelineMax) setTimelinePage(timelineMax);
-  }, [pack?.pack_id, pack?.items.entities.length, pack?.items.quotes.length, pack?.items.metrics.length, pack?.items.timeline.length, entityPage, quotePage, metricPage, timelinePage]);
 
   // Diff View State
   const [diffMode, setDiffMode] = useState(false);
@@ -170,6 +144,32 @@ export default function LanternExtract() {
   
   const [extractOptions, setExtractOptions] = useState<ExtractionOptions>({ mode: "balanced" });
   const [pack, setPack] = useState<LanternPack | null>(null);
+  
+  // Reset pagination when pack changes and clamp pages to valid range
+  useEffect(() => {
+    if (!pack) return;
+    
+    // Reset pages on pack change
+    if (pack.pack_id !== packIdRef.current) {
+      packIdRef.current = pack.pack_id;
+      setEntityPage(1);
+      setQuotePage(1);
+      setMetricPage(1);
+      setTimelinePage(1);
+      return;
+    }
+    
+    // Clamp pages to valid ranges (handles data changes)
+    const entityMax = Math.max(1, Math.ceil(pack.items.entities.length / PAGE_SIZE));
+    const quoteMax = Math.max(1, Math.ceil(pack.items.quotes.length / PAGE_SIZE));
+    const metricMax = Math.max(1, Math.ceil(pack.items.metrics.length / PAGE_SIZE));
+    const timelineMax = Math.max(1, Math.ceil(pack.items.timeline.length / PAGE_SIZE));
+    
+    if (entityPage > entityMax) setEntityPage(entityMax);
+    if (quotePage > quoteMax) setQuotePage(quoteMax);
+    if (metricPage > metricMax) setMetricPage(metricMax);
+    if (timelinePage > timelineMax) setTimelinePage(timelineMax);
+  }, [pack?.pack_id, pack?.items.entities.length, pack?.items.quotes.length, pack?.items.metrics.length, pack?.items.timeline.length, entityPage, quotePage, metricPage, timelinePage]);
   
   // Persistence keys for recovery
   const DRAFT_SOURCE_KEY = "lantern_draft_source";
