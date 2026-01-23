@@ -139,26 +139,31 @@ export default function LanternExtract() {
   }, []);
 
   const handleExtract = () => {
-    const { items, stats, stable_source_hash, trust } = extract(sourceText, extractOptions);
-    
-    const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
-        schema: "lantern.extract.pack.v1",
-        engine: { name: "heuristic", version: "0.1.6-sanitized" },
-        source: { ...metadata, retrieved_at: new Date().toISOString() },
-        items,
-        stats,
-        trust
-    };
+    try {
+      const { items, stats, stable_source_hash, trust } = extract(sourceText, extractOptions);
+      
+      const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
+          schema: "lantern.extract.pack.v1",
+          engine: { name: "heuristic", version: "0.1.6-sanitized" },
+          source: { ...metadata, retrieved_at: new Date().toISOString() },
+          items,
+          stats,
+          trust
+      };
 
-    const packId = computePackId(initialPackWithoutId, stable_source_hash);
-    const newPack: LanternPack = {
-      ...initialPackWithoutId,
-      pack_id: packId,
-      hashes: { source_text_sha256: stable_source_hash, pack_sha256: packId }
-    };
-    
-    setPack(newPack);
-    setStep("extract");
+      const packId = computePackId(initialPackWithoutId, stable_source_hash);
+      const newPack: LanternPack = {
+        ...initialPackWithoutId,
+        pack_id: packId,
+        hashes: { source_text_sha256: stable_source_hash, pack_sha256: packId }
+      };
+      
+      setPack(newPack);
+      setStep("extract");
+    } catch (err: any) {
+      console.error("[Extraction Error]", err);
+      alert("Extraction failed: " + (err?.message || "Unknown error"));
+    }
   };
 
   const handleSave = async () => {
