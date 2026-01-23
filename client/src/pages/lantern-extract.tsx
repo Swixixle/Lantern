@@ -185,23 +185,6 @@ export default function LanternExtract() {
     };
   }, []);
 
-  // DEBUG: Global click capture to diagnose blocked clicks
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      console.log("[DEBUG CLICK]", {
-        tag: target.tagName,
-        className: target.className?.slice?.(0, 80),
-        id: target.id,
-        testId: target.getAttribute('data-testid'),
-        x: e.clientX,
-        y: e.clientY
-      });
-    };
-    document.addEventListener('click', handler, true); // capture phase
-    return () => document.removeEventListener('click', handler, true);
-  }, []);
-
   // Keep sourceTextRef in sync with sourceText
   useEffect(() => {
     sourceTextRef.current = sourceText;
@@ -334,7 +317,6 @@ export default function LanternExtract() {
   };
 
   const handleSave = async () => {
-    console.log("CLICK save snapshot", { hasPack: !!pack });
     if (pack) {
       setStorageStatus("saving");
       const existing = savedPacks.find(p => isExtractPack(p) ? p.pack_id === pack.pack_id : p.packId === pack.pack_id);
@@ -392,7 +374,6 @@ export default function LanternExtract() {
     : savedPacks;
 
   const reset = () => {
-    console.log("CLICK reset");
     setStep("input");
     setPack(null);
     setSourceText("");
@@ -425,7 +406,6 @@ export default function LanternExtract() {
   };
 
   const downloadJSON = () => {
-    console.log("CLICK export JSON", { hasPack: !!pack });
     if (!pack) return;
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -437,7 +417,6 @@ export default function LanternExtract() {
   };
 
   const downloadPDF = async () => {
-    console.log("CLICK export PDF", { hasPack: !!pack });
     if (!pack) {
       alert("No pack to export");
       return;
@@ -992,9 +971,14 @@ export default function LanternExtract() {
 
                 <div className="flex-1 overflow-hidden relative">
                   <ScrollArea className="h-full pr-4">
-                    {/* Simplified Content Rendering */}
+                    {/* Content with pagination to prevent freezing on large packs */}
                     <TabsContent value="entities" className="mt-0 space-y-4">
-                      {pack.items.entities.map((item) => {
+                      {pack.items.entities.length > 100 && (
+                        <div className="text-xs font-mono text-yellow-500 bg-yellow-500/10 p-2 rounded mb-2">
+                          Showing first 100 of {pack.items.entities.length} entities. Export to see all.
+                        </div>
+                      )}
+                      {pack.items.entities.slice(0, 100).map((item) => {
                         const confScore = Math.round((item.confidence_score || item.confidence) * 100);
                         const confColor = confScore >= 70 ? "text-emerald-500" : confScore >= 50 ? "text-yellow-500" : "text-red-500";
                         return (
@@ -1016,7 +1000,12 @@ export default function LanternExtract() {
                       })}
                     </TabsContent>
                     <TabsContent value="quotes" className="mt-0 space-y-4">
-                      {pack.items.quotes.map((item) => (
+                      {pack.items.quotes.length > 100 && (
+                        <div className="text-xs font-mono text-yellow-500 bg-yellow-500/10 p-2 rounded mb-2">
+                          Showing first 100 of {pack.items.quotes.length} quotes. Export to see all.
+                        </div>
+                      )}
+                      {pack.items.quotes.slice(0, 100).map((item) => (
                         <ExtractionCard 
                           key={item.id} 
                           item={item} 
@@ -1028,7 +1017,12 @@ export default function LanternExtract() {
                       ))}
                     </TabsContent>
                     <TabsContent value="metrics" className="mt-0 space-y-4">
-                      {pack.items.metrics.map((item) => (
+                      {pack.items.metrics.length > 100 && (
+                        <div className="text-xs font-mono text-yellow-500 bg-yellow-500/10 p-2 rounded mb-2">
+                          Showing first 100 of {pack.items.metrics.length} metrics. Export to see all.
+                        </div>
+                      )}
+                      {pack.items.metrics.slice(0, 100).map((item) => (
                         <ExtractionCard 
                           key={item.id} 
                           item={item} 
@@ -1046,7 +1040,12 @@ export default function LanternExtract() {
                       ))}
                     </TabsContent>
                     <TabsContent value="timeline" className="mt-0 space-y-4">
-                      {pack.items.timeline.map((item) => (
+                      {pack.items.timeline.length > 100 && (
+                        <div className="text-xs font-mono text-yellow-500 bg-yellow-500/10 p-2 rounded mb-2">
+                          Showing first 100 of {pack.items.timeline.length} events. Export to see all.
+                        </div>
+                      )}
+                      {pack.items.timeline.slice(0, 100).map((item) => (
                         <ExtractionCard 
                           key={item.id} 
                           item={item} 
@@ -1101,7 +1100,6 @@ export default function LanternExtract() {
                   <Button 
                     data-testid="button-save-snapshot"
                     onClick={handleSave} 
-                    onPointerDown={() => console.log("POINTER save")}
                     className="w-full font-mono uppercase bg-emerald-500 text-black hover:bg-emerald-400"
                   >
                     <Save className="w-4 h-4 mr-2" /> Save Snapshot
@@ -1109,7 +1107,6 @@ export default function LanternExtract() {
                   <Button 
                     data-testid="button-export-json"
                     onClick={downloadJSON} 
-                    onPointerDown={() => console.log("POINTER json")}
                     variant="outline" 
                     className="w-full font-mono uppercase text-xs"
                   >
@@ -1118,7 +1115,6 @@ export default function LanternExtract() {
                   <Button 
                     data-testid="button-export-pdf"
                     onClick={downloadPDF} 
-                    onPointerDown={() => console.log("POINTER pdf")}
                     variant="outline" 
                     className="w-full font-mono uppercase text-xs"
                   >
