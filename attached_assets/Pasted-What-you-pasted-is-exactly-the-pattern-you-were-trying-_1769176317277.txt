@@ -1,0 +1,114 @@
+What you pasted is exactly the pattern you were trying to kill: it starts with institutional-grade requirements, then repeatedly drifts back to “simpler approach / good enough,” and then declares completion without the required evidence.
+
+Here’s how to handle this, cleanly.
+
+⸻
+
+What’s good in the agent’s update
+	•	Correct architectural intent showed up: durable server-side job + polling + refresh recovery.
+	•	Threshold-based routing (“75K+ chars goes server-side”) is a reasonable first cut.
+	•	Mentions of watchdog / stalled detection are aligned with trust requirements.
+
+⸻
+
+What is not acceptable yet
+
+1) “Let me take a simpler approach” is a red flag, not a step
+
+Increasing pagination limits is not durability. It is a local mitigation for one failure mode (render stall). It does not satisfy:
+	•	“source text must never disappear while extraction is running”
+	•	“refresh mid-extract must continue or recover”
+	•	“no indefinite spinner: timeout + error”
+	•	“proof artifacts”
+
+Pagination/virtualization is still required as a structural guardrail because you cannot assume “1000 is manageable” across devices, browsers, or future extraction sizes.
+
+2) “Server-side durable job queue is complete” is not evidence
+
+You explicitly required proof. Right now you have claims. You asked for demonstrations.
+
+3) “Saved progress at end of loop” is ambiguous
+
+That can still fail durability if:
+	•	progress is only in memory and not persisted
+	•	job state is overwritten incorrectly
+	•	partial artifacts aren’t recoverable
+	•	the UI can’t reconnect deterministically
+
+This needs concrete verification.
+
+⸻
+
+What you should tell the agent now (tight acceptance gates)
+
+Send this as your response. It’s short, binding, and non-negotiable.
+
+P0 Acceptance Criteria (must pass before any more “testing” talk)
+	1.	Proof run: long doc completes
+
+	•	Run Roe v. Wade (or equivalent).
+	•	Video showing:
+	•	phases: parsing → extracting → sanitizing → scoring → packaging
+	•	progress updates (coarse is fine)
+	•	source text remains visible the entire time
+	•	pack appears in Library
+	•	Export JSON and Export PDF both work
+
+	2.	Proof run: refresh mid-extract
+
+	•	Start extraction.
+	•	Refresh in the middle.
+	•	Video showing either:
+	•	UI reconnects to job_id and continues, OR
+	•	job completes and pack appears in Library after refresh (without manual re-run)
+
+	3.	No indefinite spinner
+
+	•	Implement a watchdog:
+	•	if no progress heartbeat for N seconds → explicit “stalled” state with recoverable action
+	•	Demonstrate it by forcing a stall (sleep, kill worker, or pause queue) and show the UI transitions correctly.
+
+	4.	UI must stay interactive
+
+	•	On the Pack Export page, demonstrate every button click:
+	•	Save Snapshot
+	•	Export JSON
+	•	Export PDF
+	•	Library
+	•	Reset
+	•	Video + console screenshot showing no errors.
+
+	5.	Rendering guardrail is structural
+
+	•	Either implement virtualization (preferred) or prove with profiling that worst-case packs won’t stall UI.
+	•	“Pagination limit 1000” is not accepted as the final solution.
+
+Instrumentation required (minimal)
+	•	Server logs must show:
+	•	job_id
+	•	phase transitions
+	•	progress increments
+	•	completion with pack_id
+	•	Client must log:
+	•	job_id persistence
+	•	reconnect events after refresh
+	•	stall detection triggers
+
+⸻
+
+One question you do not need to ask the agent
+
+“Want to test it with a large document?”
+
+No. You already told them what constitutes a test. They must bring back the proof artifacts without prompting.
+
+⸻
+
+The correct reading of the current state
+
+Based on the text you pasted:
+	•	The agent is close if the server job path is real.
+	•	But they are still in “implementation narration” mode, not “institution-grade evidence” mode.
+	•	Your next move is to force them into proof production with the gates above.
+
+If you paste their reply (especially the parts describing what they actually recorded / observed), I’ll help you evaluate whether it satisfies the requirements or whether they’re still slipping back into convenience.

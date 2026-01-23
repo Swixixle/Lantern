@@ -150,16 +150,38 @@ export default function LanternExtract() {
   const STALL_THRESHOLD_MS = 30000; // 30 seconds without progress = stalled
   const SERVER_JOB_THRESHOLD = 75000; // Use server job for docs over 75K chars
 
+  // Stall state tracking
+  const [isStalled, setIsStalled] = useState(false);
+  const lastProgressRef = useRef<number>(0);
+  const lastProgressTimeRef = useRef<number>(Date.now());
+
   // Polling function for server jobs
   const pollJobStatus = async (jobId: string) => {
     try {
       const res = await fetch(`/api/jobs/${jobId}`);
       if (!res.ok) {
+        console.error(`[Client] [${jobId}] Poll failed: Job not found`);
         throw new Error("Job not found");
       }
       const job = await res.json();
       
-      setLastHeartbeat(Date.now());
+      const now = Date.now();
+      setLastHeartbeat(now);
+      
+      // Stall detection: if progress hasn't changed for STALL_THRESHOLD_MS
+      if (job.progress !== lastProgressRef.current) {
+        lastProgressRef.current = job.progress;
+        lastProgressTimeRef.current = now;
+        if (isStalled) {
+          console.log(`[Client] [${jobId}] Resuming from stall - progress now ${job.progress}%`);
+          setIsStalled(false);
+        }
+      } else if (now - lastProgressTimeRef.current > STALL_THRESHOLD_MS && !isStalled) {
+        console.warn(`[Client] [${jobId}] STALL DETECTED - no progress for ${STALL_THRESHOLD_MS/1000}s`);
+        setIsStalled(true);
+      }
+      
+      console.log(`[Client] [${jobId}] Poll: state=${job.state} progress=${job.progress}% stalled=${isStalled}`);
       setExtractionPhase(job.state.charAt(0).toUpperCase() + job.state.slice(1) + "...");
       setExtractionProgress(job.progress);
       
@@ -173,12 +195,14 @@ export default function LanternExtract() {
         localStorage.removeItem(DRAFT_META_KEY);
         localStorage.removeItem(DRAFT_EXTRACTING_KEY);
         
-        console.log(`[Server Job] Completed with pack_id ${job.pack_id}`);
+        console.log(`[Client] [${jobId}] COMPLETE pack_id=${job.pack_id}`);
         setPack(job.pack);
         setStep("extract");
         setExtractionStatus("completed");
         setIsExtracting(false);
         setServerJobId(null);
+        isServerJobRef.current = false;
+        setIsStalled(false);
         return true;
       }
       
@@ -189,25 +213,31 @@ export default function LanternExtract() {
         localStorage.removeItem(JOB_ID_KEY);
         localStorage.removeItem(DRAFT_EXTRACTING_KEY);
         
-        console.error(`[Server Job] Failed: ${job.error_message}`);
+        console.error(`[Client] [${jobId}] FAILED: ${job.error_message}`);
         setExtractionStatus("failed");
         setExtractionError(job.error_message || "Server job failed. Your source text is preserved.");
         setIsExtracting(false);
         setServerJobId(null);
+        isServerJobRef.current = false;
+        setIsStalled(false);
         return true;
       }
       
       return false;
     } catch (err: any) {
-      console.error("[Server Job] Polling error:", err);
+      console.error(`[Client] Poll error:`, err);
       return false;
     }
   };
 
   // Start polling for a server job
   const startJobPolling = (jobId: string) => {
+    console.log(`[Client] [${jobId}] Starting job polling`);
     setServerJobId(jobId);
     setLastHeartbeat(Date.now());
+    lastProgressRef.current = 0;
+    lastProgressTimeRef.current = Date.now();
+    setIsStalled(false);
     
     // Clear any existing polling
     if (pollingRef.current) clearInterval(pollingRef.current);
@@ -220,6 +250,23 @@ export default function LanternExtract() {
         pollingRef.current = null;
       }
     }, 2000);
+  };
+
+  // Cancel stalled job and retry
+  const cancelStalledJob = () => {
+    console.log(`[Client] User cancelled stalled job ${serverJobId}`);
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    if (extractionTimer.current) clearInterval(extractionTimer.current);
+    
+    localStorage.removeItem(JOB_ID_KEY);
+    localStorage.removeItem(DRAFT_EXTRACTING_KEY);
+    
+    setExtractionStatus("failed");
+    setExtractionError("Job appeared stalled and was cancelled. Your source text is preserved. You can try again.");
+    setIsExtracting(false);
+    setServerJobId(null);
+    isServerJobRef.current = false;
+    setIsStalled(false);
   };
 
   // Init Load
@@ -1086,11 +1133,30 @@ export default function LanternExtract() {
                           Last update: {Math.round((Date.now() - lastHeartbeat) / 1000)}s ago
                         </div>
                       )}
-                      {serverJobId ? (
+                      {isStalled && serverJobId && (
+                        <div className="mt-2 p-2 bg-amber-500/20 border border-amber-500/40 rounded-md">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 text-[10px] font-mono text-amber-500">
+                              <AlertTriangle className="w-3 h-3" />
+                              <span>Job appears stalled - no progress for 30s</span>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 text-[10px] border-amber-500/50 text-amber-500 hover:bg-amber-500/20"
+                              onClick={cancelStalledJob}
+                              data-testid="button-cancel-stalled"
+                            >
+                              Cancel Job
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      {serverJobId && !isStalled ? (
                         <p className="text-[10px] font-mono text-emerald-500">
                           Durable mode - safe to refresh. Job will resume automatically.
                         </p>
-                      ) : extractionElapsed > 30000 ? (
+                      ) : !serverJobId && extractionElapsed > 30000 ? (
                         <p className="text-[10px] font-mono text-yellow-500">
                           Large document - do not refresh. Your text is saved for recovery.
                         </p>

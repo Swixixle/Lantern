@@ -25,8 +25,11 @@ async function processNextJob() {
 }
 
 async function processJob(jobId: string) {
+  const startTime = Date.now();
+  console.log(`[ExtractionProcessor] [${jobId}] Starting job at ${new Date().toISOString()}`);
+  
   const timeoutId = setTimeout(() => {
-    console.log(`[ExtractionProcessor] Job ${jobId} timed out`);
+    console.log(`[ExtractionProcessor] [${jobId}] TIMEOUT after 5 minutes`);
     activeJobs.delete(jobId);
     storage.failExtractionJob(jobId, "TIMEOUT", "Job timed out after 5 minutes");
   }, 300000);
@@ -40,26 +43,35 @@ async function processJob(jobId: string) {
     }
     
     const sourceText = job.sourceText;
+    const docSize = sourceText.length;
+    console.log(`[ExtractionProcessor] [${jobId}] Document size: ${docSize.toLocaleString()} chars`);
+    
     const metadata = JSON.parse(job.metadata);
     const options = job.options ? JSON.parse(job.options) : { mode: "balanced" };
     
+    console.log(`[ExtractionProcessor] [${jobId}] Phase: parsing (10%)`);
     await updateJobProgress(jobId, "parsing", 10);
     await sleep(100);
     
+    console.log(`[ExtractionProcessor] [${jobId}] Phase: extracting (30%)`);
     await updateJobProgress(jobId, "extracting", 30);
     
     const pack = await runExtraction(sourceText, metadata, options, async (phase, progress) => {
+      console.log(`[ExtractionProcessor] [${jobId}] Phase: ${phase} (${progress}%)`);
       await updateJobProgress(jobId, phase as ExtractionJobState, progress);
     });
     
+    console.log(`[ExtractionProcessor] [${jobId}] Phase: packaging (95%)`);
     await updateJobProgress(jobId, "packaging", 95);
     
     const packData = JSON.stringify(pack);
     await storage.completeExtractionJob(jobId, pack.pack_id, packData);
     
-    console.log(`[ExtractionProcessor] Job ${jobId} completed successfully`);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
+    console.log(`[ExtractionProcessor] [${jobId}] COMPLETE pack_id=${pack.pack_id} elapsed=${elapsed}s`);
+    console.log(`[ExtractionProcessor] [${jobId}] Stats: ${pack.items.entities.length} entities, ${pack.items.quotes.length} quotes, ${pack.items.metrics.length} metrics, ${pack.items.timeline.length} timeline`);
   } catch (err: any) {
-    console.error(`[ExtractionProcessor] Job ${jobId} failed:`, err);
+    console.error(`[ExtractionProcessor] [${jobId}] FAILED: ${err.message}`);
     await storage.failExtractionJob(jobId, "EXTRACTION_ERROR", err.message || "Unknown error");
   } finally {
     clearTimeout(activeJobs.get(jobId));
