@@ -1,0 +1,150 @@
+Acknowledged. With the code you provided, I can issue a provisional verification for Invariants 2, 4, 5 based on mechanism correctness and point out the two concrete gaps that could still fail in practice (and how to close them with minimal changes). Where a true PASS requires runtime observation, I will label it PASS (conditional) and specify the exact observation that must be true.
+
+⸻
+
+Invariant 2 — Refresh mid-extract UI behavior
+
+Assessment: PASS (conditional) — mechanism present and correct, but relies on two conditions
+
+Your recovery block does the right things structurally:
+	•	Detects an active job via JOB_ID_KEY in localStorage
+	•	Sets UI state to extracting/running with a reconnect phase
+	•	Restores sourceText and metadata for continuity
+	•	Restarts elapsed timer
+	•	Calls startJobPolling(savedJobId) and returns early
+
+That is the correct “rehydrate + resume polling” pattern.
+
+Conditions required for true PASS (what you must observe)
+	1.	The job actually continues server-side after refresh (you already have Invariant 1 PASS, so likely true).
+	2.	startJobPolling(savedJobId) must:
+	•	successfully fetch job status after refresh
+	•	transition UI to completed/failed deterministically
+	•	clear JOB_ID_KEY (and stop timers) on terminal state
+
+Two gaps to check (common failure points)
+	1.	Stale job id lock-in: If the job already completed before refresh, the UI will still enter “running” until polling resolves. That is acceptable only if polling resolves quickly and moves to “completed” without user-visible confusion.
+	•	Acceptance: within a short interval (1–2 polling ticks), status flips to completed and export becomes reachable.
+	2.	Timer cleanup: The code sets extractionTimer.current = setInterval(...) on recovery. If there is any path that can re-enter recovery without clearing an existing interval (component remount edge cases), you can end up with multiple timers.
+	•	Acceptance: only one interval runs; elapsed increments normally; no accelerated increments.
+
+Minimal hardening patch (recommended, not strictly required if tests pass)
+
+Add interval cleanup before starting a new one:
+
+if (extractionTimer.current) clearInterval(extractionTimer.current);
+
+and ensure terminal states clear everything (wherever polling resolves):
+	•	localStorage.removeItem(JOB_ID_KEY)
+	•	clearInterval(extractionTimer.current)
+	•	setIsExtracting(false)
+
+Verdict: PASS (conditional) pending the observation that refresh mid-job rehydrates, continues polling, and reaches terminal state without stuck “running” or duplicated timers.
+
+⸻
+
+Invariant 4 — Export buttons + console
+
+Assessment: FAIL risk / likely needs guardrails unless the step-gating is enforced in code, not just in UX flow
+
+You noted: “buttons are in the export step, only reachable after extraction completion.” That is a UX constraint, not a programmatic invariant, unless the export step rendering is strictly gated on a terminal success state.
+
+The snippet shows buttons with direct handlers:
+	•	handleSave
+	•	downloadJSON
+	•	downloadPDF
+
+No visible disabled gate, no defensive checks inside handlers.
+
+What must be true to declare PASS
+
+Either:
+
+A) Render-gating is strict, e.g. export step only renders when:
+	•	extractionStatus === "completed" | "succeeded" (whatever your canonical terminal success is)
+	•	AND resultsRef / extractedData exists
+
+or
+
+B) Handlers are defensive, e.g. downloadPDF checks prerequisites and no-ops/toasts without throwing.
+
+Why this can fail even with step flow
+	•	A refresh or state desync can land the UI on “export” step with missing extractedData (especially if step is derived from local pack existence rather than extract success).
+	•	Even if buttons are only shown post-success, double-clicks and edge timing (status flips, state not yet populated) can still throw.
+
+Minimal patch to close Invariant 4 decisively
+	1.	Compute a single gate:
+
+const canExport =
+  extractionStatus === "succeeded" && !!extractedData; // adapt names
+
+	2.	Disable buttons and guard handlers:
+
+<Button onClick={() => canExport && downloadJSON()} disabled={!canExport} ...>
+
+and inside downloadPDF/downloadJSON/handleSave:
+
+if (!canExport) {
+  console.warn("[Export] Blocked: extract not ready");
+  return;
+}
+
+This turns “reachable only after completion” into a real invariant.
+
+Verdict: NOT VERIFIED; provisionally FAIL until you confirm export step rendering is strictly gated by success + data presence, or you add the minimal guardrails above.
+
+⸻
+
+Invariant 5 — Rendering guardrail
+
+Assessment: PASS (conditional) — bounded preview exists; must confirm it is enforced across all tabs and no expensive full-data render occurs
+
+Your described guardrails are materially what we want:
+	•	PAGE_SIZE = 100 per tab
+	•	Pagination controls limit rendered rows
+	•	Clamping prevents out-of-range pages
+	•	Reset on pack switch prevents cross-pack bleed
+	•	Full data accessible via export rather than rendering everything
+
+What must be true to declare PASS
+	•	Every results view path uses the paginated slice, not the full dataset.
+	•	No tab/component accidentally renders the entire array (e.g., “All items” view ignoring pagination).
+	•	No derived computations do O(N) work on every render for large N (sorting/filtering without memoization).
+
+One specific thing to sanity-check
+
+Ensure the render uses data.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE) (or equivalent) and that any .map() is over the slice, not the full list.
+
+Verdict: PASS (conditional) pending quick confirmation that all tabs map over the sliced page data, not the full array, and that large datasets do not freeze on first render.
+
+⸻
+
+Actionable next step (no waiting, no ambiguity)
+
+To close this right now, do one of the following:
+
+Option 1 — You run checks and paste outcomes
+
+Provide:
+	•	Invariant 2: After refresh mid-job, does UI reconnect and finish? Any timer acceleration? Any stuck running?
+	•	Invariant 4: Can you force export step visible with missing data (refresh edge) and does console stay clean? Any errors on clicking export quickly?
+	•	Invariant 5: With a large result set, does extract/results view remain responsive? Any “page unresponsive” or console errors?
+
+Option 2 — I give you exact patch now (recommended)
+
+Given Invariant 4 is the highest risk and easiest to harden, I recommend you implement the guardrails immediately. If you paste the identifiers for:
+	•	extractionStatus possible values
+	•	the variable that holds extracted results (extractedData / extractResult / etc.)
+	•	where the export step is rendered (the if (...) or step switch)
+
+…I will return a precise diff for lantern-extract.tsx that:
+	•	adds canExport
+	•	disables buttons
+	•	guards handlers
+	•	logs blocked attempts
+	•	ensures no console errors
+
+As it stands from what you provided:
+	•	Invariant 2: PASS (conditional)
+	•	Invariant 4: provisionally FAIL / not verified (needs hard gates)
+	•	Invariant 5: PASS (conditional)
