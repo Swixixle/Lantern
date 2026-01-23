@@ -97,13 +97,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUpload(id: string): Promise<Upload | undefined> {
-    const result = await db.select().from(uploads).where(eq(uploads.id, id)).limit(1);
+    const result = await db.select().from(uploads)
+      .where(and(eq(uploads.id, id), isNull(uploads.deletedAt)))
+      .limit(1);
     return result[0];
   }
 
   async listUploadsForCase(caseId: string): Promise<Upload[]> {
     return db.select().from(uploads)
-      .where(eq(uploads.caseId, caseId))
+      .where(and(eq(uploads.caseId, caseId), isNull(uploads.deletedAt)))
       .orderBy(desc(uploads.createdAt));
   }
 
@@ -130,7 +132,7 @@ export class DatabaseStorage implements IStorage {
 
   async listPagesForUpload(uploadId: string): Promise<UploadPage[]> {
     return db.select().from(uploadPages)
-      .where(eq(uploadPages.uploadId, uploadId))
+      .where(and(eq(uploadPages.uploadId, uploadId), isNull(uploadPages.deletedAt)))
       .orderBy(uploadPages.pageNumber);
   }
 
@@ -141,13 +143,13 @@ export class DatabaseStorage implements IStorage {
 
   async listChunksForUpload(uploadId: string): Promise<Chunk[]> {
     return db.select().from(chunks)
-      .where(eq(chunks.uploadId, uploadId))
+      .where(and(eq(chunks.uploadId, uploadId), isNull(chunks.deletedAt)))
       .orderBy(chunks.chunkIndex);
   }
 
   async listChunksForCase(caseId: string): Promise<Chunk[]> {
     return db.select().from(chunks)
-      .where(eq(chunks.caseId, caseId))
+      .where(and(eq(chunks.caseId, caseId), isNull(chunks.deletedAt)))
       .orderBy(chunks.uploadId, chunks.chunkIndex);
   }
 }

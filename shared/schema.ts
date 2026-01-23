@@ -81,6 +81,7 @@ export const uploads = pgTable("uploads", {
   pageCount: integer("page_count"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
 }, (table) => [
   index("uploads_case_id_idx").on(table.caseId),
   index("uploads_case_created_idx").on(table.caseId, table.createdAt),
@@ -91,6 +92,7 @@ export const insertUploadSchema = createInsertSchema(uploads).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
+  deletedAt: true,
 });
 
 export type InsertUpload = z.infer<typeof insertUploadSchema>;
@@ -103,6 +105,7 @@ export const uploadPages = pgTable("upload_pages", {
   storagePath: text("storage_path"),
   sha256: text("sha256"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
 }, (table) => [
   index("upload_pages_upload_id_idx").on(table.uploadId),
   index("upload_pages_upload_page_idx").on(table.uploadId, table.pageNumber),
@@ -111,6 +114,7 @@ export const uploadPages = pgTable("upload_pages", {
 export const insertUploadPageSchema = createInsertSchema(uploadPages).omit({
   id: true,
   createdAt: true,
+  deletedAt: true,
 });
 
 export type InsertUploadPage = z.infer<typeof insertUploadPageSchema>;
@@ -118,13 +122,14 @@ export type UploadPage = typeof uploadPages.$inferSelect;
 
 export const chunks = pgTable("chunks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  caseId: varchar("case_id").notNull().references(() => cases.id),
+  caseId: varchar("case_id").notNull().references(() => cases.id, { onDelete: "cascade" }),
   uploadId: varchar("upload_id").notNull().references(() => uploads.id, { onDelete: "cascade" }),
   pageNumber: integer("page_number"),
   chunkIndex: integer("chunk_index").notNull(),
   content: text("content").notNull(),
   embedding: text("embedding"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
 }, (table) => [
   index("chunks_case_id_idx").on(table.caseId),
   index("chunks_upload_id_idx").on(table.uploadId),
@@ -134,6 +139,7 @@ export const chunks = pgTable("chunks", {
 export const insertChunkSchema = createInsertSchema(chunks).omit({
   id: true,
   createdAt: true,
+  deletedAt: true,
 });
 
 export type InsertChunk = z.infer<typeof insertChunkSchema>;
