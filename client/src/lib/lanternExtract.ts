@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { segmentSentences, type Segment } from "./heuristics/segmenters/sentenceSegmenter";
-import { extractEntities } from "./heuristics/entities/entityExtractor";
+import { extractEntities, type ExtractedEntity } from "./heuristics/entities/entityExtractor";
+import { sanitizeEntities, computePackConfidence, type SanitizedEntity, type EntityClass } from "./heuristics/entities/entitySanitizer";
 
 // --- TYPES ---
 
@@ -24,6 +25,9 @@ export type EntityItem = BaseItem & {
   text: string;
   type: "Person" | "Organization" | "Location" | "Event" | "Product";
   canonical_family_id?: string;
+  canonical_id?: string;
+  entity_class?: EntityClass;
+  confidence_score?: number;
 };
 
 export type QuoteItem = BaseItem & {
@@ -53,21 +57,31 @@ export type EngineStats = {
   duplicates_collapsed: number;
   invalid_dropped: number;
   headlines_suppressed: number;
+  sanitation_denied: number;
+  sanitation_reclassified: number;
+  sanitation_collapsed: number;
+};
+
+export type TrustMetadata = {
+  schema_version: string;
+  confidence_model: string;
+  sanitation_pass: boolean;
+  pack_confidence: number;
+  confidence_threshold: number;
 };
 
 export const LanternPackSchema = z.object({
   pack_id: z.string(),
   schema: z.literal("lantern.extract.pack.v1"),
-  // ... (Full validation schema would go here, keeping it minimal for discriminators)
   hashes: z.object({
       source_text_sha256: z.string(),
       pack_sha256: z.string()
   }),
-  // Allow other props loosely for now or define strictly
   engine: z.any(),
   source: z.any(),
   items: z.any(),
-  stats: z.any()
+  stats: z.any(),
+  trust: z.any().optional()
 });
 
 export const AnyPackSchema = z.discriminatedUnion("schema", [
@@ -82,6 +96,7 @@ export type LanternPack = {
   source: { title: string; author: string; publisher: string; url: string; published_at: string; source_type: string; retrieved_at: string };
   items: { entities: EntityItem[]; quotes: QuoteItem[]; metrics: MetricItem[]; timeline: TimelineItem[] };
   stats: EngineStats;
+  trust: TrustMetadata;
 };
 
 export type ExtractionOptions = {
@@ -143,7 +158,7 @@ export const createItemKey = (item: any, type: "entities" | "quotes" | "metrics"
 
 // --- EXTRACTION LOGIC (MOCK) ---
 
-export const extract = (text: string, options: ExtractionOptions): { items: LanternPack["items"], stats: EngineStats, stable_source_hash: string } => {
+export const extract = (text: string, options: ExtractionOptions): { items: LanternPack["items"], stats: EngineStats, stable_source_hash: string, trust: TrustMetadata } => {
   const stable_source_hash = mockHash(text);
   const items: LanternPack["items"] = {
     entities: [],
@@ -154,10 +169,22 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
   const stats: EngineStats = {
     duplicates_collapsed: 0,
     invalid_dropped: 0,
-    headlines_suppressed: 0
+    headlines_suppressed: 0,
+    sanitation_denied: 0,
+    sanitation_reclassified: 0,
+    sanitation_collapsed: 0
+  };
+  const CONFIDENCE_THRESHOLD = 0.5;
+
+  const defaultTrust: TrustMetadata = {
+    schema_version: "lantern.extract.pack.v1",
+    confidence_model: "span_length+ontology_match+canonical_frequency",
+    sanitation_pass: true,
+    pack_confidence: 0,
+    confidence_threshold: CONFIDENCE_THRESHOLD
   };
 
-  if (!text) return { items, stats, stable_source_hash };
+  if (!text) return { items, stats, stable_source_hash, trust: defaultTrust };
 
   // 1. Segment Sentences (M2 Priority #1)
   const segments = segmentSentences(text);
@@ -209,34 +236,73 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
       return null;
   };
 
-  // --- ENTITIES (Integrated M2.2 & M2.4) ---
-  // Run extractor PER SEGMENT to respect sentence boundaries and prevent cross-sentence merging.
+  // --- ENTITIES (Integrated M2.2 & M2.4 + Sanitation) ---
+  // Step 1: Extract raw entities per segment
+  const rawExtractedEntities: ExtractedEntity[] = [];
   segments.forEach(segment => {
       const segmentEntities = extractEntities(segment.text);
-      
       segmentEntities.forEach(e => {
-          // Adjust offsets to document-absolute
           const absStart = segment.start + e.start;
           const absEnd = segment.start + e.end;
-
-          const provenance = validateProvenance(absStart, absEnd, e.text);
-          if (!provenance) {
-              stats.invalid_dropped++;
-              return;
-          }
-
-          // Stable ID: Canonical + Offsets
-          const stableId = mockHash(`${e.canonical}:${absStart}:${absEnd}`);
-          
-          items.entities.push({
-              id: stableId,
-              provenance,
-              confidence: e.tier === "PRIMARY" ? 0.95 : (e.tier === "SECONDARY" ? 0.7 : 0.4),
-              included: e.tier !== "NOISE", 
-              text: e.text,
-              type: "Organization",
-              canonical_family_id: e.entity_id
+          rawExtractedEntities.push({
+              ...e,
+              start: absStart,
+              end: absEnd
           });
+      });
+  });
+
+  // Step 2: Apply sanitation pass (denylist, classification, confidence, dedupe)
+  const sanitizationResult = sanitizeEntities(rawExtractedEntities);
+  stats.sanitation_denied = sanitizationResult.stats.denied_count;
+  stats.sanitation_reclassified = sanitizationResult.stats.reclassified_count;
+  stats.sanitation_collapsed = sanitizationResult.stats.collapsed_count;
+
+  // Step 3: Convert sanitized entities to EntityItem format
+  sanitizationResult.entities.forEach(e => {
+      const provenance = validateProvenance(e.start, e.end, e.text);
+      if (!provenance) {
+          stats.invalid_dropped++;
+          return;
+      }
+
+      const stableId = mockHash(`${e.canonical}:${e.start}:${e.end}`);
+      const entityType = (e.entity_class === "Person" || e.entity_class === "Location" || 
+                         e.entity_class === "Organization" || e.entity_class === "Event" || 
+                         e.entity_class === "Product") ? e.entity_class : "Organization";
+      
+      items.entities.push({
+          id: stableId,
+          provenance,
+          confidence: e.confidence_score,
+          included: e.tier !== "NOISE" && e.confidence_score >= CONFIDENCE_THRESHOLD,
+          text: e.text,
+          type: entityType,
+          canonical_family_id: e.entity_id,
+          canonical_id: e.canonical_id,
+          entity_class: e.entity_class,
+          confidence_score: e.confidence_score
+      });
+  });
+
+  // Step 4: Add reclassified timeline items from sanitation
+  sanitizationResult.reclassified_timeline.forEach(t => {
+      const stableId = mockHash(`time:reclassified:${t.date}:${t.event}`);
+      items.timeline.push({
+          id: stableId,
+          provenance: {
+              start: 0,
+              end: 0,
+              sentence: t.source_entity,
+              sentence_text: t.source_entity,
+              sentence_start: 0,
+              sentence_end: 0
+          },
+          confidence: 0.7,
+          included: true,
+          date: t.date,
+          date_type: t.date_type,
+          event: t.event
       });
   });
 
@@ -356,7 +422,18 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
   items.metrics = dedupeList(items.metrics);
   items.timeline = dedupeList(items.timeline);
 
-  return { items, stats, stable_source_hash };
+  // Compute pack confidence from sanitized entities
+  const packConfidence = computePackConfidence(sanitizationResult.entities);
+
+  const trust: TrustMetadata = {
+    schema_version: "lantern.extract.pack.v1",
+    confidence_model: "span_length+ontology_match+canonical_frequency",
+    sanitation_pass: true,
+    pack_confidence: packConfidence,
+    confidence_threshold: CONFIDENCE_THRESHOLD
+  };
+
+  return { items, stats, stable_source_hash, trust };
 };
 
 // --- QUALITY SCORING ---

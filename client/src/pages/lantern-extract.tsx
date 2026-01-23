@@ -138,16 +138,16 @@ export default function LanternExtract() {
     load();
   }, []);
 
-  // ... (handleExtract same)
   const handleExtract = () => {
-    const { items, stats, stable_source_hash } = extract(sourceText, extractOptions);
+    const { items, stats, stable_source_hash, trust } = extract(sourceText, extractOptions);
     
     const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
         schema: "lantern.extract.pack.v1",
-        engine: { name: "heuristic", version: "0.1.5" },
+        engine: { name: "heuristic", version: "0.1.6-sanitized" },
         source: { ...metadata, retrieved_at: new Date().toISOString() },
         items,
-        stats
+        stats,
+        trust
     };
 
     const packId = computePackId(initialPackWithoutId, stable_source_hash);
@@ -279,75 +279,119 @@ export default function LanternExtract() {
       
       pdf.setFontSize(10);
       pdf.setFont("helvetica", "normal");
-      pdf.text("Visual Extraction Pack", 20, y);
-      y += 15;
+      pdf.text("Audit Artifact - Not Legal Advice", 20, y);
+      y += 8;
+      
+      pdf.setFontSize(8);
+      pdf.setTextColor(100);
+      pdf.text("This document is a machine-generated extraction summary for investigative review.", 20, y);
+      y += 5;
+      pdf.text("It does not constitute legal advice, expert opinion, or verified fact.", 20, y);
+      pdf.setTextColor(0);
+      y += 10;
       
       pdf.setDrawColor(0);
       pdf.setLineWidth(0.5);
       pdf.line(20, y, pageWidth - 20, y);
-      y += 15;
+      y += 12;
+      
+      const trustInfo = pack.trust || { pack_confidence: 0, confidence_threshold: 0.5, sanitation_pass: false };
+      const packConfPercent = Math.round(trustInfo.pack_confidence * 100);
       
       pdf.setFontSize(10);
       pdf.setFont("helvetica", "bold");
       pdf.text("Pack ID:", 20, y);
       pdf.setFont("helvetica", "normal");
       pdf.text(pack.pack_id, 45, y);
-      y += 10;
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Confidence:", 120, y);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(`${packConfPercent}%`, 150, y);
+      y += 8;
       
       pdf.setFont("helvetica", "bold");
       pdf.text("Source:", 20, y);
       pdf.setFont("helvetica", "normal");
       pdf.text(pack.source.title || "Untitled", 45, y);
-      y += 7;
+      y += 6;
       pdf.text(`${pack.source.source_type} - ${pack.source.published_at || "No date"}`, 45, y);
-      y += 15;
+      y += 8;
+      
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Sanitation:", 20, y);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(trustInfo.sanitation_pass ? "PASSED" : "NOT APPLIED", 50, y);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Threshold:", 90, y);
+      pdf.setFont("helvetica", "normal");
+      pdf.text(`${Math.round(trustInfo.confidence_threshold * 100)}%`, 120, y);
+      y += 12;
+      
+      pdf.setDrawColor(180);
+      pdf.setLineWidth(0.2);
+      pdf.line(20, y, pageWidth - 20, y);
+      y += 10;
       
       pdf.setFont("helvetica", "bold");
       pdf.text("Extraction Summary:", 20, y);
-      y += 10;
+      y += 8;
       
-      const entities = pack.items.entities.filter((e: any) => e.included).length;
+      const confThreshold = trustInfo.confidence_threshold || 0.5;
+      const entities = pack.items.entities.filter((e: any) => e.included && (e.confidence_score || e.confidence) >= confThreshold).length;
       const quotes = pack.items.quotes.filter((q: any) => q.included).length;
       const metrics = pack.items.metrics.filter((m: any) => m.included).length;
       const timeline = pack.items.timeline.filter((t: any) => t.included).length;
+      const excludedEntities = pack.items.entities.filter((e: any) => !e.included || (e.confidence_score || e.confidence) < confThreshold).length;
       
       pdf.setFont("helvetica", "normal");
-      pdf.text(`Entities: ${entities}`, 25, y); y += 6;
-      pdf.text(`Quotes: ${quotes}`, 25, y); y += 6;
-      pdf.text(`Metrics: ${metrics}`, 25, y); y += 6;
-      pdf.text(`Timeline Events: ${timeline}`, 25, y); y += 15;
+      pdf.text(`Entities (above threshold): ${entities}`, 25, y); y += 5;
+      pdf.text(`Entities (excluded): ${excludedEntities}`, 25, y); y += 5;
+      pdf.text(`Quotes: ${quotes}`, 25, y); y += 5;
+      pdf.text(`Metrics: ${metrics}`, 25, y); y += 5;
+      pdf.text(`Timeline Events: ${timeline}`, 25, y); y += 12;
       
       if (entities > 0) {
         pdf.setFont("helvetica", "bold");
-        pdf.text("Entities:", 20, y);
+        pdf.text("Entities (Sanitized, Above Threshold):", 20, y);
         y += 7;
         pdf.setFont("helvetica", "normal");
-        for (const entity of pack.items.entities.filter((e: any) => e.included).slice(0, 20)) {
+        const filteredEntities = pack.items.entities.filter((e: any) => 
+          e.included && (e.confidence_score || e.confidence) >= confThreshold
+        );
+        for (const entity of filteredEntities.slice(0, 25)) {
           if (y > 270) { pdf.addPage(); y = 20; }
-          const text = `- ${entity.text} (${entity.type})`;
-          pdf.text(text.substring(0, 80), 25, y);
+          const confScore = Math.round((entity.confidence_score || entity.confidence) * 100);
+          const text = `- ${entity.text} (${entity.type}) [${confScore}%]`;
+          pdf.text(text.substring(0, 85), 25, y);
           y += 5;
         }
-        y += 10;
+        if (filteredEntities.length > 25) {
+          pdf.text(`... and ${filteredEntities.length - 25} more`, 25, y);
+          y += 5;
+        }
+        y += 8;
       }
       
       if (quotes > 0) {
-        if (y > 250) { pdf.addPage(); y = 20; }
+        if (y > 245) { pdf.addPage(); y = 20; }
         pdf.setFont("helvetica", "bold");
         pdf.text("Quotes:", 20, y);
         y += 7;
         pdf.setFont("helvetica", "normal");
-        for (const quote of pack.items.quotes.filter((q: any) => q.included).slice(0, 10)) {
+        for (const quote of pack.items.quotes.filter((q: any) => q.included).slice(0, 8)) {
           if (y > 260) { pdf.addPage(); y = 20; }
-          const text = `"${quote.quote.substring(0, 100)}${quote.quote.length > 100 ? '...' : ''}"`;
+          const text = `"${quote.quote.substring(0, 90)}${quote.quote.length > 90 ? '...' : ''}"`;
           const lines = pdf.splitTextToSize(text, pageWidth - 50);
           pdf.text(lines, 25, y);
-          y += lines.length * 5 + 3;
+          y += lines.length * 5 + 2;
         }
       }
       
-      pdf.setFontSize(8);
-      pdf.text(`Generated by Lantern Extract - ${new Date().toISOString().split('T')[0]}`, 20, 285);
+      pdf.setFontSize(7);
+      pdf.setTextColor(100);
+      pdf.text(`Lantern Extract v${pack.engine.version} | Schema: ${trustInfo.schema_version || pack.schema}`, 20, 282);
+      pdf.text(`Generated: ${new Date().toISOString().split('T')[0]} | Confidence Model: ${trustInfo.confidence_model || 'heuristic'}`, 20, 286);
+      pdf.setTextColor(0);
       
       pdf.save(`lantern_pack_${pack.pack_id.slice(0, 8)}.pdf`);
     } catch (err: any) {
@@ -704,17 +748,26 @@ export default function LanternExtract() {
                   <ScrollArea className="h-full pr-4">
                     {/* Simplified Content Rendering */}
                     <TabsContent value="entities" className="mt-0 space-y-4">
-                      {pack.items.entities.map((item) => (
-                        <ExtractionCard 
-                          key={item.id} 
-                          item={item} 
-                          onToggle={() => toggleItem("entities", item.id)}
-                          icon={<Users className="w-4 h-4 text-cyan-500" />}
-                          title={item.text}
-                          subtitle={item.type}
-                          meta={<Badge variant="outline" className="text-[9px] font-mono border-cyan-500/20 text-cyan-500">{item.canonical_family_id?.slice(0,6)}</Badge>}
-                        />
-                      ))}
+                      {pack.items.entities.map((item) => {
+                        const confScore = Math.round((item.confidence_score || item.confidence) * 100);
+                        const confColor = confScore >= 70 ? "text-emerald-500" : confScore >= 50 ? "text-yellow-500" : "text-red-500";
+                        return (
+                          <ExtractionCard 
+                            key={item.id} 
+                            item={item} 
+                            onToggle={() => toggleItem("entities", item.id)}
+                            icon={<Users className="w-4 h-4 text-cyan-500" />}
+                            title={item.text}
+                            subtitle={`${item.type}${item.entity_class && item.entity_class !== item.type ? ` (${item.entity_class})` : ''}`}
+                            meta={
+                              <div className="flex gap-1 items-center">
+                                <Badge variant="outline" className={`text-[9px] font-mono border-current ${confColor}`}>{confScore}%</Badge>
+                                <Badge variant="outline" className="text-[9px] font-mono border-cyan-500/20 text-cyan-500">{item.canonical_family_id?.slice(0,6)}</Badge>
+                              </div>
+                            }
+                          />
+                        );
+                      })}
                     </TabsContent>
                     <TabsContent value="quotes" className="mt-0 space-y-4">
                       {pack.items.quotes.map((item) => (
@@ -773,12 +826,29 @@ export default function LanternExtract() {
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-2 text-center">
                     <div className="bg-muted p-2 rounded">
-                      <div className="text-xl font-bold font-mono">{pack.items.entities.length + pack.items.quotes.length + pack.items.metrics.length}</div>
+                      <div className="text-xl font-bold font-mono">{pack.items.entities.filter((e: any) => e.included).length + pack.items.quotes.filter((q: any) => q.included).length + pack.items.metrics.filter((m: any) => m.included).length}</div>
                       <div className="text-[10px] uppercase text-muted-foreground">Items</div>
                     </div>
                     <div className="bg-muted p-2 rounded">
-                      <div className="text-xl font-bold font-mono">{Object.values(pack.stats).reduce((a,b) => (typeof b === 'number' ? a+b : a), 0)}%</div>
-                      <div className="text-[10px] uppercase text-muted-foreground">Conf</div>
+                      <div className="text-xl font-bold font-mono">{Math.round((pack.trust?.pack_confidence || 0) * 100)}%</div>
+                      <div className="text-[10px] uppercase text-muted-foreground">Confidence</div>
+                    </div>
+                  </div>
+                  
+                  <div className="text-[10px] font-mono text-muted-foreground space-y-1">
+                    <div className="flex justify-between">
+                      <span>Sanitation:</span>
+                      <span className={pack.trust?.sanitation_pass ? "text-emerald-500" : "text-yellow-500"}>
+                        {pack.trust?.sanitation_pass ? "PASSED" : "NOT APPLIED"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Denied:</span>
+                      <span>{pack.stats.sanitation_denied || 0}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span>Reclassified:</span>
+                      <span>{pack.stats.sanitation_reclassified || 0}</span>
                     </div>
                   </div>
                   

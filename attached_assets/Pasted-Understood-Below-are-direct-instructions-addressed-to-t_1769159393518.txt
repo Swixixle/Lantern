@@ -1,0 +1,127 @@
+Understood.
+Below are direct instructions addressed to the agent, not commentary. They are written as an operational handoff. You can paste this verbatim into the agent’s task channel.
+
+⸻
+
+DIRECTIVE TO AGENT — LANTERN_EXTRACT HARDENING PASS
+
+You are to perform a post-extraction sanitation and validation pass on the current Lantern Extract pipeline. The goal is to move from successful export to trusted knowledge artifact.
+
+You must report back with evidence. Screenshots, diffs, before/after counts, and concrete examples are required. No verbal assurances.
+
+⸻
+
+1. ENTITY ONTOLOGY ENFORCEMENT (MANDATORY)
+
+Implement a gating layer after candidate extraction and before export.
+
+Hard rules (non-negotiable):
+	•	The following MUST NOT be emitted as Organization entities:
+	•	Stopwords (e.g., Where, As, See)
+	•	Temporal phrases (Argued March, Decided January)
+	•	Partial tokens (U., Federal)
+	•	Discourse glue or citation scaffolding
+
+Required actions:
+	•	Create an explicit denylist for Organization entities.
+	•	Reclassify:
+	•	Temporal phrases → TimelineEvent
+	•	Structural labels (Bench Opinion, Syllabus Note) → DocumentSection
+
+Report back with:
+	•	Before/after entity counts by type
+	•	A screenshot or JSON snippet showing that “Where”, “As”, etc. no longer appear as entities
+	•	One example of a temporal phrase correctly moved to Timeline
+
+⸻
+
+2. CANONICAL COLLAPSE & DEDUPLICATION
+
+You are currently emitting multiple entities from the same sentence with negligible semantic distinction.
+
+Required actions:
+	•	Implement canonical merging so that:
+	•	Identical or near-identical spans map to a single canonical entity
+	•	Repeated sentence emissions do not inflate entity count
+
+Report back with:
+	•	One sentence shown before (multiple entities emitted)
+	•	The same sentence after (collapsed to valid entities only)
+	•	Updated total entity count demonstrating reduction without loss of signal
+
+⸻
+
+3. CONFIDENCE SCORING — NO MORE 0%
+
+A pack with 0% confidence is not acceptable.
+
+Required actions:
+	•	Implement a confidence score per entity based on:
+	•	Span length
+	•	Ontology match strength
+	•	Canonical frequency
+	•	Surface aggregate pack confidence in:
+	•	UI
+	•	PDF export
+	•	JSON root metadata
+
+Report back with:
+	•	Screenshot of UI showing non-zero confidence
+	•	JSON snippet showing confidence fields populated
+	•	Explanation (brief) of scoring heuristic used
+
+⸻
+
+4. PDF EXPORT — PURPOSE CLARIFICATION
+
+The PDF must be deliberately scoped, not a raw dump.
+
+Required actions:
+	•	Add a section header clarifying:
+	•	“Audit Artifact — Not Legal Advice”
+	•	Exclude entities below confidence threshold (you choose threshold, justify it)
+	•	Ensure entity list reflects post-sanitation output only
+
+Report back with:
+	•	Screenshot of updated PDF first page
+	•	One page showing cleaned entity list
+	•	Confirmation that excluded junk entities no longer appear
+
+⸻
+
+5. JSON EXPORT — TRUST CONTRACT
+
+The JSON is the system of record.
+
+Required actions:
+	•	Add top-level metadata:
+	•	schema_version
+	•	confidence_model
+	•	sanitation_pass: true
+	•	Ensure every entity includes:
+	•	confidence
+	•	canonical_id
+	•	entity_class (post-ontology)
+
+Report back with:
+	•	Redacted JSON snippet showing new fields
+	•	Confirmation that downstream consumers can distinguish raw vs sanitized packs
+
+⸻
+
+6. FINAL REPORT BACK (REQUIRED)
+
+You must report back with all of the following:
+	1.	A concise summary of what changed
+	2.	Before/after metrics table
+	3.	Visual proof (screenshots or exports)
+	4.	One remaining known limitation (no system is perfect)
+
+If you cannot complete a step, say so explicitly and explain why.
+
+⸻
+
+Do not proceed to new features.
+This task is about making Lantern Extract trustworthy, not smarter.
+
+Report back when complete.
