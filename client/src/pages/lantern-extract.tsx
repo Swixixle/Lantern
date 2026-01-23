@@ -68,6 +68,7 @@ export default function LanternExtract() {
   const [modeValidation, setModeValidation] = useState<{ pass: boolean; warnings: string[] } | null>(null);
   const [determinismStatus, setDeterminismStatus] = useState<"pending" | "pass" | "fail">("pending");
   const [provenanceStatus, setProvenanceStatus] = useState<"pending" | "pass" | "fail">("pending");
+  const [isExtracting, setIsExtracting] = useState(false);
 
   const [sourceText, setSourceText] = useState("");
   const [uploadingFile, setUploadingFile] = useState(false);
@@ -139,31 +140,38 @@ export default function LanternExtract() {
   }, []);
 
   const handleExtract = () => {
-    try {
-      const { items, stats, stable_source_hash, trust } = extract(sourceText, extractOptions);
-      
-      const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
-          schema: "lantern.extract.pack.v1",
-          engine: { name: "heuristic", version: "0.1.6-sanitized" },
-          source: { ...metadata, retrieved_at: new Date().toISOString() },
-          items,
-          stats,
-          trust
-      };
+    if (isExtracting) return;
+    setIsExtracting(true);
+    
+    setTimeout(() => {
+      try {
+        const { items, stats, stable_source_hash, trust } = extract(sourceText, extractOptions);
+        
+        const initialPackWithoutId: Omit<LanternPack, 'pack_id' | 'hashes'> = {
+            schema: "lantern.extract.pack.v1",
+            engine: { name: "heuristic", version: "0.1.6-sanitized" },
+            source: { ...metadata, retrieved_at: new Date().toISOString() },
+            items,
+            stats,
+            trust
+        };
 
-      const packId = computePackId(initialPackWithoutId, stable_source_hash);
-      const newPack: LanternPack = {
-        ...initialPackWithoutId,
-        pack_id: packId,
-        hashes: { source_text_sha256: stable_source_hash, pack_sha256: packId }
-      };
-      
-      setPack(newPack);
-      setStep("extract");
-    } catch (err: any) {
-      console.error("[Extraction Error]", err);
-      alert("Extraction failed: " + (err?.message || "Unknown error"));
-    }
+        const packId = computePackId(initialPackWithoutId, stable_source_hash);
+        const newPack: LanternPack = {
+          ...initialPackWithoutId,
+          pack_id: packId,
+          hashes: { source_text_sha256: stable_source_hash, pack_sha256: packId }
+        };
+        
+        setPack(newPack);
+        setStep("extract");
+        setIsExtracting(false);
+      } catch (err: any) {
+        console.error("[Extraction Error]", err);
+        alert("Extraction failed: " + (err?.message || "Unknown error"));
+        setIsExtracting(false);
+      }
+    }, 50);
   };
 
   const handleSave = async () => {
@@ -718,11 +726,18 @@ export default function LanternExtract() {
                   </select>
                 </div>
                 <Button 
-                  disabled={!sourceText} 
+                  disabled={!sourceText || isExtracting} 
                   onClick={handleExtract}
                   className="w-full mt-4 font-mono uppercase bg-cyan-500 text-black hover:bg-cyan-400"
                 >
-                  Run Extraction
+                  {isExtracting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Extracting...
+                    </>
+                  ) : (
+                    "Run Extraction"
+                  )}
                 </Button>
               </CardContent>
             </Card>
