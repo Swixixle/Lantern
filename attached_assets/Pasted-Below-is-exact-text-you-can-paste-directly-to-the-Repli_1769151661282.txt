@@ -1,0 +1,76 @@
+Below is **exact text** you can paste directly to the Replit agent. It is written as an instruction to *him*, not commentary to you.
+
+---
+
+**Replit Agent — Action Required**
+
+I need you to do the following, and I want this standardized going forward.
+
+**1) Point me to the exact folder(s) that constitute a safe “snapshot” of the current system state**
+Your job is to identify where I can pull a repo snapshot that:
+
+* captures structure, wiring, and configuration
+* allows an external reviewer to understand architecture and recent changes
+* **does NOT dump secrets, private keys, tokens, Canon content, or protected parameters**
+
+Be explicit. I want:
+
+* exact folder paths
+* exact files that are safe to include
+* exact files/folders that must be excluded
+
+If there is not already a clean snapshot boundary, propose one (for example: a `/snapshot/` or `/docs/snapshots/` folder).
+
+---
+
+**2) Create or designate a “Snapshot Bundle” that can be updated after every meaningful change**
+
+This snapshot must include (or auto-generate):
+
+* repo tree (structure only)
+* framework/runtime identifiers
+* dependency manifests (lockfiles OK, secrets excluded)
+* DB schema or migration definitions (structure only)
+* API route list
+* LLM pipeline entrypoints (names only, no prompts)
+* governance gate entrypoints (paths + names, no logic)
+* git commit hash or tag
+
+If any of this cannot be safely included, explain why and propose a safe substitute.
+
+---
+
+**3) Tell me exactly how to regenerate the snapshot after changes**
+Provide:
+
+* the command(s) to run
+* where the output lives
+* what gets overwritten vs versioned
+* how to confirm the snapshot is current
+
+This must be simple enough that it becomes habit after every change.
+
+---
+
+**4) Going forward: treat the snapshot as mandatory**
+Assume:
+
+* every architectural change
+* every governance change
+* every routing / case-binding change
+  **requires a snapshot refresh**
+
+If you think something should *not* require a snapshot update, justify that exception explicitly.
+
+---
+
+**Constraints**
+
+* Do NOT include secrets
+* Do NOT include Canon, formulas, thresholds, or protected parameters
+* Prefer structure, wiring, and names over content
+* If something is risky, exclude it and explain the tradeoff
+
+A good answer here will make it impossible for me to accidentally leak IP while still enabling full systems review.
+
+---
