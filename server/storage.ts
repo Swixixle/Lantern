@@ -1,38 +1,155 @@
-import { type User, type InsertUser } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { 
+  type User, type InsertUser,
+  type Case, type InsertCase,
+  type Upload, type InsertUpload,
+  type UploadPage, type InsertUploadPage,
+  type Chunk, type InsertChunk,
+  users, cases, uploads, uploadPages, chunks
+} from "@shared/schema";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { eq, and, isNull, desc } from "drizzle-orm";
+import pg from "pg";
 
-// modify the interface with any CRUD methods
-// you might need
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export const db = drizzle(pool);
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  
+  createCase(data: InsertCase): Promise<Case>;
+  getCase(id: string): Promise<Case | undefined>;
+  listCases(): Promise<Case[]>;
+  updateCase(id: string, data: Partial<InsertCase>): Promise<Case | undefined>;
+  archiveCase(id: string): Promise<boolean>;
+  
+  createUpload(data: InsertUpload): Promise<Upload>;
+  getUpload(id: string): Promise<Upload | undefined>;
+  listUploadsForCase(caseId: string): Promise<Upload[]>;
+  updateUploadState(id: string, state: string): Promise<Upload | undefined>;
+  updateUpload(id: string, data: Partial<InsertUpload>): Promise<Upload | undefined>;
+  
+  createUploadPage(data: InsertUploadPage): Promise<UploadPage>;
+  listPagesForUpload(uploadId: string): Promise<UploadPage[]>;
+  
+  createChunk(data: InsertChunk): Promise<Chunk>;
+  listChunksForUpload(uploadId: string): Promise<Chunk[]>;
+  listChunksForCase(caseId: string): Promise<Chunk[]>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-
-  constructor() {
-    this.users = new Map();
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return result[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const result = await db.insert(users).values(insertUser).returning();
+    return result[0];
+  }
+
+  async createCase(data: InsertCase): Promise<Case> {
+    const result = await db.insert(cases).values(data).returning();
+    return result[0];
+  }
+
+  async getCase(id: string): Promise<Case | undefined> {
+    const result = await db.select().from(cases)
+      .where(and(eq(cases.id, id), isNull(cases.deletedAt)))
+      .limit(1);
+    return result[0];
+  }
+
+  async listCases(): Promise<Case[]> {
+    return db.select().from(cases)
+      .where(isNull(cases.deletedAt))
+      .orderBy(desc(cases.createdAt));
+  }
+
+  async updateCase(id: string, data: Partial<InsertCase>): Promise<Case | undefined> {
+    const result = await db.update(cases)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(cases.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async archiveCase(id: string): Promise<boolean> {
+    const result = await db.update(cases)
+      .set({ deletedAt: new Date(), status: "archived" })
+      .where(eq(cases.id, id))
+      .returning();
+    return result.length > 0;
+  }
+
+  async createUpload(data: InsertUpload): Promise<Upload> {
+    const result = await db.insert(uploads).values(data).returning();
+    return result[0];
+  }
+
+  async getUpload(id: string): Promise<Upload | undefined> {
+    const result = await db.select().from(uploads).where(eq(uploads.id, id)).limit(1);
+    return result[0];
+  }
+
+  async listUploadsForCase(caseId: string): Promise<Upload[]> {
+    return db.select().from(uploads)
+      .where(eq(uploads.caseId, caseId))
+      .orderBy(desc(uploads.createdAt));
+  }
+
+  async updateUploadState(id: string, state: string): Promise<Upload | undefined> {
+    const result = await db.update(uploads)
+      .set({ ingestionState: state, updatedAt: new Date() })
+      .where(eq(uploads.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async updateUpload(id: string, data: Partial<InsertUpload>): Promise<Upload | undefined> {
+    const result = await db.update(uploads)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(uploads.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async createUploadPage(data: InsertUploadPage): Promise<UploadPage> {
+    const result = await db.insert(uploadPages).values(data).returning();
+    return result[0];
+  }
+
+  async listPagesForUpload(uploadId: string): Promise<UploadPage[]> {
+    return db.select().from(uploadPages)
+      .where(eq(uploadPages.uploadId, uploadId))
+      .orderBy(uploadPages.pageNumber);
+  }
+
+  async createChunk(data: InsertChunk): Promise<Chunk> {
+    const result = await db.insert(chunks).values(data).returning();
+    return result[0];
+  }
+
+  async listChunksForUpload(uploadId: string): Promise<Chunk[]> {
+    return db.select().from(chunks)
+      .where(eq(chunks.uploadId, uploadId))
+      .orderBy(chunks.chunkIndex);
+  }
+
+  async listChunksForCase(caseId: string): Promise<Chunk[]> {
+    return db.select().from(chunks)
+      .where(eq(chunks.caseId, caseId))
+      .orderBy(chunks.uploadId, chunks.chunkIndex);
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();

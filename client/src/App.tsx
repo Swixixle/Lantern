@@ -4,6 +4,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import Library from "@/pages/library";
+import Cases from "@/pages/cases";
 import Dashboard from "@/pages/dashboard";
 import LanternCore from "@/pages/lantern-core";
 import LanternExtract from "@/pages/lantern-extract";
@@ -13,7 +14,7 @@ import DossierComparison from "@/pages/dossier-comparison";
 import HowItWorks from "@/pages/how-it-works";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
-import { Menu, X, BookOpen, Home, FileSearch, GitCompare } from "lucide-react";
+import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen } from "lucide-react";
 
 function Router() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -52,6 +53,12 @@ function Router() {
                 Compare
               </Button>
             </Link>
+            <Link href="/cases" onClick={() => setMenuOpen(false)}>
+              <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
+                <FolderOpen className="w-4 h-4 mr-2" />
+                Cases
+              </Button>
+            </Link>
             <div className="border-t border-border my-1" />
             <Link href="/reference" onClick={() => setMenuOpen(false)}>
               <Button variant="ghost" size="sm" className="w-full justify-start text-sm text-muted-foreground">
@@ -69,6 +76,7 @@ function Router() {
         <Route path="/dossier/:id" component={DossierEditor} />
         <Route path="/dossier/:id/report" component={DossierReport} />
         <Route path="/compare" component={DossierComparison} />
+        <Route path="/cases" component={Cases} />
         <Route path="/reference" component={HowItWorks} />
         <Route path="/legacy" component={Dashboard} />
         <Route path="/legacy/core" component={LanternCore} />

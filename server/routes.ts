@@ -1,15 +1,40 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { insertCaseSchema, insertUploadSchema, ingestionStateEnum } from "@shared/schema";
+import { z } from "zod";
+import { createHash } from "crypto";
+import { mkdir, writeFile } from "fs/promises";
+import { join } from "path";
 
 const isDev = process.env.NODE_ENV !== "production";
+
+const UPLOADS_DIR = join(process.cwd(), "uploads");
+
+async function ensureUploadsDir() {
+  try {
+    await mkdir(UPLOADS_DIR, { recursive: true });
+  } catch (e) {
+  }
+}
+
+function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+}
+
+function computeSha256(buffer: Buffer): string {
+  return createHash("sha256").update(buffer).digest("hex");
+}
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   
-  // /__boot - Plain HTML boot test (dev-only, 404 in prod)
+  await ensureUploadsDir();
+  
   app.get("/__boot", (_req, res) => {
     if (!isDev) {
       return res.status(404).send("Not Found");
@@ -31,7 +56,6 @@ export async function registerRoutes(
     res.type("html").send(html);
   });
 
-  // /__health - JSON health check (dev-only, 404 in prod)
   app.get("/__health", (_req, res) => {
     if (!isDev) {
       return res.status(404).send("Not Found");
@@ -42,6 +66,297 @@ export async function registerRoutes(
       pid: process.pid,
       env: process.env.NODE_ENV || "development"
     });
+  });
+
+  app.post("/api/cases", asyncHandler(async (req, res) => {
+    const parsed = insertCaseSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ 
+        type: "VALIDATION_ERROR",
+        errors: parsed.error.errors 
+      });
+    }
+    
+    if (!parsed.data.name || parsed.data.name.trim() === "") {
+      return res.status(400).json({
+        type: "CONTEXT_REQUIRED",
+        missing_fields: ["name"],
+        next_actions: ["Provide a case name"]
+      });
+    }
+    
+    const newCase = await storage.createCase(parsed.data);
+    res.status(201).json(newCase);
+  }));
+
+  app.get("/api/cases", asyncHandler(async (_req, res) => {
+    const allCases = await storage.listCases();
+    res.json(allCases);
+  }));
+
+  app.get("/api/cases/:caseId", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    const caseData = await storage.getCase(caseId);
+    
+    if (!caseData) {
+      return res.status(404).json({ 
+        type: "NOT_FOUND",
+        message: "Case not found" 
+      });
+    }
+    
+    res.json(caseData);
+  }));
+
+  app.patch("/api/cases/:caseId", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    const existing = await storage.getCase(caseId);
+    
+    if (!existing) {
+      return res.status(404).json({ 
+        type: "NOT_FOUND",
+        message: "Case not found" 
+      });
+    }
+    
+    if (existing.status === "sealed") {
+      return res.status(403).json({
+        type: "SEALED",
+        message: "Cannot modify a sealed case"
+      });
+    }
+    
+    const allowedFields = ["name", "status", "decisionTarget", "decisionTime"];
+    const updateData: Record<string, any> = {};
+    for (const field of allowedFields) {
+      if (field in req.body) {
+        updateData[field] = req.body[field];
+      }
+    }
+    
+    const updated = await storage.updateCase(caseId, updateData);
+    res.json(updated);
+  }));
+
+  app.delete("/api/cases/:caseId", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    const success = await storage.archiveCase(caseId);
+    
+    if (!success) {
+      return res.status(404).json({ 
+        type: "NOT_FOUND",
+        message: "Case not found" 
+      });
+    }
+    
+    res.json({ archived: true });
+  }));
+
+  app.post("/api/cases/:caseId/uploads/init", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    
+    const caseData = await storage.getCase(caseId);
+    if (!caseData) {
+      return res.status(404).json({
+        type: "CONTEXT_REQUIRED",
+        missing_fields: ["valid caseId"],
+        next_actions: ["Select or create a case first"]
+      });
+    }
+    
+    if (caseData.status === "sealed") {
+      return res.status(403).json({
+        type: "SEALED",
+        message: "Cannot upload to a sealed case"
+      });
+    }
+    
+    const { filename, mimeType, evidenceType, sourceLabel } = req.body;
+    
+    if (!filename || !mimeType) {
+      return res.status(400).json({
+        type: "CONTEXT_REQUIRED",
+        missing_fields: [!filename ? "filename" : null, !mimeType ? "mimeType" : null].filter(Boolean),
+        next_actions: ["Provide filename and mimeType"]
+      });
+    }
+    
+    const validEvidenceTypes = ["document", "photo", "scan", "note", "other"];
+    const finalEvidenceType = validEvidenceTypes.includes(evidenceType) ? evidenceType : "document";
+    
+    const upload = await storage.createUpload({
+      caseId,
+      filename,
+      mimeType,
+      evidenceType: finalEvidenceType,
+      sourceLabel: sourceLabel || null,
+      ingestionState: "uploaded"
+    });
+    
+    res.status(201).json({
+      uploadId: upload.id,
+      uploadUrl: `/api/cases/${caseId}/uploads/${upload.id}/data`,
+      method: "PUT"
+    });
+  }));
+
+  app.put("/api/cases/:caseId/uploads/:uploadId/data", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    const uploadId = req.params.uploadId as string;
+    
+    const upload = await storage.getUpload(uploadId);
+    if (!upload || upload.caseId !== caseId) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Upload not found"
+      });
+    }
+    
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
+    
+    const sha256 = computeSha256(buffer);
+    const storagePath = join(UPLOADS_DIR, `${uploadId}_${upload.filename}`);
+    
+    await writeFile(storagePath, buffer);
+    
+    await storage.updateUpload(uploadId, {
+      sha256,
+      storagePath,
+      fileSize: buffer.length,
+      ingestionState: "stored"
+    });
+    
+    const updated = await storage.getUpload(uploadId);
+    res.json(updated);
+  }));
+
+  app.post("/api/cases/:caseId/uploads/complete", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    const { uploadId } = req.body;
+    
+    if (!uploadId) {
+      return res.status(400).json({
+        type: "CONTEXT_REQUIRED",
+        missing_fields: ["uploadId"],
+        next_actions: ["Provide the uploadId from init"]
+      });
+    }
+    
+    const upload = await storage.getUpload(uploadId);
+    if (!upload || upload.caseId !== caseId) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Upload not found"
+      });
+    }
+    
+    if (upload.ingestionState !== "stored") {
+      return res.status(400).json({
+        type: "INVALID_STATE",
+        message: `Upload is in state '${upload.ingestionState}', expected 'stored'`
+      });
+    }
+    
+    await storage.updateUploadState(uploadId, "extracted");
+    
+    const updated = await storage.getUpload(uploadId);
+    res.json({
+      upload: updated,
+      message: "Upload complete, ingestion started"
+    });
+  }));
+
+  app.get("/api/cases/:caseId/uploads", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    
+    const caseData = await storage.getCase(caseId);
+    if (!caseData) {
+      return res.status(404).json({
+        type: "CONTEXT_REQUIRED",
+        missing_fields: ["valid caseId"],
+        next_actions: ["Select or create a case first"]
+      });
+    }
+    
+    const uploadsList = await storage.listUploadsForCase(caseId);
+    res.json(uploadsList);
+  }));
+
+  app.get("/api/cases/:caseId/uploads/:uploadId", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    const uploadId = req.params.uploadId as string;
+    
+    const upload = await storage.getUpload(uploadId);
+    if (!upload || upload.caseId !== caseId) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Upload not found"
+      });
+    }
+    
+    res.json(upload);
+  }));
+
+  app.patch("/api/cases/:caseId/uploads/:uploadId/state", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    const uploadId = req.params.uploadId as string;
+    const { state } = req.body;
+    
+    const validStates = ingestionStateEnum.options;
+    if (!validStates.includes(state)) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: `Invalid state. Must be one of: ${validStates.join(", ")}`
+      });
+    }
+    
+    const upload = await storage.getUpload(uploadId);
+    if (!upload || upload.caseId !== caseId) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Upload not found"
+      });
+    }
+    
+    const updated = await storage.updateUploadState(uploadId, state);
+    res.json(updated);
+  }));
+
+  app.get("/api/cases/:caseId/chunks", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    
+    const caseData = await storage.getCase(caseId);
+    if (!caseData) {
+      return res.status(404).json({
+        type: "CONTEXT_REQUIRED",
+        missing_fields: ["valid caseId"],
+        next_actions: ["Select or create a case first"]
+      });
+    }
+    
+    const chunksList = await storage.listChunksForCase(caseId);
+    res.json(chunksList);
+  }));
+
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    console.error("API Error:", err);
+    
+    if (isDev) {
+      res.status(500).json({
+        type: "SERVER_ERROR",
+        message: err.message,
+        stack: err.stack
+      });
+    } else {
+      res.status(500).json({
+        type: "SERVER_ERROR",
+        message: "Internal server error"
+      });
+    }
   });
 
   return httpServer;
