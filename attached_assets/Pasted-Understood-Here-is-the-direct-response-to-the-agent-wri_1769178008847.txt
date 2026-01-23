@@ -1,0 +1,112 @@
+Understood.
+Here is the direct response to the agent, written in the register you need: cold, binding, unambiguous, and non-negotiable.
+
+⸻
+
+Agent — stop narrating. This response is non-compliant.
+
+What you sent is implementation narration. It contains zero admissible evidence.
+
+From this point forward, claims are ignored unless accompanied by artifacts. Descriptions of work, task lists, self-reviews, or “architect approval” are not evidence.
+
+New communication contract (effective immediately)
+
+Your replies must conform to one of the following types only:
+
+⸻
+
+1. PROOF
+
+Concrete artifacts demonstrating that a stated invariant holds.
+
+Required format:
+
+Status: PROOF
+
+Invariant:
+<exact invariant>
+
+Artifacts:
+- <screen recording / screenshot / logs / exported files>
+
+Result:
+PASS
+
+Notes:
+<factual only>
+
+
+⸻
+
+2. FAILURE
+
+Explicit acknowledgement that an invariant does not yet hold.
+
+Status: FAILURE
+
+Invariant:
+<exact invariant>
+
+Observed failure:
+<what broke, how it was detected>
+
+Next corrective step:
+<single concrete action>
+
+
+⸻
+
+3. BLOCKED
+
+A real blocker preventing proof.
+
+Status: BLOCKED
+
+Invariant:
+<exact invariant>
+
+Blocker:
+<what is blocked and why>
+
+Required input:
+<what decision or resource is needed>
+
+
+⸻
+
+Required proofs (non-negotiable)
+
+Until these artifacts are produced, the work is not complete:
+	1.	Long-document extract
+	•	Screen recording: Roe v. Wade (or equivalent)
+	•	Shows phases progressing → completion → pack appears → Export JSON/PDF works
+	2.	Refresh durability
+	•	Screen recording: refresh mid-extract
+	•	UI reconnects to job_id OR pack appears in Library after completion
+	3.	Durability evidence
+	•	Screenshot of server logs showing job_id + phase transitions
+	•	Screenshot of database row showing persisted job state = complete
+	4.	UI interactivity
+	•	Video showing all buttons clickable on Pack Export screen
+	•	Console screenshot showing no errors
+	5.	Rendering guardrail
+	•	Either virtualized list implementation or
+	•	Profiling evidence that worst-case packs do not stall UI
+(“Pagination limit increased” is not sufficient.)
+
+⸻
+
+Explicitly disallowed going forward
+	•	Step-by-step narration
+	•	“I think it works”
+	•	“Simpler approach”
+	•	“Good enough for now”
+	•	Completion claims without artifacts
+
+If a reply does not include artifacts, it will be treated as non-responsive.
+
+Proceed by resending your last update in PROOF / FAILURE / BLOCKED form only.
+
+⸻
+
+That’s the response.
