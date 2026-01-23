@@ -8,7 +8,14 @@ Lantern is a client-side investigative journalism intelligence platform that ena
 3. Apply "Shadow-Caste" heuristics to detect structural patterns (influence hubs, funding flows, enforcement actions)
 4. Generate publication-ready reports with cryptographic integrity fingerprints
 
-The application is a **client-heavy hybrid** architecture. While a full-stack scaffold exists (Express server, Drizzle ORM), all active application logic runs in the browser. Data persists to localStorage/IndexedDB, with no active backend API endpoints.
+The application is a **client-heavy hybrid** architecture with server-side durability for large document extraction. Data persists to IndexedDB locally, with server-side PostgreSQL job queue for documents exceeding 75K characters.
+
+### Server-Side Job Queue (Institutional-Grade Durability)
+- **Threshold-Based Routing**: Documents <75K chars use browser Web Worker; ≥75K use server job queue
+- **PostgreSQL Persistence**: Jobs survive page refresh and server restarts
+- **Automatic Recovery**: localStorage stores job_id for reconnection on page load with 2-second polling
+- **Stall Detection**: 30-second client-side watchdog with amber warning UI; server has 5-minute timeout
+- **Job States**: `pending`, `processing`, `completed`, `failed`, `cancelled`
 
 ## User Preferences
 
@@ -19,8 +26,9 @@ Preferred communication style: Simple, everyday language.
 ### Runtime Architecture
 - **Frontend**: React + Vite + TypeScript single-page application
 - **Storage**: IndexedDB via `idb` library (local-first architecture)
-- **Server**: Express server acts only as static asset host; `routes.ts` contains no active endpoints
-- **No External Calls**: Zero network calls for data transmission; operates as an isolated local tool
+- **Server**: Express server with extraction job queue API endpoints
+- **Database**: PostgreSQL for durable job queue persistence (extraction_jobs table)
+- **Web Worker**: Browser-side extraction for documents <75K characters
 
 ### Core Data Model
 Two discriminated pack types coexist in the library:
@@ -80,19 +88,24 @@ Two discriminated pack types coexist in the library:
 ```
 client/src/
 ├── pages/
-│   ├── lantern-extract.tsx    # Main extraction UI
+│   ├── lantern-extract.tsx    # Main extraction UI with pagination (100 items/page)
 │   ├── dossier-editor.tsx     # CRUD for dossier curation
 │   ├── dossier-report.tsx     # Publication-ready reports
 │   └── dossier-comparison.tsx # Cross-dossier analysis
 ├── lib/
 │   ├── lanternExtract.ts      # Core extraction engine
-│   ├── storage.ts             # Persistence layer
+│   ├── storage.ts             # IndexedDB persistence layer
 │   ├── heuristics/            # Analysis algorithms
 │   └── schema/pack_v1.ts      # Dossier schema (v2)
+├── workers/
+│   └── extraction.worker.ts   # Web Worker for browser-side extraction
 server/
-├── index.ts                   # Express entrypoint (static host only)
-├── routes.ts                  # Empty API placeholder
-└── storage.ts                 # Unused MemStorage adapter
+├── index.ts                   # Express entrypoint
+├── routes.ts                  # API endpoints for job queue and file upload
+├── extractionProcessor.ts     # Server-side extraction job processor
+└── storage.ts                 # MemStorage adapter for job persistence
+shared/
+└── schema.ts                  # Drizzle schema for extraction_jobs table
 ```
 
 ## External Dependencies
@@ -112,10 +125,10 @@ server/
 - **Zod** for runtime schema validation
 - **drizzle-zod** for database schema integration (scaffold only)
 
-### Database (Scaffold - Not Active)
+### Database (Active - Extraction Job Queue)
 - **Drizzle ORM** configured for PostgreSQL
+- **extraction_jobs** table: Durable job queue with states (pending, processing, completed, failed, cancelled)
 - **connect-pg-simple** for session storage
-- Schema defined in `shared/schema.ts` but unused by frontend
 
 ### Charting & Visualization
 - **Recharts** for data visualization (referenced in attached assets)

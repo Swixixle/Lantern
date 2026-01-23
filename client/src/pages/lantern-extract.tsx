@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +13,8 @@ import {
   FileJson, 
   FileText, 
   RefreshCw, 
-  ChevronRight, 
+  ChevronRight,
+  ChevronLeft,
   Users, 
   Quote, 
   Hash, 
@@ -58,6 +59,40 @@ export default function LanternExtract() {
   // Storage State
   const [storageStatus, setStorageStatus] = useState<StorageStatus>("idle");
   const [selectedPackIds, setSelectedPackIds] = useState<Set<string>>(new Set());
+  
+  // Pagination State
+  const PAGE_SIZE = 100;
+  const [entityPage, setEntityPage] = useState(1);
+  const [quotePage, setQuotePage] = useState(1);
+  const [metricPage, setMetricPage] = useState(1);
+  const [timelinePage, setTimelinePage] = useState(1);
+  
+  // Reset pagination when pack changes and clamp pages to valid range
+  const packIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!pack) return;
+    
+    // Reset pages on pack change
+    if (pack.pack_id !== packIdRef.current) {
+      packIdRef.current = pack.pack_id;
+      setEntityPage(1);
+      setQuotePage(1);
+      setMetricPage(1);
+      setTimelinePage(1);
+      return;
+    }
+    
+    // Clamp pages to valid ranges (handles data changes)
+    const entityMax = Math.max(1, Math.ceil(pack.items.entities.length / PAGE_SIZE));
+    const quoteMax = Math.max(1, Math.ceil(pack.items.quotes.length / PAGE_SIZE));
+    const metricMax = Math.max(1, Math.ceil(pack.items.metrics.length / PAGE_SIZE));
+    const timelineMax = Math.max(1, Math.ceil(pack.items.timeline.length / PAGE_SIZE));
+    
+    if (entityPage > entityMax) setEntityPage(entityMax);
+    if (quotePage > quoteMax) setQuotePage(quoteMax);
+    if (metricPage > metricMax) setMetricPage(metricMax);
+    if (timelinePage > timelineMax) setTimelinePage(timelineMax);
+  }, [pack?.pack_id, pack?.items.entities.length, pack?.items.quotes.length, pack?.items.metrics.length, pack?.items.timeline.length, entityPage, quotePage, metricPage, timelinePage]);
 
   // Diff View State
   const [diffMode, setDiffMode] = useState(false);
@@ -1216,91 +1251,199 @@ export default function LanternExtract() {
 
                 <div className="flex-1 overflow-hidden relative">
                   <ScrollArea className="h-full pr-4">
-                    {/* Content with pagination to prevent freezing on large packs */}
+                    {/* Content with pagination for large datasets */}
                     <TabsContent value="entities" className="mt-0 space-y-4">
-                      {pack.items.entities.length > 100 && (
-                        <div className="text-xs font-mono text-yellow-500 bg-yellow-500/10 p-2 rounded mb-2">
-                          Showing first 100 of {pack.items.entities.length} entities. Export to see all.
-                        </div>
-                      )}
-                      {pack.items.entities.slice(0, 100).map((item) => {
-                        const confScore = Math.round((item.confidence_score || item.confidence) * 100);
-                        const confColor = confScore >= 70 ? "text-emerald-500" : confScore >= 50 ? "text-yellow-500" : "text-red-500";
+                      {(() => {
+                        const items = pack.items.entities;
+                        const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+                        const safePage = Math.min(entityPage, totalPages);
+                        const start = (safePage - 1) * PAGE_SIZE;
+                        const pageItems = items.slice(start, start + PAGE_SIZE);
                         return (
-                          <ExtractionCard 
-                            key={item.id} 
-                            item={item} 
-                            onToggle={() => toggleItem("entities", item.id)}
-                            icon={<Users className="w-4 h-4 text-cyan-500" />}
-                            title={item.text}
-                            subtitle={`${item.type}${item.entity_class && item.entity_class !== item.type ? ` (${item.entity_class})` : ''}`}
-                            meta={
-                              <div className="flex gap-1 items-center">
-                                <Badge variant="outline" className={`text-[9px] font-mono border-current ${confColor}`}>{confScore}%</Badge>
-                                <Badge variant="outline" className="text-[9px] font-mono border-cyan-500/20 text-cyan-500">{item.canonical_family_id?.slice(0,6)}</Badge>
+                          <>
+                            {items.length > PAGE_SIZE && (
+                              <div className="flex items-center justify-between text-xs font-mono text-muted-foreground bg-muted/30 p-2 rounded mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span>Page {safePage} of {totalPages} ({items.length.toLocaleString()} total)</span>
+                                </div>
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="sm" disabled={safePage <= 1} onClick={() => setEntityPage(1)} className="h-6 px-1" title="First">
+                                    <ChevronLeft className="w-3 h-3" /><ChevronLeft className="w-3 h-3 -ml-2" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage <= 1} onClick={() => setEntityPage(p => Math.max(1, p - 1))} className="h-6 px-2">
+                                    <ChevronLeft className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage >= totalPages} onClick={() => setEntityPage(p => Math.min(totalPages, p + 1))} className="h-6 px-2">
+                                    <ChevronRight className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage >= totalPages} onClick={() => setEntityPage(totalPages)} className="h-6 px-1" title="Last">
+                                    <ChevronRight className="w-3 h-3" /><ChevronRight className="w-3 h-3 -ml-2" />
+                                  </Button>
+                                </div>
                               </div>
-                            }
-                          />
+                            )}
+                            {pageItems.map((item) => {
+                              const confScore = Math.round((item.confidence_score || item.confidence) * 100);
+                              const confColor = confScore >= 70 ? "text-emerald-500" : confScore >= 50 ? "text-yellow-500" : "text-red-500";
+                              return (
+                                <ExtractionCard 
+                                  key={item.id} 
+                                  item={item} 
+                                  onToggle={() => toggleItem("entities", item.id)}
+                                  icon={<Users className="w-4 h-4 text-cyan-500" />}
+                                  title={item.text}
+                                  subtitle={`${item.type}${item.entity_class && item.entity_class !== item.type ? ` (${item.entity_class})` : ''}`}
+                                  meta={
+                                    <div className="flex gap-1 items-center">
+                                      <Badge variant="outline" className={`text-[9px] font-mono border-current ${confColor}`}>{confScore}%</Badge>
+                                      <Badge variant="outline" className="text-[9px] font-mono border-cyan-500/20 text-cyan-500">{item.canonical_family_id?.slice(0,6)}</Badge>
+                                    </div>
+                                  }
+                                />
+                              );
+                            })}
+                          </>
                         );
-                      })}
+                      })()}
                     </TabsContent>
                     <TabsContent value="quotes" className="mt-0 space-y-4">
-                      {pack.items.quotes.length > 100 && (
-                        <div className="text-xs font-mono text-yellow-500 bg-yellow-500/10 p-2 rounded mb-2">
-                          Showing first 100 of {pack.items.quotes.length} quotes. Export to see all.
-                        </div>
-                      )}
-                      {pack.items.quotes.slice(0, 100).map((item) => (
-                        <ExtractionCard 
-                          key={item.id} 
-                          item={item} 
-                          onToggle={() => toggleItem("quotes", item.id)}
-                          icon={<Quote className="w-4 h-4 text-amber-500" />}
-                          title={`"${item.quote}"`}
-                          subtitle={item.speaker || (item.speaker_candidates ? `Candidates: ${item.speaker_candidates.join(", ")}` : "Unknown Speaker")}
-                        />
-                      ))}
+                      {(() => {
+                        const items = pack.items.quotes;
+                        const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+                        const safePage = Math.min(quotePage, totalPages);
+                        const start = (safePage - 1) * PAGE_SIZE;
+                        const pageItems = items.slice(start, start + PAGE_SIZE);
+                        return (
+                          <>
+                            {items.length > PAGE_SIZE && (
+                              <div className="flex items-center justify-between text-xs font-mono text-muted-foreground bg-muted/30 p-2 rounded mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span>Page {safePage} of {totalPages} ({items.length.toLocaleString()} total)</span>
+                                </div>
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="sm" disabled={safePage <= 1} onClick={() => setQuotePage(1)} className="h-6 px-1" title="First">
+                                    <ChevronLeft className="w-3 h-3" /><ChevronLeft className="w-3 h-3 -ml-2" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage <= 1} onClick={() => setQuotePage(p => Math.max(1, p - 1))} className="h-6 px-2">
+                                    <ChevronLeft className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage >= totalPages} onClick={() => setQuotePage(p => Math.min(totalPages, p + 1))} className="h-6 px-2">
+                                    <ChevronRight className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage >= totalPages} onClick={() => setQuotePage(totalPages)} className="h-6 px-1" title="Last">
+                                    <ChevronRight className="w-3 h-3" /><ChevronRight className="w-3 h-3 -ml-2" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                            {pageItems.map((item) => (
+                              <ExtractionCard 
+                                key={item.id} 
+                                item={item} 
+                                onToggle={() => toggleItem("quotes", item.id)}
+                                icon={<Quote className="w-4 h-4 text-amber-500" />}
+                                title={`"${item.quote.slice(0, 200)}${item.quote.length > 200 ? '...' : ''}"`}
+                                subtitle={item.speaker || (item.speaker_candidates ? `Candidates: ${item.speaker_candidates.join(", ")}` : "Unknown Speaker")}
+                              />
+                            ))}
+                          </>
+                        );
+                      })()}
                     </TabsContent>
                     <TabsContent value="metrics" className="mt-0 space-y-4">
-                      {pack.items.metrics.length > 100 && (
-                        <div className="text-xs font-mono text-yellow-500 bg-yellow-500/10 p-2 rounded mb-2">
-                          Showing first 100 of {pack.items.metrics.length} metrics. Export to see all.
-                        </div>
-                      )}
-                      {pack.items.metrics.slice(0, 100).map((item) => (
-                        <ExtractionCard 
-                          key={item.id} 
-                          item={item} 
-                          onToggle={() => toggleItem("metrics", item.id)}
-                          icon={<Hash className="w-4 h-4 text-emerald-500" />}
-                          title={`${item.value} ${item.unit}`}
-                          subtitle={item.metric_kind === "range" ? `Range: ${item.range_low} - ${item.range_high}` : item.parse_notes || "Extracted Metric"}
-                          meta={
-                            <div className="flex gap-1">
-                              {item.qualifier && <Badge variant="outline" className="text-[9px] border-emerald-500/20 text-emerald-500">{item.qualifier}</Badge>}
-                              {item.metric_kind !== "scalar" && <Badge variant="outline" className="text-[9px] border-blue-500/20 text-blue-500">{item.metric_kind}</Badge>}
-                            </div>
-                          }
-                        />
-                      ))}
+                      {(() => {
+                        const items = pack.items.metrics;
+                        const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+                        const safePage = Math.min(metricPage, totalPages);
+                        const start = (safePage - 1) * PAGE_SIZE;
+                        const pageItems = items.slice(start, start + PAGE_SIZE);
+                        return (
+                          <>
+                            {items.length > PAGE_SIZE && (
+                              <div className="flex items-center justify-between text-xs font-mono text-muted-foreground bg-muted/30 p-2 rounded mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span>Page {safePage} of {totalPages} ({items.length.toLocaleString()} total)</span>
+                                </div>
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="sm" disabled={safePage <= 1} onClick={() => setMetricPage(1)} className="h-6 px-1" title="First">
+                                    <ChevronLeft className="w-3 h-3" /><ChevronLeft className="w-3 h-3 -ml-2" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage <= 1} onClick={() => setMetricPage(p => Math.max(1, p - 1))} className="h-6 px-2">
+                                    <ChevronLeft className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage >= totalPages} onClick={() => setMetricPage(p => Math.min(totalPages, p + 1))} className="h-6 px-2">
+                                    <ChevronRight className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage >= totalPages} onClick={() => setMetricPage(totalPages)} className="h-6 px-1" title="Last">
+                                    <ChevronRight className="w-3 h-3" /><ChevronRight className="w-3 h-3 -ml-2" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                            {pageItems.map((item) => (
+                              <ExtractionCard 
+                                key={item.id} 
+                                item={item} 
+                                onToggle={() => toggleItem("metrics", item.id)}
+                                icon={<Hash className="w-4 h-4 text-emerald-500" />}
+                                title={`${item.value} ${item.unit}`}
+                                subtitle={item.metric_kind === "range" ? `Range: ${item.range_low} - ${item.range_high}` : item.parse_notes || "Extracted Metric"}
+                                meta={
+                                  <div className="flex gap-1">
+                                    {item.qualifier && <Badge variant="outline" className="text-[9px] border-emerald-500/20 text-emerald-500">{item.qualifier}</Badge>}
+                                    {item.metric_kind !== "scalar" && <Badge variant="outline" className="text-[9px] border-blue-500/20 text-blue-500">{item.metric_kind}</Badge>}
+                                  </div>
+                                }
+                              />
+                            ))}
+                          </>
+                        );
+                      })()}
                     </TabsContent>
                     <TabsContent value="timeline" className="mt-0 space-y-4">
-                      {pack.items.timeline.length > 100 && (
-                        <div className="text-xs font-mono text-yellow-500 bg-yellow-500/10 p-2 rounded mb-2">
-                          Showing first 100 of {pack.items.timeline.length} events. Export to see all.
-                        </div>
-                      )}
-                      {pack.items.timeline.slice(0, 100).map((item) => (
-                        <ExtractionCard 
-                          key={item.id} 
-                          item={item} 
-                          onToggle={() => toggleItem("timeline", item.id)}
-                          icon={<CalendarClock className="w-4 h-4 text-purple-500" />}
-                          title={item.date}
-                          subtitle={item.event}
-                          meta={<Badge variant="outline" className="text-[9px] border-purple-500/20 text-purple-500">{item.confidence > 0.8 ? "HIGH" : "MED"}</Badge>}
-                        />
-                      ))}
+                      {(() => {
+                        const items = pack.items.timeline;
+                        const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+                        const safePage = Math.min(timelinePage, totalPages);
+                        const start = (safePage - 1) * PAGE_SIZE;
+                        const pageItems = items.slice(start, start + PAGE_SIZE);
+                        return (
+                          <>
+                            {items.length > PAGE_SIZE && (
+                              <div className="flex items-center justify-between text-xs font-mono text-muted-foreground bg-muted/30 p-2 rounded mb-2">
+                                <div className="flex items-center gap-2">
+                                  <span>Page {safePage} of {totalPages} ({items.length.toLocaleString()} total)</span>
+                                </div>
+                                <div className="flex gap-1">
+                                  <Button variant="ghost" size="sm" disabled={safePage <= 1} onClick={() => setTimelinePage(1)} className="h-6 px-1" title="First">
+                                    <ChevronLeft className="w-3 h-3" /><ChevronLeft className="w-3 h-3 -ml-2" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage <= 1} onClick={() => setTimelinePage(p => Math.max(1, p - 1))} className="h-6 px-2">
+                                    <ChevronLeft className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage >= totalPages} onClick={() => setTimelinePage(p => Math.min(totalPages, p + 1))} className="h-6 px-2">
+                                    <ChevronRight className="w-3 h-3" />
+                                  </Button>
+                                  <Button variant="ghost" size="sm" disabled={safePage >= totalPages} onClick={() => setTimelinePage(totalPages)} className="h-6 px-1" title="Last">
+                                    <ChevronRight className="w-3 h-3" /><ChevronRight className="w-3 h-3 -ml-2" />
+                                  </Button>
+                                </div>
+                              </div>
+                            )}
+                            {pageItems.map((item) => (
+                              <ExtractionCard 
+                                key={item.id} 
+                                item={item} 
+                                onToggle={() => toggleItem("timeline", item.id)}
+                                icon={<CalendarClock className="w-4 h-4 text-purple-500" />}
+                                title={item.date}
+                                subtitle={item.event}
+                                meta={<Badge variant="outline" className="text-[9px] border-purple-500/20 text-purple-500">{item.confidence > 0.8 ? "HIGH" : "MED"}</Badge>}
+                              />
+                            ))}
+                          </>
+                        );
+                      })()}
                     </TabsContent>
                   </ScrollArea>
                 </div>
