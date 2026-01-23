@@ -1081,13 +1081,30 @@ export default function LanternExtract() {
                     </div>
                   </div>
                   
-                  <Button onClick={handleSave} className="w-full font-mono uppercase bg-emerald-500 text-black hover:bg-emerald-400">
+                  <Button 
+                    data-testid="button-save-snapshot"
+                    onClick={handleSave} 
+                    onPointerDown={() => console.log("POINTER save")}
+                    className="w-full font-mono uppercase bg-emerald-500 text-black hover:bg-emerald-400"
+                  >
                     <Save className="w-4 h-4 mr-2" /> Save Snapshot
                   </Button>
-                  <Button onClick={downloadJSON} variant="outline" className="w-full font-mono uppercase text-xs">
+                  <Button 
+                    data-testid="button-export-json"
+                    onClick={downloadJSON} 
+                    onPointerDown={() => console.log("POINTER json")}
+                    variant="outline" 
+                    className="w-full font-mono uppercase text-xs"
+                  >
                     <Download className="w-3 h-3 mr-2" /> Export JSON
                   </Button>
-                  <Button onClick={downloadPDF} variant="outline" className="w-full font-mono uppercase text-xs">
+                  <Button 
+                    data-testid="button-export-pdf"
+                    onClick={downloadPDF} 
+                    onPointerDown={() => console.log("POINTER pdf")}
+                    variant="outline" 
+                    className="w-full font-mono uppercase text-xs"
+                  >
                     <FileText className="w-3 h-3 mr-2" /> Export PDF
                   </Button>
                 </CardContent>
