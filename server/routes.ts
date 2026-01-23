@@ -5,7 +5,8 @@ import { insertCaseSchema, insertUploadSchema, ingestionStateEnum } from "@share
 import { z } from "zod";
 import { createHash } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
-import { join } from "path";
+import { join, extname } from "path";
+import multer from "multer";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -17,6 +18,28 @@ async function ensureUploadsDir() {
   } catch (e) {
   }
 }
+
+const ALLOWED_TEXT_EXTENSIONS = [".txt", ".md"];
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
+const textUploadStorage = multer.memoryStorage();
+
+const textUpload = multer({
+  storage: textUploadStorage,
+  limits: { fileSize: MAX_FILE_SIZE },
+  fileFilter: (_req, file, cb) => {
+    const ext = extname(file.originalname).toLowerCase();
+    if (ext === ".pdf") {
+      cb(new Error("PDF_NOT_SUPPORTED"));
+      return;
+    }
+    if (!ALLOWED_TEXT_EXTENSIONS.includes(ext)) {
+      cb(new Error("UNSUPPORTED_TYPE"));
+      return;
+    }
+    cb(null, true);
+  }
+});
 
 function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) {
   return (req: Request, res: Response, next: NextFunction) => {
@@ -65,6 +88,51 @@ export async function registerRoutes(
       time: new Date().toISOString(),
       pid: process.pid,
       env: process.env.NODE_ENV || "development"
+    });
+  });
+
+  app.post("/api/upload", (req, res, next) => {
+    textUpload.single("file")(req, res, (err: any) => {
+      if (err) {
+        if (err.message === "PDF_NOT_SUPPORTED") {
+          return res.status(415).json({
+            type: "UNSUPPORTED_MEDIA_TYPE",
+            message: "PDF files are not yet supported. PDF support is planned for a future release.",
+            supported_types: ALLOWED_TEXT_EXTENSIONS
+          });
+        }
+        if (err.message === "UNSUPPORTED_TYPE") {
+          return res.status(415).json({
+            type: "UNSUPPORTED_MEDIA_TYPE",
+            message: "Unsupported file type. Only .txt and .md files are supported.",
+            supported_types: ALLOWED_TEXT_EXTENSIONS
+          });
+        }
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(413).json({
+            type: "FILE_TOO_LARGE",
+            message: `File exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`
+          });
+        }
+        return next(err);
+      }
+      
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({
+          type: "VALIDATION_ERROR",
+          message: "No file provided. Include a file in the 'file' field."
+        });
+      }
+      
+      const text = file.buffer.toString("utf-8");
+      
+      res.json({
+        filename: file.originalname,
+        text,
+        size: file.size,
+        mimeType: file.mimetype
+      });
     });
   });
 

@@ -31,7 +31,9 @@ import {
   ArrowRight,
   Download,
   Upload,
-  Trash2
+  Trash2,
+  Paperclip,
+  Loader2
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import html2canvas from "html2canvas";
@@ -69,6 +71,8 @@ export default function LanternExtract() {
   const [provenanceStatus, setProvenanceStatus] = useState<"pending" | "pass" | "fail">("pending");
 
   const [sourceText, setSourceText] = useState("");
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [metadata, setMetadata] = useState({
     title: "",
     author: "",
@@ -77,6 +81,41 @@ export default function LanternExtract() {
     published_at: "",
     source_type: "News"
   });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setUploadingFile(true);
+    setUploadError(null);
+    
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData
+      });
+      
+      const data = await res.json();
+      
+      if (!res.ok) {
+        setUploadError(data.message || "Upload failed");
+        return;
+      }
+      
+      setSourceText(data.text);
+      if (data.filename && !metadata.title) {
+        setMetadata(prev => ({ ...prev, title: data.filename.replace(/\.(txt|md)$/, "") }));
+      }
+    } catch (err: any) {
+      setUploadError(err.message || "Upload failed");
+    } finally {
+      setUploadingFile(false);
+      e.target.value = "";
+    }
+  };
   
   const [extractOptions, setExtractOptions] = useState<ExtractionOptions>({ mode: "balanced" });
   const [pack, setPack] = useState<LanternPack | null>(null);
@@ -466,13 +505,47 @@ export default function LanternExtract() {
                   </Select>
                 </div>
               </CardHeader>
-              <CardContent>
-                <Textarea 
-                  placeholder="Paste article text here..." 
-                  className="min-h-[400px] font-mono text-sm bg-background/50 resize-y"
-                  value={sourceText}
-                  onChange={(e) => setSourceText(e.target.value)}
-                />
+              <CardContent className="space-y-3">
+                <div className="relative">
+                  <Textarea 
+                    placeholder="Paste article text here or upload a .txt/.md file..." 
+                    className="min-h-[400px] font-mono text-sm bg-background/50 resize-y pr-12"
+                    value={sourceText}
+                    onChange={(e) => setSourceText(e.target.value)}
+                    data-testid="textarea-source"
+                  />
+                  <div className="absolute top-2 right-2">
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".txt,.md"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        disabled={uploadingFile}
+                        data-testid="input-file-upload"
+                      />
+                      <div className={cn(
+                        "p-2 rounded-md border border-border bg-background/80 hover:bg-muted transition-colors",
+                        uploadingFile && "opacity-50 cursor-not-allowed"
+                      )}>
+                        {uploadingFile ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                        ) : (
+                          <Paperclip className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+                        )}
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                {uploadError && (
+                  <div className="flex items-center gap-2 text-sm text-red-500 bg-red-500/10 px-3 py-2 rounded-md" data-testid="text-upload-error">
+                    <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                    {uploadError}
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Supports .txt and .md files (max 5MB). PDF support coming soon.
+                </p>
               </CardContent>
             </Card>
 

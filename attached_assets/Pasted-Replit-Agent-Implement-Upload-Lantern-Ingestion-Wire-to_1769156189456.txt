@@ -1,0 +1,41 @@
+Replit Agent — Implement Upload (Lantern Ingestion) + Wire to Existing Paste UI
+Context: The app runs and the UI allows users to paste text. There is currently no file upload route and no paperclip/photo picker. We want Lantern ingestion to support uploading text-based documents as a first step.
+
+Goal (MVP):
+
+Add a UI “paperclip” upload control on the existing paste screen.
+Add a backend endpoint to accept uploads.
+For v1, support .txt and .md only (no PDF yet).
+When a file is uploaded, read it as text and inject it into the existing paste box.
+Do NOT store files yet unless storage already exists; returning text is enough.
+Hard constraints:
+Do NOT add or expose secrets.
+Do NOT modify Canon content or decision logic.
+Keep this isolated to “Lantern ingestion” only.
+Validate file type and size; reject others with clear error JSON.
+Keep routes case-safe: do not require caseId for this v1 ingestion unless the app already has a current active case model; if case binding exists, bind upload to the current active case deterministically.
+What I need from you (deliverables):
+Identify the exact frontend component file where the paste box lives (path).
+Implement an Upload button (paperclip) in that component:
+uses <input type="file">
+calls backend endpoint
+fills the paste box with returned text
+shows user-friendly errors
+Implement backend route:
+POST /api/upload (or match existing API patterns)
+use a standard Express upload middleware (multer or equivalent)
+allow only .txt and .md
+size limit: 2–5MB
+returns { filename, text }
+Provide exact file paths changed and code diffs (or pasted snippets).
+Provide 5 manual test steps to confirm it works end-to-end.
+Extra (optional but ideal):
+Add a placeholder for PDF support later: return a 415 Unsupported Media Type for PDF with a clear message.
+Proceed now. Be explicit with file paths and minimal code changes.
+What I need from you right after
+Paste the agent’s response here. If he gives you code diffs/snippets, paste them too (you can redact any accidental secrets with [REDACTED]).
+Then I will:
+
+review it for correctness and security,
+tell you exactly how to test it,
+and give you the best route for the next Lantern milestones (Extract → Dossier → Report).
