@@ -7,6 +7,7 @@ import { createHash } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { join, extname } from "path";
 import multer from "multer";
+import * as pdfParse from "pdf-parse";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -21,6 +22,8 @@ async function ensureUploadsDir() {
 
 const ALLOWED_TEXT_EXTENSIONS = [".txt", ".md"];
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const MAX_PDF_SIZE = 10 * 1024 * 1024;
+const MIN_TEXT_LENGTH = 50;
 
 const textUploadStorage = multer.memoryStorage();
 
@@ -30,11 +33,24 @@ const textUpload = multer({
   fileFilter: (_req, file, cb) => {
     const ext = extname(file.originalname).toLowerCase();
     if (ext === ".pdf") {
-      cb(new Error("PDF_NOT_SUPPORTED"));
+      cb(new Error("USE_PDF_ENDPOINT"));
       return;
     }
     if (!ALLOWED_TEXT_EXTENSIONS.includes(ext)) {
       cb(new Error("UNSUPPORTED_TYPE"));
+      return;
+    }
+    cb(null, true);
+  }
+});
+
+const pdfUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_PDF_SIZE },
+  fileFilter: (_req, file, cb) => {
+    const ext = extname(file.originalname).toLowerCase();
+    if (ext !== ".pdf") {
+      cb(new Error("NOT_A_PDF"));
       return;
     }
     cb(null, true);
@@ -94,11 +110,11 @@ export async function registerRoutes(
   app.post("/api/upload", (req, res, next) => {
     textUpload.single("file")(req, res, (err: any) => {
       if (err) {
-        if (err.message === "PDF_NOT_SUPPORTED") {
+        if (err.message === "USE_PDF_ENDPOINT") {
           return res.status(415).json({
-            type: "UNSUPPORTED_MEDIA_TYPE",
-            message: "PDF files are not yet supported. PDF support is planned for a future release.",
-            supported_types: ALLOWED_TEXT_EXTENSIONS
+            type: "USE_PDF_ENDPOINT",
+            message: "For PDF files, use POST /api/upload/pdf instead.",
+            redirect: "/api/upload/pdf"
           });
         }
         if (err.message === "UNSUPPORTED_TYPE") {
@@ -133,6 +149,72 @@ export async function registerRoutes(
         size: file.size,
         mimeType: file.mimetype
       });
+    });
+  });
+
+  app.post("/api/upload/pdf", (req, res, next) => {
+    pdfUpload.single("file")(req, res, async (err: any) => {
+      if (err) {
+        if (err.message === "NOT_A_PDF") {
+          return res.status(415).json({
+            type: "UNSUPPORTED_MEDIA_TYPE",
+            error: "NOT_A_PDF",
+            code: 415,
+            message: "Only PDF files are accepted at this endpoint."
+          });
+        }
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(413).json({
+            type: "FILE_TOO_LARGE",
+            error: "FILE_TOO_LARGE",
+            code: 413,
+            message: `File exceeds maximum size of ${MAX_PDF_SIZE / 1024 / 1024}MB`
+          });
+        }
+        return next(err);
+      }
+      
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({
+          type: "VALIDATION_ERROR",
+          error: "NO_FILE",
+          code: 400,
+          message: "No file provided. Include a PDF file in the 'file' field."
+        });
+      }
+      
+      try {
+        const pdfData = await (pdfParse as any).default(file.buffer);
+        const text = pdfData.text?.trim() || "";
+        
+        if (text.length < MIN_TEXT_LENGTH) {
+          return res.status(422).json({
+            type: "UNPROCESSABLE_ENTITY",
+            error: "IMAGE_BASED_PDF",
+            code: 422,
+            message: "PDF appears image-based; OCR not implemented yet. Please use a text-based PDF or paste the content manually.",
+            charCount: text.length
+          });
+        }
+        
+        console.log(`[PDF Upload] Extracted ${text.length} chars from ${file.originalname}`);
+        
+        res.json({
+          filename: file.originalname,
+          text,
+          pages: pdfData.numpages,
+          charCount: text.length
+        });
+      } catch (parseError: any) {
+        console.error("[PDF Upload] Parse error:", parseError.message);
+        return res.status(422).json({
+          type: "PARSE_ERROR",
+          error: "PDF_PARSE_FAILED",
+          code: 422,
+          message: "Failed to extract text from PDF. The file may be corrupted or password-protected."
+        });
+      }
     });
   });
 

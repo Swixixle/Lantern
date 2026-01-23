@@ -1,0 +1,89 @@
+Paste this to your Replit agent exactly. It is written to force a concrete fix, not discussion.
+
+---
+
+**Replit Agent — Fix Broken PDF Upload Button (Lantern Ingestion) — Execute Now**
+
+Current state:
+
+* App runs; paste-text ingestion works.
+* “Upload PDF” button exists but **does not work** (no paperclip/photo grab success).
+* We need PDF upload to reliably produce text that flows into the existing Extract Pack pipeline.
+
+Mission:
+
+1. Make the upload control actually send a file.
+2. Ensure the server receives it.
+3. Extract usable text from the PDF.
+4. Return `{ filename, text }` (or directly an Extract Pack if that’s already the next step).
+5. Wire the returned text into the existing paste box / extraction flow.
+
+Non-negotiables:
+
+* Do NOT add or expose secrets.
+* Do NOT touch or output Canon logic/thresholds/weights.
+* Add explicit file type + size validation.
+* Fail loudly and clearly (no silent failures). Return JSON errors.
+
+### A) Frontend: locate and fix the upload UI
+
+1. Find the component that renders the “Upload PDF” button (path).
+2. Ensure it uses `<input type="file" accept="application/pdf">`.
+3. On file select:
+
+   * build `FormData()`
+   * `POST` to backend endpoint (see below)
+   * handle JSON response
+   * inject returned `text` into the existing paste textbox state
+4. Add clear UI error if:
+
+   * no file selected
+   * wrong type
+   * server returns an error
+5. Add one console log for the response during dev.
+
+### B) Backend: add/verify the upload endpoint
+
+Implement (or verify) a route like:
+
+* `POST /api/upload/pdf`
+
+Requirements:
+
+* Use `multer` (or equivalent) to accept **one file** under field name `file`.
+* Max size: 10MB (configurable).
+* Reject non-PDF with 415.
+* Extract text:
+
+  * Prefer `pdf-parse` for text PDFs.
+  * If extraction yields near-empty text (scanned PDF), return 422 with message “PDF appears image-based; OCR not implemented yet.”
+* Return JSON:
+
+  * `200 { filename, text, pages?, charCount }`
+* Ensure CORS/proxy works with your Vite setup (do not assume same origin; use existing API prefix patterns).
+
+### C) Plumbing / Determinism
+
+* Ensure the endpoint is reachable from the client:
+
+  * if your client uses `/api/...` with a proxy, keep it consistent
+  * otherwise configure the fetch URL correctly
+* No silent failures: every failure must return JSON `{ error, code }` and client must show it.
+
+### D) Deliverables back to me in chat
+
+Return:
+
+1. Exact file paths changed.
+2. The backend route file code snippet.
+3. The frontend component code snippet (upload handler + UI).
+4. A 7-step manual test:
+
+   * upload a normal text PDF → paste box populates
+   * upload a non-PDF → gets 415 + UI error
+   * upload a scanned PDF → gets 422 + UI error
+   * upload a too-large PDF → gets 413/400 + UI error
+
+Execute now. Be concrete. No vague advice.
+
+---

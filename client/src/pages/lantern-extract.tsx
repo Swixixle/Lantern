@@ -93,12 +93,16 @@ export default function LanternExtract() {
       const formData = new FormData();
       formData.append("file", file);
       
-      const res = await fetch("/api/upload", {
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      const endpoint = ext === "pdf" ? "/api/upload/pdf" : "/api/upload";
+      
+      const res = await fetch(endpoint, {
         method: "POST",
         body: formData
       });
       
       const data = await res.json();
+      console.log("[Upload Response]", data);
       
       if (!res.ok) {
         setUploadError(data.message || "Upload failed");
@@ -106,8 +110,9 @@ export default function LanternExtract() {
       }
       
       setSourceText(data.text);
-      if (data.filename && !metadata.title) {
-        setMetadata(prev => ({ ...prev, title: data.filename.replace(/\.(txt|md)$/, "") }));
+      const cleanFilename = data.filename?.replace(/\.(txt|md|pdf)$/i, "") || "";
+      if (cleanFilename && !metadata.title) {
+        setMetadata(prev => ({ ...prev, title: cleanFilename }));
       }
     } catch (err: any) {
       setUploadError(err.message || "Upload failed");
@@ -518,7 +523,7 @@ export default function LanternExtract() {
                     <label className="cursor-pointer">
                       <input
                         type="file"
-                        accept=".txt,.md"
+                        accept=".txt,.md,.pdf,application/pdf"
                         onChange={handleFileUpload}
                         className="hidden"
                         disabled={uploadingFile}
@@ -544,7 +549,7 @@ export default function LanternExtract() {
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Supports .txt and .md files (max 5MB). PDF support coming soon.
+                  Supports .txt, .md (max 5MB) and PDF files (max 10MB, text-based only).
                 </p>
               </CardContent>
             </Card>
