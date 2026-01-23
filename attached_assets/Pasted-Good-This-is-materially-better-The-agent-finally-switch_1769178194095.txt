@@ -1,0 +1,187 @@
+Good. This is materially better. The agent finally switched from narration to admissible artifacts. Now we evaluate strictly, invariant by invariant.
+
+I’ll respond the way an auditor or regulator would.
+
+⸻
+
+Evaluation Summary (Straight)
+	•	Progress: Real.
+	•	Compliance: Partial.
+	•	Remaining gaps: Clear, bounded, resolvable.
+
+No theatrics. No encouragement inflation.
+
+⸻
+
+Invariant-by-Invariant Evaluation
+
+✅ Invariant 1 — Long-document extraction completes successfully
+
+Status: ACCEPTED (server-side path)
+
+Why this passes:
+	•	Deterministic test
+	•	Large input (178,500 chars)
+	•	Job lifecycle observable
+	•	Job ID, Pack ID present
+	•	Completion time reasonable
+	•	Output counts consistent
+	•	Clear PASS/FAIL boundary
+
+What this proves:
+	•	Server-side extraction works
+	•	Queue executes to completion
+	•	Pack materializes
+
+What it does not prove (yet):
+	•	UI behavior
+	•	Refresh durability
+	•	Human-facing trust
+
+But as a backend invariant, this one is now closed.
+
+⸻
+
+✅ Invariant 3 — Database persistence of completed jobs
+
+Status: ACCEPTED
+
+Why this passes:
+	•	Direct SQL evidence
+	•	Multiple completed rows
+	•	Timestamps consistent
+	•	pack_id linkage present
+
+This satisfies durability at the data layer.
+
+⸻
+
+⚠️ Invariant 2 — Refresh durability (human-visible)
+
+Status: BLOCKED (legitimately)
+
+This is a real block, not a dodge.
+
+You were explicit that screen recording is required. The agent cannot fabricate that. This block is acceptable only because:
+	•	They demonstrated backend durability
+	•	They named the exact human action required
+	•	They did not claim completion
+
+What must happen next (you):
+	•	Start a large extract
+	•	Refresh mid-extract
+	•	Observe one of:
+	•	UI reconnects to job_id and continues
+	•	Job completes and pack appears in Library
+
+When you do that, this invariant can be closed.
+
+⸻
+
+⚠️ Invariant 4 — UI interactivity (buttons + console)
+
+Status: BLOCKED (legitimately)
+
+Again: acceptable block, correctly stated.
+
+However, note this distinction:
+	•	You already experienced a P0 failure here previously.
+	•	That means human verification is mandatory, not optional.
+
+When you test, verify all of the following explicitly:
+	•	Save Snapshot click
+	•	Export JSON click → file downloads
+	•	Export PDF click → file downloads
+	•	Library navigation
+	•	Console shows no errors
+	•	Buttons respond immediately (no lag)
+
+If any one fails, this invariant remains open.
+
+⸻
+
+⚠️ Invariant 5 — Rendering guardrail
+
+Status: PARTIAL PASS (not closed)
+
+This is the weakest area and where discipline must hold.
+
+What passes:
+	•	DOM node bounding (100 items per page)
+	•	Page clamping
+	•	No setState during render
+	•	Export path preserves full data
+
+What does not pass yet:
+	•	No proof that worst-case packs (10k–50k entities) won’t:
+	•	Stall page transitions
+	•	Stall button clicks
+	•	Accumulate memory pressure over time
+
+Pagination is acceptable as an interim containment, but it is not a structural guarantee.
+
+What would close this invariant cleanly (pick one):
+	1.	Virtualization with react-window/react-virtualized with proof, or
+	2.	Profiling evidence (screenshots/video) showing:
+	•	10k+ entities loaded
+	•	Button clicks remain responsive (<100ms)
+	•	No main-thread freeze
+
+Until then, this remains open.
+
+⸻
+
+The Meta-Assessment (Important)
+
+The agent finally did three critical things right:
+	1.	Stopped claiming UI behavior they couldn’t prove
+	2.	Separated backend proof from human-visible proof
+	3.	Used BLOCKED correctly instead of hand-waving
+
+That is the behavior you were trying to train. It worked.
+
+⸻
+
+What You Should Say Next (Minimal, Correct)
+
+Here is the exact response you should send. Do not add commentary.
+
+⸻
+
+Response
+
+Accepted:
+	•	Invariant 1 (server-side extraction completion)
+	•	Invariant 3 (database durability)
+
+Open / pending human verification:
+	•	Invariant 2 (refresh mid-extract UI behavior)
+	•	Invariant 4 (export buttons + console)
+
+Partial / not closed:
+	•	Invariant 5 (rendering guardrail)
+
+Next steps:
+	•	I will perform the UI verification for Invariants 2 and 4 and report results.
+	•	Rendering guardrail remains open until either virtualization is implemented or profiling evidence is produced showing responsiveness with 10k+ entities.
+
+Do not advance scope. Wait for verification results.
+
+⸻
+
+Final Note (for you, not the agent)
+
+This is the moment where most people either:
+	•	relax standards (“it’s basically done”), or
+	•	quietly let narration creep back in
+
+Don’t.
+
+You’re now operating exactly where you said you live:
+	•	boundaries
+	•	admissibility
+	•	receipts
+	•	refusal to overclaim
+
+Run the UI tests when you’re ready.
+When you have the observations, bring them back — and we’ll close or reopen invariants cleanly.
