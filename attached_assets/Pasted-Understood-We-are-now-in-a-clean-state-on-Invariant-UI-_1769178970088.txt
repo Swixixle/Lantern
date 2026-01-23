@@ -1,0 +1,77 @@
+Understood. We are now in a clean state on Invariant: “UI copy accurately describes system architecture” for the specific artifact you changed:
+	•	client/src/pages/library.tsx line ~192
+	•	Copy moved from “Local-first… browser storage only” → “Hybrid execution… durable server jobs”
+	•	Result: PASS (Invariant closed)
+
+What remains is exactly what the gate says: BLOCKED on Invariants 2, 4, 5 pending human verification. Since I don’t have your invariant register in front of me in this chat, the most useful thing I can do right now is give you a tight Replit verification script that will produce the evidence you need to un-block the run, and (optionally) add guardrails so this invariant doesn’t drift again.
+
+⸻
+
+Human verification script (Replit) for the “hybrid execution” claim
+
+A) Verify “packs persist locally”
+
+Goal: prove “packs persist locally” is true in practice (not just intended).
+	1.	Run the app in Replit (dev mode).
+	2.	In the UI:
+	•	Create/import a pack
+	•	Confirm it appears in Library
+	3.	Hard refresh + reopen:
+	•	Refresh the page
+	•	Close tab, reopen app
+	•	Pack should still be present
+	4.	Verify storage mechanism:
+	•	In browser devtools → Application/Storage:
+	•	Confirm pack metadata exists where you expect (IndexedDB/localStorage/etc.)
+	5.	Negative test:
+	•	Clear site storage
+	•	Confirm packs disappear (expected if local persistence is the source of truth)
+
+Evidence to record for “PASS”:
+	•	Where it persists (IndexedDB vs localStorage) and the key/DB name
+	•	“Before/after refresh” behavior
+
+⸻
+
+B) Verify “large extracts run as durable server jobs”
+
+Goal: prove “large extracts” are not running entirely in-browser and survive interruption.
+	1.	Trigger an extract that crosses your “large” threshold (whatever defines it).
+	2.	Confirm the UI shows job-based execution (queued/running/completed), not immediate synchronous completion.
+	3.	Durability test:
+	•	Start the large extract
+	•	While it runs: close the tab / refresh / restart the client
+	•	Reopen Library and confirm you can still observe:
+	•	job status (running/completed/failed)
+	•	ability to retrieve results after completion
+	4.	Server-side confirmation:
+	•	Replit logs should show a job being created/handled
+	•	Ideally: a job id is returned and tracked
+
+Evidence to record for “PASS”:
+	•	The job id flow (where it’s created; where status is polled)
+	•	What happens on refresh (job continues vs resets)
+
+⸻
+
+C) Verify the UI copy cannot drift again (two low-cost guardrails)
+
+These are “prevent future drift” measures that match what your screenshot hinted at (“Two follow-ons…”):
+	1.	Single source of truth for architecture copy
+	•	Move the copy string into a constant (e.g., ARCHITECTURE_COPY.libraryPersistenceBlurb)
+	•	Add a short comment above it stating the invariant and what must remain true
+	2.	A minimal regression test
+	•	Add a unit/UI snapshot test asserting the Library page includes the “Hybrid execution…” wording
+	•	(Optional) If the app has modes/flags, assert the copy changes only when the underlying execution mode changes
+
+This won’t prove the architecture is correct, but it does prevent accidental copy regression back to “local-only.”
+
+⸻
+
+What I need from you to continue unblocking Invariants 2, 4, 5
+
+Paste either:
+	1.	the text definitions of Invariant 2, 4, 5, or
+	2.	the “human verification results” you gathered from the script above (even rough notes)
+
+Once you drop that in, I’ll translate your observations into PASS/FAIL with precise remediation (and, if needed, the exact edits to make in Replit).
