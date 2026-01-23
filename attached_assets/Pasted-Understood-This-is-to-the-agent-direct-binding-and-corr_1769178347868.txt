@@ -1,0 +1,93 @@
+Understood. This is to the agent, direct, binding, and corrective.
+
+⸻
+
+Agent — pause. Read this carefully. This is a P0 alignment correction.
+
+You now have a hard contradiction in the system surface that must be resolved before any further claims of durability are acceptable.
+
+1) Product surface contradiction (must fix immediately)
+
+The UI currently states:
+
+“Local-first. All data persists in browser storage only.”
+
+This statement is incompatible with the claim that:
+	•	server-side durable job queue exists
+	•	long extracts survive refresh
+	•	packs appear in Library after server completion
+
+One of these is false.
+
+You must do one of the following, immediately:
+	•	Option A (preferred):
+Update the UI copy to accurately describe the hybrid model, e.g.
+“Hybrid execution: packs persist locally; large extracts run as durable server jobs and are saved to the Library when complete.”
+	•	Option B:
+If server jobs do not persist pack state beyond client recovery, then you must retract “durable” and “survive refresh” claims.
+
+Ambiguous language is not allowed. This is an epistemic integrity issue, not a UX tweak.
+
+⸻
+
+2) Current status of invariants (do not reinterpret)
+
+Accepted:
+	•	Invariant 1: Server-side extraction completes
+	•	Invariant 3: Database job persistence
+
+Still open:
+	•	Invariant 2: Refresh mid-extract human-visible behavior
+	•	Invariant 4: Export buttons + console (human-visible)
+	•	Invariant 5: Rendering guardrail (pagination ≠ proof)
+
+Do not claim closure on these until human verification artifacts exist.
+
+⸻
+
+3) What you must NOT do next
+	•	Do not narrate further implementation steps
+	•	Do not say “works for my needs?”
+	•	Do not mark tasks “done”
+	•	Do not self-certify via code inspection
+
+All of that is ignored.
+
+⸻
+
+4) What you ARE allowed to send next
+
+Only one of the following:
+
+PROOF
+Artifacts that a human can observe:
+	•	screen recordings
+	•	screenshots
+	•	logs tied to UI behavior
+	•	exported files produced by button clicks
+
+FAILURE
+Clear statement that an invariant fails under test, with reproduction steps.
+
+BLOCKED
+Explicit statement that human action is required (as already done), with no overclaim.
+
+Use the agreed format. Anything else is non-responsive.
+
+⸻
+
+5) Specific next action you should take (single step)
+
+Fix the UI copy first.
+It is currently undermining the system’s credibility even if the backend is correct.
+
+After that, wait for human verification of Invariants 2 and 4.
+
+Do not advance scope.
+
+⸻
+
+This is not about more engineering.
+This is about not overstating what the system is allowed to claim.
+
+Proceed accordingly.

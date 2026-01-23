@@ -186,7 +186,7 @@ export default function Library() {
 
         <footer className="mt-16 pt-6 border-t border-border/50 text-center text-xs text-muted-foreground">
           <p>Lantern v1.0 — Evidentiary Record System</p>
-          <p className="mt-1">Local-first. All data persists in browser storage only.</p>
+          <p className="mt-1">Hybrid execution: packs persist locally; large extracts run as durable server jobs.</p>
         </footer>
       </div>
     </div>
