@@ -317,6 +317,7 @@ export default function LanternExtract() {
   };
 
   const handleSave = async () => {
+    console.log("CLICK save snapshot", { hasPack: !!pack });
     if (pack) {
       setStorageStatus("saving");
       const existing = savedPacks.find(p => isExtractPack(p) ? p.pack_id === pack.pack_id : p.packId === pack.pack_id);
@@ -374,6 +375,7 @@ export default function LanternExtract() {
     : savedPacks;
 
   const reset = () => {
+    console.log("CLICK reset");
     setStep("input");
     setPack(null);
     setSourceText("");
@@ -406,6 +408,7 @@ export default function LanternExtract() {
   };
 
   const downloadJSON = () => {
+    console.log("CLICK export JSON", { hasPack: !!pack });
     if (!pack) return;
     const blob = new Blob([JSON.stringify(pack, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -417,6 +420,7 @@ export default function LanternExtract() {
   };
 
   const downloadPDF = async () => {
+    console.log("CLICK export PDF", { hasPack: !!pack });
     if (!pack) {
       alert("No pack to export");
       return;
