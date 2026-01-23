@@ -140,6 +140,87 @@ export default function LanternExtract() {
   const DRAFT_SOURCE_KEY = "lantern_draft_source";
   const DRAFT_META_KEY = "lantern_draft_meta";
   const DRAFT_EXTRACTING_KEY = "lantern_extracting";
+  const JOB_ID_KEY = "lantern_job_id";
+  
+  // Server job state
+  const [serverJobId, setServerJobId] = useState<string | null>(null);
+  const [lastHeartbeat, setLastHeartbeat] = useState<number>(0);
+  const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const isServerJobRef = useRef<boolean>(false); // Ref to track if using server job (avoids stale closure)
+  const STALL_THRESHOLD_MS = 30000; // 30 seconds without progress = stalled
+  const SERVER_JOB_THRESHOLD = 75000; // Use server job for docs over 75K chars
+
+  // Polling function for server jobs
+  const pollJobStatus = async (jobId: string) => {
+    try {
+      const res = await fetch(`/api/jobs/${jobId}`);
+      if (!res.ok) {
+        throw new Error("Job not found");
+      }
+      const job = await res.json();
+      
+      setLastHeartbeat(Date.now());
+      setExtractionPhase(job.state.charAt(0).toUpperCase() + job.state.slice(1) + "...");
+      setExtractionProgress(job.progress);
+      
+      if (job.state === "complete") {
+        // Job completed successfully
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        if (extractionTimer.current) clearInterval(extractionTimer.current);
+        
+        localStorage.removeItem(JOB_ID_KEY);
+        localStorage.removeItem(DRAFT_SOURCE_KEY);
+        localStorage.removeItem(DRAFT_META_KEY);
+        localStorage.removeItem(DRAFT_EXTRACTING_KEY);
+        
+        console.log(`[Server Job] Completed with pack_id ${job.pack_id}`);
+        setPack(job.pack);
+        setStep("extract");
+        setExtractionStatus("completed");
+        setIsExtracting(false);
+        setServerJobId(null);
+        return true;
+      }
+      
+      if (job.state === "failed") {
+        if (pollingRef.current) clearInterval(pollingRef.current);
+        if (extractionTimer.current) clearInterval(extractionTimer.current);
+        
+        localStorage.removeItem(JOB_ID_KEY);
+        localStorage.removeItem(DRAFT_EXTRACTING_KEY);
+        
+        console.error(`[Server Job] Failed: ${job.error_message}`);
+        setExtractionStatus("failed");
+        setExtractionError(job.error_message || "Server job failed. Your source text is preserved.");
+        setIsExtracting(false);
+        setServerJobId(null);
+        return true;
+      }
+      
+      return false;
+    } catch (err: any) {
+      console.error("[Server Job] Polling error:", err);
+      return false;
+    }
+  };
+
+  // Start polling for a server job
+  const startJobPolling = (jobId: string) => {
+    setServerJobId(jobId);
+    setLastHeartbeat(Date.now());
+    
+    // Clear any existing polling
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    
+    // Poll every 2 seconds
+    pollingRef.current = setInterval(async () => {
+      const done = await pollJobStatus(jobId);
+      if (done && pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    }, 2000);
+  };
 
   // Init Load
   useEffect(() => {
@@ -149,6 +230,35 @@ export default function LanternExtract() {
             setSavedPacks(library.packs);
         } else {
             setSavedPacks([]); 
+        }
+        
+        // Recovery: Check for active server job
+        const savedJobId = localStorage.getItem(JOB_ID_KEY);
+        if (savedJobId) {
+          console.log("[Recovery] Found active server job:", savedJobId);
+          isServerJobRef.current = true;
+          setIsExtracting(true);
+          setExtractionStatus("running");
+          setExtractionPhase("Reconnecting to job...");
+          extractionStartTime.current = Date.now();
+          
+          // Restore source text for display
+          const savedSource = localStorage.getItem(DRAFT_SOURCE_KEY);
+          const savedMeta = localStorage.getItem(DRAFT_META_KEY);
+          if (savedSource) setSourceText(savedSource);
+          if (savedMeta) {
+            try { setMetadata(JSON.parse(savedMeta)); } catch (e) {}
+          }
+          
+          // Start elapsed timer
+          extractionTimer.current = setInterval(() => {
+            const elapsed = Date.now() - extractionStartTime.current;
+            setExtractionElapsed(elapsed);
+          }, 500);
+          
+          // Reconnect to job polling
+          startJobPolling(savedJobId);
+          return;
         }
         
         // Recovery: Check if there's a draft from a crashed extraction
@@ -172,7 +282,7 @@ export default function LanternExtract() {
     load();
   }, []);
 
-  // Cleanup extraction timer and worker on unmount
+  // Cleanup extraction timer, worker, and polling on unmount
   useEffect(() => {
     return () => {
       if (extractionTimer.current) {
@@ -181,6 +291,10 @@ export default function LanternExtract() {
       if (workerRef.current) {
         workerRef.current.terminate();
         workerRef.current = null;
+      }
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
       }
     };
   }, []);
@@ -193,14 +307,15 @@ export default function LanternExtract() {
   const EXTRACTION_TIMEOUT_MS = 180000;
   const LARGE_DOC_THRESHOLD = 50000;
 
-  const handleExtract = () => {
+  const handleExtract = async () => {
     if (isExtracting) return;
     
     sourceTextRef.current = sourceText;
     const charCount = sourceText.length;
     const isLargeDoc = charCount > LARGE_DOC_THRESHOLD;
+    const useServerJob = charCount > SERVER_JOB_THRESHOLD;
     
-    console.log(`[Extraction] Starting Web Worker extraction of ${charCount} characters at ${new Date().toISOString()}`);
+    console.log(`[Extraction] Starting extraction of ${charCount} characters (server=${useServerJob}) at ${new Date().toISOString()}`);
     
     // PERSIST before extraction - survives page refresh
     localStorage.setItem(DRAFT_SOURCE_KEY, sourceText);
@@ -211,7 +326,7 @@ export default function LanternExtract() {
     setExtractionStatus("running");
     setExtractionError(null);
     setExtractionElapsed(0);
-    setExtractionPhase(isLargeDoc ? "Preparing large document..." : "Starting...");
+    setExtractionPhase(useServerJob ? "Submitting to server..." : (isLargeDoc ? "Preparing large document..." : "Starting..."));
     setExtractionProgress(0);
     extractionStartTime.current = Date.now();
     
@@ -220,24 +335,27 @@ export default function LanternExtract() {
       clearInterval(extractionTimer.current);
     }
     
-    // Terminate any existing worker
-    if (workerRef.current) {
-      workerRef.current.terminate();
-    }
-    
-    // Create new worker
-    const worker = new ExtractionWorker();
-    workerRef.current = worker;
-    
-    // Start elapsed time tracker - runs independently on main thread
+    // Start elapsed time tracker
     extractionTimer.current = setInterval(() => {
       const elapsed = Date.now() - extractionStartTime.current;
       setExtractionElapsed(elapsed);
       
-      if (elapsed > EXTRACTION_TIMEOUT_MS) {
+      // Watchdog: Check for stalled server job
+      if (serverJobId && lastHeartbeat > 0) {
+        const timeSinceHeartbeat = Date.now() - lastHeartbeat;
+        if (timeSinceHeartbeat > STALL_THRESHOLD_MS) {
+          setExtractionPhase("Connection stalled - retrying...");
+        }
+      }
+      
+      // Timeout (only for worker mode - server jobs have their own timeout)
+      // Use ref to avoid stale closure issue
+      if (!isServerJobRef.current && elapsed > EXTRACTION_TIMEOUT_MS) {
         console.error("[Extraction] Timeout after", elapsed, "ms");
-        worker.terminate();
-        workerRef.current = null;
+        if (workerRef.current) {
+          workerRef.current.terminate();
+          workerRef.current = null;
+        }
         setExtractionStatus("timeout");
         setExtractionError("Extraction timed out after 3 minutes. Your text has been saved - try a smaller section.");
         setIsExtracting(false);
@@ -246,7 +364,54 @@ export default function LanternExtract() {
       }
     }, 500);
     
-    // Handle worker messages
+    // USE SERVER JOB for large documents
+    if (useServerJob) {
+      isServerJobRef.current = true;
+      try {
+        const res = await fetch('/api/extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sourceText,
+            metadata,
+            options: extractOptions
+          })
+        });
+        
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || "Failed to create server job");
+        }
+        
+        const job = await res.json();
+        console.log(`[Server Job] Created job ${job.job_id}`);
+        
+        // Persist job ID for refresh recovery
+        localStorage.setItem(JOB_ID_KEY, job.job_id);
+        
+        // Start polling
+        startJobPolling(job.job_id);
+        return;
+      } catch (err: any) {
+        console.error("[Server Job] Creation failed:", err);
+        setExtractionStatus("failed");
+        setExtractionError("Failed to start server job: " + err.message);
+        setIsExtracting(false);
+        if (extractionTimer.current) clearInterval(extractionTimer.current);
+        localStorage.removeItem(DRAFT_EXTRACTING_KEY);
+        return;
+      }
+    }
+    
+    // USE WEB WORKER for smaller documents
+    isServerJobRef.current = false;
+    if (workerRef.current) {
+      workerRef.current.terminate();
+    }
+    
+    const worker = new ExtractionWorker();
+    workerRef.current = worker;
+    
     worker.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const msg = event.data;
       
@@ -261,7 +426,6 @@ export default function LanternExtract() {
         worker.terminate();
         workerRef.current = null;
         
-        // CLEAR persistence on success
         localStorage.removeItem(DRAFT_SOURCE_KEY);
         localStorage.removeItem(DRAFT_META_KEY);
         localStorage.removeItem(DRAFT_EXTRACTING_KEY);
@@ -301,7 +465,6 @@ export default function LanternExtract() {
       localStorage.removeItem(DRAFT_EXTRACTING_KEY);
     };
     
-    // Send extraction request to worker
     const request: ExtractRequest = {
       type: 'extract',
       text: sourceText,
@@ -908,14 +1071,30 @@ export default function LanternExtract() {
                           style={{ width: `${extractionProgress}%` }}
                         />
                       </div>
-                      <p className="text-[10px] font-mono text-cyan-500/60">
-                        Elapsed: {Math.floor(extractionElapsed / 1000)}s | {sourceText.length.toLocaleString()} chars
-                      </p>
-                      {extractionElapsed > 30000 && (
+                      <div className="flex justify-between text-[10px] font-mono text-cyan-500/60">
+                        <span>Elapsed: {Math.floor(extractionElapsed / 1000)}s</span>
+                        <span>{sourceText.length.toLocaleString()} chars</span>
+                      </div>
+                      {serverJobId && (
+                        <div className="text-[10px] font-mono text-cyan-500/40 flex justify-between">
+                          <span>Server Job</span>
+                          <span>{serverJobId.slice(0, 8)}</span>
+                        </div>
+                      )}
+                      {lastHeartbeat > 0 && (
+                        <div className="text-[10px] font-mono text-cyan-500/40">
+                          Last update: {Math.round((Date.now() - lastHeartbeat) / 1000)}s ago
+                        </div>
+                      )}
+                      {serverJobId ? (
+                        <p className="text-[10px] font-mono text-emerald-500">
+                          Durable mode - safe to refresh. Job will resume automatically.
+                        </p>
+                      ) : extractionElapsed > 30000 ? (
                         <p className="text-[10px] font-mono text-yellow-500">
                           Large document - do not refresh. Your text is saved for recovery.
                         </p>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 )}

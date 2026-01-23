@@ -1,0 +1,111 @@
+You’re in a materially better place now (the “buttons dead” condition was a UI thread starvation failure, and pagination/virtualization is the correct first containment). But you are not done until durability and “proof” are institutional-grade—because right now the system still hinges on client continuity unless you add a server job lane.
+
+Here is what I want the agent to do next, in priority order, with no “setup convenience” language and no deflection.
+
+⸻
+
+Directive to the agent: next work must optimize for trust and durability
+
+P0 — Regressions: lock in “export/pack screen is always interactive”
+	1.	Keep pagination, but make it structural
+	•	If you are currently doing “render first 100” ad-hoc: replace with virtualized lists (react-window / react-virtualized) or equivalent.
+	•	Requirement: entity count can be 50,000+ and the UI remains interactive.
+	2.	Add an automated guardrail
+	•	Add a “UI responsiveness” smoke check: render 10k entities in a test route and confirm buttons click within 100ms (Playwright can do this; see P2).
+
+Deliverable: screen recording showing Export JSON/PDF works with a 10k+ entity pack and no UI stall.
+
+⸻
+
+P0 — Long extract durability: Web Worker is not enough by itself
+
+If the user refreshes mid-extract, worker-based compute dies unless you have a durable job model. localStorage recovery of source text is helpful, but it is not durability of the extract.
+
+Implement server-side job + polling now.
+Web Worker may remain for “local mode,” but the primary path for long docs must be durable.
+
+Required architecture (minimum viable)
+	•	POST /api/extract → returns { job_id } immediately (no long request hangs)
+	•	Server enqueues job (BullMQ/Redis, Cloudflare Queue, Postgres-backed queue—anything durable)
+	•	GET /api/jobs/:job_id → returns:
+	•	state: queued | parsing | extracting | sanitizing | scoring | packaging | complete | failed
+	•	progress: 0–100 (coarse is fine)
+	•	pack_id if complete
+	•	error_code + recoverable_message if failed
+	•	Client:
+	•	stores job_id locally
+	•	on refresh, reconnects to job_id and resumes polling
+	•	if job is complete, pack appears in Library automatically
+
+Non-negotiables:
+	•	Source text never disappears during run.
+	•	No indefinite spinner: add timeout thresholds per phase + a recoverable failure surface.
+	•	Refresh mid-extract must either:
+	•	reconnect and complete, or
+	•	show explicit recoverable failure message (not silent death).
+
+⸻
+
+P1 — Phase/progress UI must be literal and instrumented
+
+Do not present generic “loading.” Present a real state machine.
+	•	Display:
+	•	current phase
+	•	elapsed time
+	•	last progress update timestamp
+	•	Add watchdog:
+	•	if no progress heartbeat for N seconds → transition to stalled with guidance (“retry job”, “resume polling”, “view logs”, etc.)
+
+This prevents the exact “I don’t know if it’s dead” trust collapse.
+
+⸻
+
+P1 — Evidence: produce proof artifacts the way auditors want them
+
+You requested proof; the agent must deliver it.
+
+Required proof package
+	1.	Long run success
+	•	Roe v. Wade (or equivalent large doc)
+	•	Video: start extract → phases update → completes → pack shows → export JSON/PDF works
+	2.	Refresh mid-extract
+	•	Video: start extract → mid-way refresh → UI reconnects → completes and pack shows in Library
+	3.	Before/after metrics
+	•	time-to-complete
+	•	UI responsiveness (subjective + one measurable proxy, e.g., click-to-log latency)
+	•	whether source text remained visible
+	4.	Console screenshot
+	•	no errors
+	•	phase transitions logged
+	•	job_id visible in logs for traceability
+
+If they cannot produce these proofs, the feature is not “done.”
+
+⸻
+
+P2 — Add automated regression tests (so this never reappears)
+
+At minimum:
+	•	Playwright:
+	•	run extract (mocked job progress stream) and assert:
+	•	phase changes render
+	•	source text remains visible
+	•	buttons clickable at all times
+	•	on refresh, job_id resumes and pack appears
+	•	Unit test:
+	•	state machine transitions always clear isBusy in finally{} and never leave UI locked
+
+⸻
+
+Why I’m pushing server jobs even though the worker “works”
+
+Because your requirement wasn’t “UI responsive.” It was durable and trustworthy under interruption. A worker is good engineering, but it does not satisfy refresh durability. A queue does.
+
+⸻
+
+What I need back from the agent (exactly)
+	1.	Confirmation that server-side job+polling is implemented (or in progress with commit link, if applicable).
+	2.	The proof package: 2 videos + screenshots + before/after metrics.
+	3.	A short postmortem of the original freeze issue (“rendering unbounded lists stalled UI thread”) and the guardrail added to prevent recurrence.
+
+If you want, paste this as-is into the agent thread. This is the correct next push.

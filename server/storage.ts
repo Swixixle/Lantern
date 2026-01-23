@@ -4,7 +4,9 @@ import {
   type Upload, type InsertUpload,
   type UploadPage, type InsertUploadPage,
   type Chunk, type InsertChunk,
-  users, cases, uploads, uploadPages, chunks
+  type ExtractionJob, type InsertExtractionJob,
+  type ExtractionJobState,
+  users, cases, uploads, uploadPages, chunks, extractionJobs
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, isNull, desc } from "drizzle-orm";
@@ -39,6 +41,14 @@ export interface IStorage {
   createChunk(data: InsertChunk): Promise<Chunk>;
   listChunksForUpload(uploadId: string): Promise<Chunk[]>;
   listChunksForCase(caseId: string): Promise<Chunk[]>;
+  
+  // Extraction jobs
+  createExtractionJob(data: InsertExtractionJob): Promise<ExtractionJob>;
+  getExtractionJob(id: string): Promise<ExtractionJob | undefined>;
+  updateExtractionJobState(id: string, state: ExtractionJobState, progress: number): Promise<ExtractionJob | undefined>;
+  completeExtractionJob(id: string, packId: string, packData: string): Promise<ExtractionJob | undefined>;
+  failExtractionJob(id: string, errorCode: string, errorMessage: string): Promise<ExtractionJob | undefined>;
+  listPendingExtractionJobs(): Promise<ExtractionJob[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -151,6 +161,64 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(chunks)
       .where(and(eq(chunks.caseId, caseId), isNull(chunks.deletedAt)))
       .orderBy(chunks.uploadId, chunks.chunkIndex);
+  }
+
+  // Extraction jobs
+  async createExtractionJob(data: InsertExtractionJob): Promise<ExtractionJob> {
+    const result = await db.insert(extractionJobs).values(data).returning();
+    return result[0];
+  }
+
+  async getExtractionJob(id: string): Promise<ExtractionJob | undefined> {
+    const result = await db.select().from(extractionJobs)
+      .where(eq(extractionJobs.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async updateExtractionJobState(id: string, state: ExtractionJobState, progress: number): Promise<ExtractionJob | undefined> {
+    const result = await db.update(extractionJobs)
+      .set({ state, progress, updatedAt: new Date() })
+      .where(eq(extractionJobs.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async completeExtractionJob(id: string, packId: string, packData: string): Promise<ExtractionJob | undefined> {
+    const result = await db.update(extractionJobs)
+      .set({ 
+        state: "complete", 
+        progress: 100,
+        packId, 
+        packData, 
+        updatedAt: new Date(),
+        completedAt: new Date()
+      })
+      .where(eq(extractionJobs.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async failExtractionJob(id: string, errorCode: string, errorMessage: string): Promise<ExtractionJob | undefined> {
+    const result = await db.update(extractionJobs)
+      .set({ 
+        state: "failed", 
+        errorCode, 
+        errorMessage, 
+        updatedAt: new Date(),
+        completedAt: new Date()
+      })
+      .where(eq(extractionJobs.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async listPendingExtractionJobs(): Promise<ExtractionJob[]> {
+    // Return all non-terminal states to resume jobs after server restart
+    const nonTerminalStates = ["queued", "parsing", "extracting", "sanitizing", "scoring", "packaging"];
+    const result = await db.select().from(extractionJobs)
+      .orderBy(extractionJobs.createdAt);
+    return result.filter(job => nonTerminalStates.includes(job.state));
   }
 }
 

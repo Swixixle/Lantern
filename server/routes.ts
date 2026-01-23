@@ -1,13 +1,14 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCaseSchema, insertUploadSchema, ingestionStateEnum } from "@shared/schema";
+import { insertCaseSchema, insertUploadSchema, ingestionStateEnum, extractionJobStateEnum } from "@shared/schema";
 import { z } from "zod";
 import { createHash } from "crypto";
 import { mkdir, writeFile } from "fs/promises";
 import { join, extname } from "path";
 import multer from "multer";
 import PDFParser from "pdf2json";
+import { startJobProcessor } from "./extractionProcessor";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -521,6 +522,79 @@ export async function registerRoutes(
     res.json(chunksList);
   }));
 
+  // === EXTRACTION JOB API ===
+  
+  // Create a new extraction job
+  app.post("/api/extract", asyncHandler(async (req, res) => {
+    const { sourceText, metadata, options } = req.body;
+    
+    if (!sourceText || typeof sourceText !== "string") {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "sourceText is required and must be a string"
+      });
+    }
+    
+    if (sourceText.length < 50) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "sourceText must be at least 50 characters"
+      });
+    }
+    
+    const job = await storage.createExtractionJob({
+      sourceText,
+      metadata: JSON.stringify(metadata || {}),
+      options: options ? JSON.stringify(options) : null,
+      state: "queued",
+      progress: 0
+    });
+    
+    console.log(`[Extract API] Created job ${job.id} for ${sourceText.length} chars`);
+    
+    res.status(201).json({
+      job_id: job.id,
+      state: job.state,
+      progress: job.progress,
+      created_at: job.createdAt
+    });
+  }));
+  
+  // Get job status
+  app.get("/api/jobs/:jobId", asyncHandler(async (req, res) => {
+    const jobId = req.params.jobId as string;
+    const job = await storage.getExtractionJob(jobId);
+    
+    if (!job) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Job not found"
+      });
+    }
+    
+    const response: any = {
+      job_id: job.id,
+      state: job.state,
+      progress: job.progress,
+      created_at: job.createdAt,
+      updated_at: job.updatedAt
+    };
+    
+    if (job.state === "complete") {
+      response.pack_id = job.packId;
+      response.pack = job.packData ? JSON.parse(job.packData) : null;
+      response.completed_at = job.completedAt;
+    }
+    
+    if (job.state === "failed") {
+      response.error_code = job.errorCode;
+      response.error_message = job.errorMessage;
+      response.completed_at = job.completedAt;
+    }
+    
+    res.json(response);
+  }));
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error("API Error:", err);
     
@@ -537,6 +611,9 @@ export async function registerRoutes(
       });
     }
   });
+
+  // Start the job processor
+  startJobProcessor();
 
   return httpServer;
 }

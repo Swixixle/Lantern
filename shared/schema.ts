@@ -144,3 +144,46 @@ export const insertChunkSchema = createInsertSchema(chunks).omit({
 
 export type InsertChunk = z.infer<typeof insertChunkSchema>;
 export type Chunk = typeof chunks.$inferSelect;
+
+// Extraction job states
+export const extractionJobStateEnum = z.enum([
+  "queued",
+  "parsing",
+  "extracting", 
+  "sanitizing",
+  "scoring",
+  "packaging",
+  "complete",
+  "failed"
+]);
+export type ExtractionJobState = z.infer<typeof extractionJobStateEnum>;
+
+// Extraction jobs table for durable job processing
+export const extractionJobs = pgTable("extraction_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  state: text("state").notNull().default("queued"),
+  progress: integer("progress").notNull().default(0),
+  sourceText: text("source_text").notNull(),
+  metadata: text("metadata").notNull(), // JSON string
+  options: text("options"), // JSON string
+  packId: text("pack_id"),
+  packData: text("pack_data"), // JSON string of completed pack
+  errorCode: text("error_code"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => [
+  index("extraction_jobs_state_idx").on(table.state),
+  index("extraction_jobs_created_at_idx").on(table.createdAt),
+]);
+
+export const insertExtractionJobSchema = createInsertSchema(extractionJobs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+});
+
+export type InsertExtractionJob = z.infer<typeof insertExtractionJobSchema>;
+export type ExtractionJob = typeof extractionJobs.$inferSelect;
