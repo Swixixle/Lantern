@@ -263,14 +263,30 @@ export default function LanternExtract() {
   };
 
   const downloadPDF = async () => {
-    if (!pack) return;
+    console.log("[PDF Export] Starting...");
+    if (!pack) {
+      console.log("[PDF Export] No pack available");
+      return;
+    }
     const element = document.querySelector(".pdf-preview") as HTMLElement;
-    if (!element) return;
-    const canvas = await html2canvas(element, { scale: 2 });
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [595, 842] });
-    pdf.addImage(imgData, "PNG", 0, 0, 595, 842);
-    pdf.save(`lantern_pack_${pack.pack_id.slice(0, 8)}.pdf`);
+    console.log("[PDF Export] Found element:", element);
+    if (!element) {
+      console.log("[PDF Export] No .pdf-preview element found");
+      return;
+    }
+    try {
+      console.log("[PDF Export] Capturing canvas...");
+      const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: true });
+      console.log("[PDF Export] Canvas created:", canvas.width, "x", canvas.height);
+      const imgData = canvas.toDataURL("image/png");
+      console.log("[PDF Export] Image data length:", imgData.length);
+      const pdf = new jsPDF({ orientation: "portrait", unit: "px", format: [595, 842] });
+      pdf.addImage(imgData, "PNG", 0, 0, 595, 842);
+      pdf.save(`lantern_pack_${pack.pack_id.slice(0, 8)}.pdf`);
+      console.log("[PDF Export] Complete!");
+    } catch (err) {
+      console.error("[PDF Export] Error:", err);
+    }
   };
 
   const runQualityTests = async () => {
@@ -717,9 +733,8 @@ export default function LanternExtract() {
               </Card>
             </div>
 
-            {/* PDF PREVIEW */}
-            {/* (Omitted for brevity, kept structure from previous step) */}
-            <div className="order-1 lg:order-2 flex justify-center bg-zinc-100 p-8 rounded-lg overflow-hidden border border-zinc-200">
+            {/* PDF PREVIEW - Hidden but capturable for PDF export */}
+            <div className="fixed left-[-9999px] top-0">
               <div 
                 className="pdf-preview w-[595px] min-h-[842px] bg-white text-black p-12 shadow-xl flex flex-col relative" 
               >
