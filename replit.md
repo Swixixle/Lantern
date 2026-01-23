@@ -18,7 +18,7 @@ Preferred communication style: Simple, everyday language.
 
 ### Runtime Architecture
 - **Frontend**: React + Vite + TypeScript single-page application
-- **Storage**: localStorage is the default persistence layer (IndexedDB available behind feature flag)
+- **Storage**: IndexedDB via `idb` library (local-first architecture)
 - **Server**: Express server acts only as static asset host; `routes.ts` contains no active endpoints
 - **No External Calls**: Zero network calls for data transmission; operates as an isolated local tool
 

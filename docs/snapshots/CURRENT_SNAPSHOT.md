@@ -1,7 +1,7 @@
 # Nikodemus System Snapshot
 
-Generated: 2026-01-23T07:03:55.325Z
-Commit: 4e5709f
+Generated: 2026-01-23T07:19:58.207Z
+Commit: 6ca74f2
 Branch: main
 
 ---
@@ -11,7 +11,7 @@ Branch: main
 - **Runtime**: Node.js (tsx for dev, node for prod)
 - **Frontend**: React 19 + Vite + TypeScript
 - **Backend**: Express 5
-- **Storage**: Browser localStorage (local-first architecture)
+- **Storage**: Browser IndexedDB via idb (local-first architecture)
 - **Build**: Vite (client) + esbuild (server)
 
 ---
@@ -142,6 +142,7 @@ Branch: main
 ./client/src/scripts/test-provenance.ts
 ./client/src/scripts/test-segmenter.ts
 ./components.json
+./docs/GOVERNANCE_AUDIT_2026_01_23.md
 ./docs/investor/01_NARRATIVE.md
 ./docs/investor/02_DECK_OUTLINE.md
 ./docs/investor/03_DEMO_SCRIPT.md
@@ -348,7 +349,7 @@ The following are explicitly excluded:
 To verify this snapshot is current:
 ```bash
 git rev-parse --short HEAD
-# Should match: 4e5709f
+# Should match: 6ca74f2
 ```
 
 To regenerate:

@@ -1,0 +1,133 @@
+You are my Replit build agent for the Nikodemus/Lantern system (not ELI, not CABINET). I will not interrupt unless necessary. Follow the Snapshot Policy constraints strictly: do not expose secrets, uploads, git internals, build output, or any Canon/protected parameters. If you encounter protected content, do not output it; use [SEALED] for protected values and [CANON_REF] for references only.
+
+Objective
+
+Bring the repo to a governance-safe, case-bound state that supports paperclip uploads + file tabs + scan/photo uploads for Lantern, and produce a snapshot-driven change audit so we can recover “what strategy changed” since the Snapshot Policy.
+
+⸻
+
+Phase 0 — Immediate Repo Grounding (Required)
+	1.	Generate a safe snapshot:
+
+	•	Run: npx tsx script/generate-snapshot.ts
+	•	Verify: git rev-parse --short HEAD
+	•	Confirm docs/snapshots/CURRENT_SNAPSHOT.md exists and contains the commit hash/timestamp.
+
+	2.	Produce Snapshot & Change Audit (Deliverable 0) using only snapshot-safe information:
+
+	•	Repo snapshot: framework(s), key dirs, DB choice, runtime entrypoints.
+	•	Change audit since last known good version:
+	•	If git tags exist: diff from most recent tag.
+	•	If not: infer by file modification patterns and commit messages (do not include .git content).
+	•	Highlight behavior changes that could break case-binding or governance.
+	•	Identify tech debt or duplicated logic.
+	•	If no baseline exists, create a baseline summary for next time.
+
+Output must not contain any Canon content; use [SEALED]/[CANON_REF] as needed.
+
+⸻
+
+Phase 1 — Upload Capability for Lantern (Core Feature)
+
+Non-negotiable constraints
+
+A) Hard case-binding: every upload, extracted artifact, chunk, and retrieval record must belong to a caseId. No orphans.
+B) Deterministic ingestion states: do not treat “uploaded” as “usable.” Track state.
+C) Fail-closed UX: if there is no valid active caseId, the UI must block uploads and show structured guidance (not generic success).
+
+UX Requirements
+
+Implement a paperclip attachment entrypoint in the case UI (header or composer row). Clicking opens an Upload Drawer/Modal with tabs:
+	1.	Files: drag/drop + browse (PDF/DOCX/TXT/images).
+	2.	Photos / Camera: capture photo from device camera.
+	3.	Scan: multi-page capture workflow; produce either a multi-page PDF or ordered page images.
+
+In all tabs:
+	•	Prominently display “Attach to Case: {caseName}” and the case identifier (read-only).
+	•	Require/collect:
+	•	evidenceType (document/photo/scan/note/other)
+	•	optional: sourceLabel (user upload, etc.)
+
+Backend/API Requirements (Case-bound routing)
+
+Implement/confirm endpoints are case-scoped (caseId in path), for example:
+	•	POST /api/cases/:caseId/uploads/init
+	•	POST /api/cases/:caseId/uploads/complete
+	•	GET  /api/cases/:caseId/uploads
+	•	GET  /api/cases/:caseId/uploads/:uploadId
+
+If your repo already has conventions, follow them, but maintain the caseId-in-path requirement. No upload endpoint may accept uploads without a caseId binding.
+
+Storage & Ingestion
+	•	Store raw objects in your existing storage layer. If S3/R2/etc: use signed URL init/complete pattern. If local dev: store under a case-scoped path.
+	•	Add integrity: compute and store sha256 hash where practical.
+	•	Introduce an ingestion state machine (DB column):
+	•	UPLOADED → STORED → EXTRACTED → CHUNKED → INDEXED → READY
+	•	and failure states: FAILED_STORING, FAILED_EXTRACTION, FAILED_CHUNKING, FAILED_INDEXING
+	•	Create a background job or server-side queue mechanism if one exists; if none, implement a minimal deterministic job runner consistent with repo patterns.
+
+Data Model Requirements (DB)
+
+Implement or confirm tables/relations (names may differ; follow existing schema style):
+	•	uploads (FK to cases)
+	•	upload_pages (optional but recommended for scan mode)
+	•	chunks (FK to case + upload; includes pageNumber, chunkIndex)
+	•	Ensure indexes:
+	•	uploads(caseId, createdAt)
+	•	chunks(caseId, uploadId)
+	•	Verify constraints: no orphan records; enforce cascades carefully (prefer archive/soft delete over hard delete).
+
+⸻
+
+Phase 2 — Governance-Safe Determinism (Mandatory Wiring)
+
+LLM call contract (must be deterministic)
+
+For every LLM call (chat, analysis, extraction, summarization, retrieval, printout generation), confirm it always passes:
+	•	caseId
+	•	decisionTarget (if relevant to Lantern; if Lantern uses a different field name, map it)
+	•	decisionTime (or equivalent)
+	•	structured prerequisite state (versioned)
+	•	citations as [CANON_REF] only
+	•	refusal/safety flags
+
+If any required context is missing:
+Return a structured response object with:
+	•	type: "CONTEXT REQUIRED"
+	•	missing_fields: [...]
+	•	next_actions: [...]
+and DO NOT produce a helpful-sounding generic answer.
+
+You must identify all code paths where LLM calls occur and prove they are gated.
+
+⸻
+
+Phase 3 — Naming and Product Separation
+
+Perform a naming sweep to ensure Lantern UI and docs do not show “ELI” or “CABINET” labels. Provide file paths and string locations. This repo is Lantern.
+
+⸻
+
+Deliverables (All Required)
+	1.	Snapshot & Change Audit (as defined above).
+	2.	Current-State Architecture Map (frontend routes/components; backend endpoints; DB schema; LLM pipeline stages; auth/session; file upload + chunking).
+	3.	What’s Broken / Confusing list with severity + exact repro steps (focus on active case confusion, case visibility, missing decision fields, misleading success states).
+	4.	Missing-Field Audit for case build completeness (caseId binding everywhere; decisionTarget; decisionTime; prereqs; evidence type; provenance model; case status; printout immutability metadata).
+	5.	Data Model Sanity & Governance Constraints verification (FKs, immutability, archive vs delete, indexes, migrations).
+	6.	Upload Feature Implementation Plan with exact file paths and stepwise code-level notes (UI + backend + DB + ingestion states).
+	7.	Top 10 Prioritized Fix Plan ranked by impact/effort/risk with exact file paths.
+	8.	Verification Checklist with manual demo test steps:
+	•	create case → upload file → see ingestion status transitions → confirm chunks belong to case
+	•	photo capture
+	•	scan multi-page
+	•	attempt upload without active case → must block with CONTEXT REQUIRED
+	•	attempt LLM call without required context → must block deterministically
+
+⸻
+
+Output Rules
+	•	Do not output any sealed parameters, formulas, thresholds, weights, or Canon logic. Use [SEALED] and [CANON_REF].
+	•	Do not include file contents from denylisted patterns or excluded folders.
+	•	Provide file paths, routes, component names, table names, and integration points.
+
+Begin with Phase 0 immediately and proceed through the phases in order.

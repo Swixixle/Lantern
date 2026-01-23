@@ -189,7 +189,7 @@ Branch: ${git.branch}
 - **Runtime**: Node.js (tsx for dev, node for prod)
 - **Frontend**: React 19 + Vite + TypeScript
 - **Backend**: Express 5
-- **Storage**: Browser localStorage (local-first architecture)
+- **Storage**: Browser IndexedDB via idb (local-first architecture)
 - **Build**: Vite (client) + esbuild (server)
 
 ---
