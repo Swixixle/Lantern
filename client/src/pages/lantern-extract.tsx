@@ -185,6 +185,23 @@ export default function LanternExtract() {
     };
   }, []);
 
+  // DEBUG: Global click capture to diagnose blocked clicks
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      console.log("[DEBUG CLICK]", {
+        tag: target.tagName,
+        className: target.className?.slice?.(0, 80),
+        id: target.id,
+        testId: target.getAttribute('data-testid'),
+        x: e.clientX,
+        y: e.clientY
+      });
+    };
+    document.addEventListener('click', handler, true); // capture phase
+    return () => document.removeEventListener('click', handler, true);
+  }, []);
+
   // Keep sourceTextRef in sync with sourceText
   useEffect(() => {
     sourceTextRef.current = sourceText;
