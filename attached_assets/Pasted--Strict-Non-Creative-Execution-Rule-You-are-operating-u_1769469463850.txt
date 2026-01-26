@@ -1,0 +1,100 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+I cannot directly operate your Replit UI or hit your running endpoints from here. I can, however, give you the exact verification procedure that will conclusively answer “yes” in a way we can audit.
+
+## Verification Procedure (you run; paste outputs back)
+
+### 1) Create corpus
+
+Run in your Replit Shell (or local terminal pointing at your deployed URL):
+
+```bash
+BASE_URL="http://localhost:3000" # change to your Replit URL if deployed
+curl -s -X POST "$BASE_URL/api/corpus" \
+  -H "Content-Type: application/json" \
+  -d '{"purpose":"Litigation support"}' | jq
+```
+
+Pass condition:
+
+* Response includes `corpus_id`, `created_at`, `purpose` exactly.
+
+### 2) Upload a PRIMARY source
+
+```bash
+CORPUS_ID="PASTE_CORPUS_ID_HERE"
+curl -s -X POST "$BASE_URL/api/corpus/$CORPUS_ID/sources" \
+  -F "role=PRIMARY" \
+  -F "file=@./path/to/yourfile.pdf" | jq
+```
+
+Pass condition:
+
+* Response includes `source_id`, `corpus_id`, `role="PRIMARY"`, `filename`, `uploaded_at`, `sha256_hex` (64 hex chars).
+
+### 3) Upload a SECONDARY source
+
+```bash
+curl -s -X POST "$BASE_URL/api/corpus/$CORPUS_ID/sources" \
+  -F "role=SECONDARY" \
+  -F "file=@./path/to/anotherfile.pdf" | jq
+```
+
+Pass condition:
+
+* Same as above, but `role="SECONDARY"`.
+
+### 4) List corpus sources
+
+```bash
+curl -s "$BASE_URL/api/corpus/$CORPUS_ID/sources" | jq
+```
+
+Pass condition:
+
+* Returns `sources[]` with two entries, correct roles, and sha256 hashes.
+
+### 5) Enter Claim Space with corpusId
+
+Open in browser:
+
+* `BASE_URL/intake` → select purpose → upload → click **Enter Claim Space**
+* Confirm URL includes: `/?corpusId=<CORPUS_ID>` (or whatever you implemented as the query param)
+
+### 6) Snapshot stores the same corpus_id
+
+From Claim Space → Save Snapshot → open snapshot detail → confirm `corpus_id` equals the corpus you created.
+
+---
+
+## What to send me (minimal, sufficient)
+
+Paste:
+
+1. The JSON output from steps 1, 2, 3, and 4
+2. The Claim Space URL after clicking “Enter Claim Space”
+3. One snapshot JSON header (snapshot_id, created_at, corpus_id, hash_alg, hash_hex)
+
+With that, I can confirm definitively whether corpus creation, uploads, and navigation are correct—and if anything is off, I can point to the exact failing contract condition.
