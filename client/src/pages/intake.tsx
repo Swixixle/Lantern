@@ -3,8 +3,17 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Upload, AlertCircle, FileText, CheckCircle } from "lucide-react";
+import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2 } from "lucide-react";
 import { CORPUS_PURPOSES, SYSTEM_LIMITATIONS, type CorpusPurpose, type CorpusSource } from "@/lib/schema/corpus";
+
+interface BuildResult {
+  corpus_id: string;
+  mode: string;
+  status: string;
+  anchors_created: number;
+  claims_created: number;
+  constraints_created: number;
+}
 
 export default function Intake() {
   const [, navigate] = useLocation();
@@ -18,6 +27,9 @@ export default function Intake() {
   const [secondarySources, setSecondarySources] = useState<CorpusSource[]>([]);
   const [uploadingPrimary, setUploadingPrimary] = useState(false);
   const [uploadingSecondary, setUploadingSecondary] = useState(false);
+  
+  const [building, setBuilding] = useState(false);
+  const [buildResult, setBuildResult] = useState<BuildResult | null>(null);
   
   const primaryInputRef = useRef<HTMLInputElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +111,34 @@ export default function Intake() {
     const file = e.target.files?.[0];
     if (file) handleUpload(file, "SECONDARY");
     e.target.value = "";
+  };
+
+  const handleBuildAnchors = async () => {
+    if (!corpusId) return;
+    
+    setBuilding(true);
+    setError(null);
+    setBuildResult(null);
+    
+    try {
+      const response = await fetch(`/api/corpus/${corpusId}/build`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "anchors_only" })
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to build anchors");
+      }
+      
+      const result: BuildResult = await response.json();
+      setBuildResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setBuilding(false);
+    }
   };
 
   const hasAnySources = primarySources.length > 0 || secondarySources.length > 0;
@@ -266,14 +306,46 @@ export default function Intake() {
             </div>
 
             {hasAnySources && (
-              <Button
-                onClick={() => navigate(`/?corpusId=${corpusId}`)}
-                className="w-full bg-emerald-600 hover:bg-emerald-500"
-                data-testid="button-enter-claim-space"
-              >
-                <CheckCircle className="w-4 h-4 mr-2" />
-                Enter Claim Space
-              </Button>
+              <div className="space-y-4">
+                <Button
+                  onClick={handleBuildAnchors}
+                  disabled={building}
+                  variant="outline"
+                  className="w-full"
+                  data-testid="button-build-anchors"
+                >
+                  {building ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Anchor className="w-4 h-4 mr-2" />
+                  )}
+                  Build Anchors (Explicit)
+                </Button>
+                
+                {buildResult && (
+                  <Card className="border-cyan-500/30 bg-cyan-500/5">
+                    <CardContent className="py-4">
+                      <p className="text-sm font-semibold text-cyan-400 mb-2">Build Complete</p>
+                      <div className="text-xs font-mono text-muted-foreground space-y-1">
+                        <p>mode: {buildResult.mode}</p>
+                        <p>status: {buildResult.status}</p>
+                        <p>anchors_created: {buildResult.anchors_created}</p>
+                        <p>claims_created: {buildResult.claims_created}</p>
+                        <p>constraints_created: {buildResult.constraints_created}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
+                <Button
+                  onClick={() => navigate(`/?corpusId=${corpusId}`)}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500"
+                  data-testid="button-enter-claim-space"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Enter Claim Space
+                </Button>
+              </div>
             )}
           </>
         )}

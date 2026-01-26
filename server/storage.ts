@@ -9,7 +9,8 @@ import {
   type Snapshot, type InsertSnapshot,
   type Corpus, type InsertCorpus,
   type CorpusSource, type InsertCorpusSource,
-  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources
+  type AnchorRecord, type InsertAnchorRecord,
+  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, isNull, desc } from "drizzle-orm";
@@ -61,7 +62,13 @@ export interface IStorage {
   createCorpus(data: InsertCorpus): Promise<Corpus>;
   getCorpus(id: string): Promise<Corpus | undefined>;
   createCorpusSource(data: InsertCorpusSource): Promise<CorpusSource>;
+  getCorpusSource(id: string): Promise<CorpusSource | undefined>;
   listCorpusSources(corpusId: string): Promise<CorpusSource[]>;
+  
+  // Anchor Records
+  createAnchorRecord(data: InsertAnchorRecord): Promise<AnchorRecord>;
+  listAnchorRecordsByCorpus(corpusId: string): Promise<AnchorRecord[]>;
+  countAnchorRecordsBySource(sourceId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -263,10 +270,34 @@ export class DatabaseStorage implements IStorage {
     return result[0];
   }
 
+  async getCorpusSource(id: string): Promise<CorpusSource | undefined> {
+    const result = await db.select().from(corpusSources)
+      .where(eq(corpusSources.id, id))
+      .limit(1);
+    return result[0];
+  }
+
   async listCorpusSources(corpusId: string): Promise<CorpusSource[]> {
     return db.select().from(corpusSources)
       .where(eq(corpusSources.corpusId, corpusId))
       .orderBy(corpusSources.uploadedAt);
+  }
+
+  async createAnchorRecord(data: InsertAnchorRecord): Promise<AnchorRecord> {
+    const result = await db.insert(anchorRecords).values(data).returning();
+    return result[0];
+  }
+
+  async listAnchorRecordsByCorpus(corpusId: string): Promise<AnchorRecord[]> {
+    return db.select().from(anchorRecords)
+      .where(eq(anchorRecords.corpusId, corpusId))
+      .orderBy(anchorRecords.createdAt);
+  }
+
+  async countAnchorRecordsBySource(sourceId: string): Promise<number> {
+    const result = await db.select().from(anchorRecords)
+      .where(eq(anchorRecords.sourceId, sourceId));
+    return result.length;
   }
 }
 

@@ -284,3 +284,30 @@ export const insertCorpusSourceSchema = createInsertSchema(corpusSources).omit({
 
 export type InsertCorpusSource = z.infer<typeof insertCorpusSourceSchema>;
 export type CorpusSource = typeof corpusSources.$inferSelect;
+
+// Anchor records table (corpus-bound)
+export const anchorRecords = pgTable("anchor_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  corpusId: varchar("corpus_id").notNull().references(() => corpora.id, { onDelete: "cascade" }),
+  sourceId: varchar("source_id").notNull().references(() => corpusSources.id, { onDelete: "cascade" }),
+  quote: text("quote").notNull(),
+  sourceDocument: text("source_document").notNull(),
+  pageRef: text("page_ref").notNull(),
+  sectionRef: text("section_ref"),
+  timelineDate: text("timeline_date").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("anchor_records_corpus_id_idx").on(table.corpusId),
+  index("anchor_records_source_id_idx").on(table.sourceId),
+]);
+
+export const insertAnchorRecordSchema = createInsertSchema(anchorRecords).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertAnchorRecord = z.infer<typeof insertAnchorRecordSchema>;
+export type AnchorRecord = typeof anchorRecords.$inferSelect;
+
+// Build mode enum
+export const buildModeEnum = z.enum(["anchors_only", "claims_from_anchors"]);
