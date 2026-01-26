@@ -1,9 +1,49 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCaseSchema, insertUploadSchema, ingestionStateEnum, extractionJobStateEnum } from "@shared/schema";
+import { insertCaseSchema, insertUploadSchema, ingestionStateEnum, extractionJobStateEnum, claimSchema, anchorSchema, type Anchor } from "@shared/schema";
 import { z } from "zod";
 import { createHash } from "crypto";
+
+const MOCK_ANCHORS: Record<string, Anchor> = {
+  "anchor-001": {
+    id: "anchor-001",
+    quote: "This Agreement is entered into as of March 15, 2024, by and between Party A and Party B.",
+    source_document: "Master Services Agreement v2.1.pdf",
+    page_ref: "p. 1",
+    section_ref: "§1.1 Parties",
+    timeline_date: "2024-03-15"
+  },
+  "anchor-002": {
+    id: "anchor-002",
+    quote: "Both parties hereby acknowledge receipt of this executed agreement and agree to be bound by its terms.",
+    source_document: "Master Services Agreement v2.1.pdf",
+    page_ref: "p. 12",
+    section_ref: "Signature Block",
+    timeline_date: "2024-03-15"
+  },
+  "anchor-003": {
+    id: "anchor-003",
+    quote: "Payment shall be due within thirty (30) days of invoice date. Late payments shall accrue interest at 1.5% per month.",
+    source_document: "Master Services Agreement v2.1.pdf",
+    page_ref: "p. 5",
+    section_ref: "§4.2 Payment Terms",
+    timeline_date: "2024-03-15"
+  }
+};
+
+function canonicalizeForHash(corpusId: string, claims: z.infer<typeof claimSchema>[]) {
+  const sortedClaims = [...claims].map(c => ({
+    ...c,
+    anchor_ids: [...c.anchor_ids].sort(),
+  })).sort((a, b) => a.id.localeCompare(b.id));
+  return JSON.stringify({ corpus_id: corpusId, claims: sortedClaims });
+}
+
+function computeSnapshotHash(corpusId: string, claims: z.infer<typeof claimSchema>[]) {
+  const canonical = canonicalizeForHash(corpusId, claims);
+  return createHash("sha256").update(canonical, "utf8").digest("hex");
+}
 import { mkdir, writeFile } from "fs/promises";
 import { join, extname } from "path";
 import multer from "multer";
@@ -593,6 +633,128 @@ export async function registerRoutes(
     }
     
     res.json(response);
+  }));
+
+  // === ANCHOR API ===
+  
+  app.get("/api/anchors", asyncHandler(async (req, res) => {
+    const idsParam = req.query.ids as string;
+    
+    if (!idsParam) {
+      return res.json({ anchors: [], missing_ids: [] });
+    }
+    
+    const requestedIds = idsParam.split(",").map(id => id.trim()).filter(Boolean);
+    const anchors: Anchor[] = [];
+    const missing_ids: string[] = [];
+    
+    for (const id of requestedIds) {
+      if (MOCK_ANCHORS[id]) {
+        anchors.push(MOCK_ANCHORS[id]);
+      } else {
+        missing_ids.push(id);
+      }
+    }
+    
+    res.json({ anchors, missing_ids });
+  }));
+
+  // === SNAPSHOT API ===
+  
+  // Create snapshot
+  app.post("/api/snapshots", asyncHandler(async (req, res) => {
+    const { corpus_id, claims } = req.body;
+    
+    if (!corpus_id || typeof corpus_id !== "string") {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "corpus_id is required"
+      });
+    }
+    
+    const claimsArraySchema = z.array(claimSchema);
+    const parseResult = claimsArraySchema.safeParse(claims);
+    
+    if (!parseResult.success) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "Invalid claims format",
+        details: parseResult.error.issues
+      });
+    }
+    
+    const validClaims = parseResult.data;
+    const hashHex = computeSnapshotHash(corpus_id, validClaims);
+    
+    const snapshotData = {
+      corpus_id,
+      claims: validClaims
+    };
+    
+    const snapshot = await storage.createSnapshot({
+      corpusId: corpus_id,
+      snapshotJson: JSON.stringify(snapshotData),
+      hashAlg: "SHA-256",
+      hashHex
+    });
+    
+    console.log(`[Snapshot API] Created snapshot ${snapshot.id} for corpus ${corpus_id}`);
+    
+    res.status(201).json({
+      snapshot_id: snapshot.id,
+      created_at: snapshot.createdAt,
+      hash_alg: snapshot.hashAlg,
+      hash_hex: snapshot.hashHex
+    });
+  }));
+  
+  // Get snapshot
+  app.get("/api/snapshots/:snapshotId", asyncHandler(async (req, res) => {
+    const snapshotId = req.params.snapshotId as string;
+    const snapshot = await storage.getSnapshot(snapshotId);
+    
+    if (!snapshot) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Snapshot not found"
+      });
+    }
+    
+    const snapshotData = JSON.parse(snapshot.snapshotJson);
+    
+    res.json({
+      snapshot_id: snapshot.id,
+      created_at: snapshot.createdAt,
+      corpus_id: snapshot.corpusId,
+      claims: snapshotData.claims,
+      hash_alg: snapshot.hashAlg,
+      hash_hex: snapshot.hashHex
+    });
+  }));
+  
+  // Verify snapshot
+  app.get("/api/snapshots/:snapshotId/verify", asyncHandler(async (req, res) => {
+    const snapshotId = req.params.snapshotId as string;
+    const snapshot = await storage.getSnapshot(snapshotId);
+    
+    if (!snapshot) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Snapshot not found"
+      });
+    }
+    
+    const snapshotData = JSON.parse(snapshot.snapshotJson);
+    const recomputedHash = computeSnapshotHash(snapshotData.corpus_id, snapshotData.claims);
+    const verified = recomputedHash === snapshot.hashHex;
+    
+    res.json({
+      snapshot_id: snapshot.id,
+      verified,
+      hash_alg: snapshot.hashAlg,
+      stored_hash_hex: snapshot.hashHex,
+      recomputed_hash_hex: recomputedHash
+    });
   }));
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

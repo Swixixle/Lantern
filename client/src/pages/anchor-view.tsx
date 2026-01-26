@@ -1,40 +1,9 @@
+import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, FileText, Calendar, Hash, Layers } from "lucide-react";
-
-export interface Anchor {
-  id: string;
-  quoted_text: string;
-  source_document: string;
-  page_section: string;
-  timeline_context: string;
-}
-
-const MOCK_ANCHORS: Record<string, Anchor> = {
-  "anchor-001": {
-    id: "anchor-001",
-    quoted_text: "This Agreement is entered into as of March 15, 2024, by and between Party A and Party B.",
-    source_document: "Master Services Agreement v2.1",
-    page_section: "Page 1, Section 1.1",
-    timeline_context: "Document dated: March 15, 2024"
-  },
-  "anchor-002": {
-    id: "anchor-002",
-    quoted_text: "Both parties hereby acknowledge receipt of this executed agreement.",
-    source_document: "Master Services Agreement v2.1",
-    page_section: "Page 12, Signature Block",
-    timeline_context: "Signatures dated: March 15, 2024"
-  },
-  "anchor-003": {
-    id: "anchor-003",
-    quoted_text: "Payment shall be due within thirty (30) days of invoice date.",
-    source_document: "Master Services Agreement v2.1",
-    page_section: "Page 5, Section 4.2",
-    timeline_context: "Document dated: March 15, 2024"
-  }
-};
+import { ArrowLeft, FileText, Calendar, Hash, Layers, AlertCircle } from "lucide-react";
+import type { Anchor } from "@/lib/schema/anchors";
 
 function AnchorCard({ anchor }: { anchor: Anchor }) {
   return (
@@ -45,8 +14,8 @@ function AnchorCard({ anchor }: { anchor: Anchor }) {
           <span className="text-xs font-mono text-muted-foreground">{anchor.id}</span>
         </div>
         
-        <blockquote className="border-l-2 border-cyan-500/50 pl-3 italic text-sm">
-          "{anchor.quoted_text}"
+        <blockquote className="border-l-2 border-cyan-500/50 pl-3 italic text-sm bg-muted/30 p-3 rounded-r">
+          "{anchor.quote}"
         </blockquote>
         
         <div className="grid grid-cols-2 gap-2 text-xs">
@@ -55,11 +24,14 @@ function AnchorCard({ anchor }: { anchor: Anchor }) {
             <span>{anchor.source_document}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-muted-foreground">{anchor.page_section}</span>
+            <span className="text-muted-foreground">{anchor.page_ref}</span>
+            {anchor.section_ref && (
+              <span className="text-muted-foreground">• {anchor.section_ref}</span>
+            )}
           </div>
           <div className="flex items-center gap-2 col-span-2">
             <Calendar className="w-3 h-3 text-muted-foreground" />
-            <span>{anchor.timeline_context}</span>
+            <span>{anchor.timeline_date}</span>
           </div>
         </div>
       </CardContent>
@@ -74,9 +46,37 @@ export default function AnchorView() {
   const claimId = params.get("claimId");
   const isEmpty = params.get("empty") === "true";
 
-  const anchors = anchorIds
-    .map(id => MOCK_ANCHORS[id])
-    .filter(Boolean);
+  const [anchors, setAnchors] = useState<Anchor[]>([]);
+  const [missingIds, setMissingIds] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isEmpty || anchorIds.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    const fetchAnchors = async () => {
+      try {
+        const response = await fetch(`/api/anchors?ids=${anchorIds.join(",")}`);
+        if (!response.ok) {
+          throw new Error("Failed to fetch anchors");
+        }
+        const data = await response.json();
+        setAnchors(data.anchors);
+        setMissingIds(data.missing_ids);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnchors();
+  }, [anchorIds.join(","), isEmpty]);
+
+  const noAnchorsAvailable = isEmpty || (anchorIds.length === 0) || (anchors.length === 0 && !loading);
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
@@ -90,7 +90,7 @@ export default function AnchorView() {
           </div>
           
           <Link href="/">
-            <Button variant="ghost" size="sm" className="mb-4">
+            <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back">
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Claim Space
             </Button>
@@ -102,6 +102,12 @@ export default function AnchorView() {
               Claim: {claimId}
             </p>
           )}
+          {anchorIds.length > 0 && !isEmpty && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Requested: {anchorIds.length} anchor{anchorIds.length !== 1 ? "s" : ""} 
+              {anchors.length > 0 && ` • Found: ${anchors.length}`}
+            </p>
+          )}
         </header>
 
         <div className="bg-amber-500/10 border border-amber-500/30 rounded p-3 mb-6">
@@ -110,8 +116,21 @@ export default function AnchorView() {
           </p>
         </div>
 
-        {isEmpty || anchors.length === 0 ? (
+        {loading ? (
           <Card className="border-dashed">
+            <CardContent className="py-8 text-center text-muted-foreground">
+              <p className="text-sm">Loading anchors...</p>
+            </CardContent>
+          </Card>
+        ) : error ? (
+          <Card className="border-red-500/30">
+            <CardContent className="py-8 text-center text-red-400">
+              <AlertCircle className="w-6 h-6 mx-auto mb-2" />
+              <p className="text-sm">{error}</p>
+            </CardContent>
+          </Card>
+        ) : noAnchorsAvailable ? (
+          <Card className="border-dashed" data-testid="no-anchors-message">
             <CardContent className="py-8 text-center text-muted-foreground">
               <p className="text-sm">No anchors available for this claim in the current corpus.</p>
               <p className="text-xs mt-2">This claim cannot be defended without supporting evidence.</p>
@@ -122,6 +141,16 @@ export default function AnchorView() {
             {anchors.map((anchor) => (
               <AnchorCard key={anchor.id} anchor={anchor} />
             ))}
+            
+            {missingIds.length > 0 && (
+              <Card className="border-amber-500/30 mt-6">
+                <CardContent className="py-4">
+                  <p className="text-xs text-amber-500">
+                    {missingIds.length} anchor{missingIds.length !== 1 ? "s" : ""} not found in corpus: {missingIds.join(", ")}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 

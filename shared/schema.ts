@@ -187,3 +187,50 @@ export const insertExtractionJobSchema = createInsertSchema(extractionJobs).omit
 
 export type InsertExtractionJob = z.infer<typeof insertExtractionJobSchema>;
 export type ExtractionJob = typeof extractionJobs.$inferSelect;
+
+// Claim classification enum
+export const claimClassificationEnum = z.enum(["DEFENSIBLE", "RESTRICTED", "AMBIGUOUS"]);
+export type ClaimClassification = z.infer<typeof claimClassificationEnum>;
+
+// Claim schema for snapshots
+export const claimSchema = z.object({
+  id: z.string(),
+  classification: claimClassificationEnum,
+  text: z.string(),
+  confidence: z.number().min(0).max(0.99),
+  refusal_reason: z.string().nullable(),
+  anchor_ids: z.array(z.string()),
+});
+export type SnapshotClaim = z.infer<typeof claimSchema>;
+
+// Snapshots table for claim governance
+export const snapshots = pgTable("snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  corpusId: text("corpus_id").notNull(),
+  snapshotJson: text("snapshot_json").notNull(),
+  hashAlg: text("hash_alg").notNull().default("SHA-256"),
+  hashHex: text("hash_hex").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("snapshots_corpus_id_idx").on(table.corpusId),
+  index("snapshots_created_at_idx").on(table.createdAt),
+]);
+
+export const insertSnapshotSchema = createInsertSchema(snapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertSnapshot = z.infer<typeof insertSnapshotSchema>;
+export type Snapshot = typeof snapshots.$inferSelect;
+
+// Anchor schema
+export const anchorSchema = z.object({
+  id: z.string(),
+  quote: z.string(),
+  source_document: z.string(),
+  page_ref: z.string(),
+  section_ref: z.string().nullable().optional(),
+  timeline_date: z.string(),
+});
+export type Anchor = z.infer<typeof anchorSchema>;

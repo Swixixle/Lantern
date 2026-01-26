@@ -6,7 +6,8 @@ import {
   type Chunk, type InsertChunk,
   type ExtractionJob, type InsertExtractionJob,
   type ExtractionJobState,
-  users, cases, uploads, uploadPages, chunks, extractionJobs
+  type Snapshot, type InsertSnapshot,
+  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, isNull, desc } from "drizzle-orm";
@@ -49,6 +50,10 @@ export interface IStorage {
   completeExtractionJob(id: string, packId: string, packData: string): Promise<ExtractionJob | undefined>;
   failExtractionJob(id: string, errorCode: string, errorMessage: string): Promise<ExtractionJob | undefined>;
   listPendingExtractionJobs(): Promise<ExtractionJob[]>;
+  
+  // Snapshots
+  createSnapshot(data: InsertSnapshot): Promise<Snapshot>;
+  getSnapshot(id: string): Promise<Snapshot | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -219,6 +224,18 @@ export class DatabaseStorage implements IStorage {
     const result = await db.select().from(extractionJobs)
       .orderBy(extractionJobs.createdAt);
     return result.filter(job => nonTerminalStates.includes(job.state));
+  }
+
+  async createSnapshot(data: InsertSnapshot): Promise<Snapshot> {
+    const result = await db.insert(snapshots).values(data).returning();
+    return result[0];
+  }
+
+  async getSnapshot(id: string): Promise<Snapshot | undefined> {
+    const result = await db.select().from(snapshots)
+      .where(eq(snapshots.id, id))
+      .limit(1);
+    return result[0];
   }
 }
 

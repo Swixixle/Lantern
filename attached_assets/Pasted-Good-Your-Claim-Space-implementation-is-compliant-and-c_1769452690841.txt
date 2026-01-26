@@ -1,0 +1,270 @@
+Good. Your Claim Space implementation is compliant and, critically, **testable**. We can now proceed to (1) **Anchor View** and (2) **Snapshot + hash** without rework.
+
+Below is the exact implementation contract for each.
+
+---
+
+# 1) Anchor View Implementation Contract (v1)
+
+## A. Route (you already have)
+
+`/anchors?ids=anchor-001,anchor-002&claimId=claim-def-001`
+
+Anchor View must be able to render in three states:
+
+1. **Valid IDs → anchors found**
+2. **IDs present → none found**
+3. **No ids param** (manual navigation / bad route)
+
+## B. Anchor data model (minimum viable)
+
+Create `client/src/lib/schema/anchors.ts` (or server equivalent):
+
+```ts
+export interface Anchor {
+  id: string;                // "anchor-001"
+  quote: string;             // verbatim quoted text
+  source_document: string;   // "Law Library Report.pdf"
+  page_ref: string;          // "p. 12" or "Table 3" or "§2.1"
+  section_ref?: string | null; // optional, if you have it
+  timeline_date: string;     // ISO: "2025-03-14" or "2024-11-01"
+}
+```
+
+Hard requirements:
+
+* `quote` must be verbatim (no paraphrase).
+* `timeline_date` must be displayed as a date (do not “relative-time” it).
+
+## C. API contract (wire-ready even if you mock first)
+
+### Endpoint
+
+`GET /api/anchors?ids=anchor-001,anchor-002`
+
+### Response
+
+```json
+{
+  "anchors": [ /* Anchor[] */ ],
+  "missing_ids": ["anchor-999"]
+}
+```
+
+You may mock this initially, but the endpoint signature must exist because Snapshot verification will depend on it later.
+
+## D. UI requirements
+
+### Header (exact text)
+
+At top of Anchor View:
+
+**“Any claim not anchored here is not defensible.”**
+
+### Claim context (optional but recommended)
+
+If `claimId` provided, show:
+
+* Claim ID (not required to show claim text yet)
+* Number of requested anchors vs found anchors
+
+### Anchor rendering
+
+For each anchor show, in this order:
+
+1. **Quoted passage** (visually distinct; block/box)
+2. Source document name
+3. Page/section reference
+4. Anchor ID
+5. Timeline context date
+
+### No anchors found state (must be non-alarming)
+
+If no anchors found for provided IDs:
+
+* Show a neutral message:
+
+> “No anchors available for this claim in the current corpus.”
+
+No error banners.
+
+---
+
+# 2) Snapshot + Hash Specification (v1)
+
+This is the core defensibility artifact. The goal is:
+
+* Immutable snapshot ID
+* Re-verifiable by hash
+* Reproducible hash via canonical serialization
+
+## A. Snapshot schema (server-side strongly preferred)
+
+Create a server-side snapshot model:
+
+```ts
+export interface Snapshot {
+  snapshot_id: string;          // UUID
+  created_at: string;           // ISO datetime
+  corpus_id: string;            // string
+  claims: {
+    id: string;
+    classification: "DEFENSIBLE" | "RESTRICTED" | "AMBIGUOUS";
+    text: string;
+    confidence: number;         // stored numeric
+    refusal_reason: string | null;
+    anchor_ids: string[];
+  }[];
+  hash_alg: "SHA-256";
+  hash_hex: string;             // computed over canonical payload
+}
+```
+
+Hard rule:
+
+* Snapshot must store **exactly what was shown** in Claim Space at save-time.
+
+## B. Canonical hashing rule (do this exactly)
+
+### Canonical payload
+
+Compute the hash over a canonical JSON payload that excludes mutable metadata:
+
+* Include: `corpus_id`, `claims` (full), and nothing else.
+* Exclude: `snapshot_id`, `created_at`, `hash_*`.
+
+### Canonicalization steps
+
+1. Sort claims by `id` ascending
+2. Within each claim, sort `anchor_ids` ascending
+3. Serialize using stable JSON stringify (no whitespace variability)
+
+### Hash algorithm
+
+SHA-256 of UTF-8 bytes of canonical JSON string.
+
+### Node example (server)
+
+```ts
+import crypto from "crypto";
+
+function canonicalizeForHash(corpus_id: string, claims: Snapshot["claims"]) {
+  const sortedClaims = [...claims].map(c => ({
+    ...c,
+    anchor_ids: [...c.anchor_ids].sort(),
+  })).sort((a, b) => a.id.localeCompare(b.id));
+
+  return JSON.stringify({ corpus_id, claims: sortedClaims });
+}
+
+export function computeSnapshotHash(corpus_id: string, claims: Snapshot["claims"]) {
+  const canonical = canonicalizeForHash(corpus_id, claims);
+  return crypto.createHash("sha256").update(canonical, "utf8").digest("hex");
+}
+```
+
+## C. Endpoints
+
+### 1) Create snapshot
+
+`POST /api/snapshots`
+
+Request:
+
+```json
+{
+  "corpus_id": "corpus-001",
+  "claims": [ /* Claim[] */ ]
+}
+```
+
+Response:
+
+```json
+{
+  "snapshot_id": "uuid",
+  "created_at": "ISO",
+  "hash_alg": "SHA-256",
+  "hash_hex": "..."
+}
+```
+
+### 2) Read snapshot
+
+`GET /api/snapshots/:snapshot_id`
+
+Returns the full Snapshot object.
+
+### 3) Verify snapshot
+
+`GET /api/snapshots/:snapshot_id/verify`
+
+Response:
+
+```json
+{
+  "snapshot_id": "uuid",
+  "verified": true,
+  "hash_alg": "SHA-256",
+  "stored_hash_hex": "...",
+  "recomputed_hash_hex": "..."
+}
+```
+
+If mismatch:
+
+* `verified: false`
+* include both hashes
+
+## D. Storage (minimum acceptable)
+
+* SQLite is fine for v1.
+* Table `snapshots` with:
+
+  * `snapshot_id TEXT PRIMARY KEY`
+  * `created_at TEXT`
+  * `corpus_id TEXT`
+  * `snapshot_json TEXT` (store full snapshot object)
+  * `hash_hex TEXT`
+  * `hash_alg TEXT`
+
+This avoids schema churn while you iterate.
+
+## E. UI placement (v1)
+
+Add a button on Claim Space:
+
+**Save Snapshot**
+
+On click:
+
+* POST to `/api/snapshots`
+* Display:
+
+  * Snapshot ID
+  * Hash (short display ok: first 8 + last 8)
+  * Link: “Verify snapshot” (calls verify endpoint)
+
+No export work yet.
+
+---
+
+# Immediate Next Build Order (do not reorder)
+
+1. Implement `/api/anchors` (mock ok)
+2. Complete Anchor View rendering to contract
+3. Implement snapshot endpoints + SQLite persistence
+4. Add Save Snapshot + Verify UI
+
+---
+
+# What I need from you after Anchors + Snapshot are implemented
+
+Send:
+
+* The Anchor interface + sample anchor objects
+* A screenshot of Anchor View with at least 1 anchor rendered
+* Snapshot create response payload
+* Verify response payload (verified = true)
+
+Then we move to **Conflict & Gaps** screen (Screen 4) only after these are stable.
