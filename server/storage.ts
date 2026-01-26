@@ -11,7 +11,8 @@ import {
   type CorpusSource, type InsertCorpusSource,
   type AnchorRecord, type InsertAnchorRecord,
   type ClaimRecord, type InsertClaimRecord,
-  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords
+  type EvidencePacket, type InsertEvidencePacket,
+  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords, evidencePackets
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, isNull, desc } from "drizzle-orm";
@@ -77,6 +78,11 @@ export interface IStorage {
   listClaimRecordsByCorpus(corpusId: string): Promise<ClaimRecord[]>;
   getClaimRecord(id: string): Promise<ClaimRecord | undefined>;
   deleteClaimRecord(id: string): Promise<boolean>;
+  
+  // Evidence Packets
+  createEvidencePacket(data: InsertEvidencePacket): Promise<EvidencePacket>;
+  getEvidencePacket(id: string): Promise<EvidencePacket | undefined>;
+  getAnchorRecordsByIds(ids: string[]): Promise<AnchorRecord[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -350,6 +356,24 @@ export class DatabaseStorage implements IStorage {
       .where(eq(claimRecords.id, id))
       .returning();
     return result.length > 0;
+  }
+
+  async createEvidencePacket(data: InsertEvidencePacket): Promise<EvidencePacket> {
+    const result = await db.insert(evidencePackets).values(data).returning();
+    return result[0];
+  }
+
+  async getEvidencePacket(id: string): Promise<EvidencePacket | undefined> {
+    const result = await db.select().from(evidencePackets)
+      .where(eq(evidencePackets.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async getAnchorRecordsByIds(ids: string[]): Promise<AnchorRecord[]> {
+    if (ids.length === 0) return [];
+    const allAnchors = await db.select().from(anchorRecords);
+    return allAnchors.filter(a => ids.includes(a.id));
   }
 }
 

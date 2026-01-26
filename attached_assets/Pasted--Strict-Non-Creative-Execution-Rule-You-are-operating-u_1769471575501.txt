@@ -1,0 +1,204 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+v1.3 is accepted as compliant. You now have an end-to-end governed workflow:
+
+Intake → Source registry (role + hash) → explicit build (anchors-only) → anchor browser → user-authored claims → claim space → anchors view → constraints view → snapshot export + verification.
+
+Next specification is **v1.4 — Claim-to-Anchor Evidence Packet (Deterministic bundle)**. This is the minimum “court-friendly” artifact without adding summaries: a per-claim packet that bundles the claim + its anchors + citations verbatim.
+
+# v1.4 — Evidence Packet (Per-Claim, Verbatim, Deterministic)
+
+## 0) Goal (scope-locked)
+
+For any **DEFENSIBLE** claim, generate an **Evidence Packet** that includes:
+
+* Claim header
+* Anchor list (full verbatim quotes + citations)
+* Snapshot reference (optional)
+* Hash of the packet payload (verifiable)
+
+No narrative. No conclusions. No synthesis.
+
+---
+
+## 1) New Route
+
+`/claims/:claim_id/packet?corpusId=<id>`
+
+---
+
+## 2) Data model
+
+### EvidencePacket payload (canonical)
+
+```ts
+export interface EvidencePacket {
+  packet_id: string;             // UUID
+  created_at: string;            // ISO
+  corpus_id: string;
+  claim: {
+    id: string;
+    classification: "DEFENSIBLE";
+    text: string;
+    confidence: number;
+    anchor_ids: string[];
+  };
+  anchors: {
+    id: string;
+    quote: string;
+    source_document: string;
+    page_ref: string;
+    section_ref?: string | null;
+    timeline_date: string;
+    source_id: string;
+  }[];
+  hash_alg: "SHA-256";
+  hash_hex: string;
+}
+```
+
+Hard rule:
+
+* Anchors included must match `claim.anchor_ids` exactly (set equality).
+
+---
+
+## 3) New API endpoints (minimal)
+
+### A) Create packet (explicit action)
+
+`POST /api/corpus/:corpus_id/claims/:claim_id/packet`
+
+Response: EvidencePacket
+
+Server rules:
+
+* If claim is not DEFENSIBLE → 400 with message:
+  `"Evidence packet requires a DEFENSIBLE claim with at least one anchor."`
+
+### B) Read packet
+
+`GET /api/packets/:packet_id`
+
+Returns EvidencePacket
+
+### C) Verify packet
+
+`GET /api/packets/:packet_id/verify`
+
+Response:
+
+```json
+{
+  "packet_id": "uuid",
+  "verified": true,
+  "hash_alg": "SHA-256",
+  "stored_hash_hex": "...",
+  "recomputed_hash_hex": "..."
+}
+```
+
+---
+
+## 4) Canonical hashing (must mirror snapshot discipline)
+
+Hash over canonical payload excluding:
+
+* packet_id
+* created_at
+* hash_alg
+* hash_hex
+
+Canonicalization:
+
+* Sort anchors by `id`
+* Ensure claim.anchor_ids sorted
+* JSON.stringify stable
+
+SHA-256 hex.
+
+---
+
+## 5) UI requirements
+
+### A) Entry point (Claim Space)
+
+For each DEFENSIBLE claim:
+
+* Button: **Generate Evidence Packet**
+
+On click:
+
+* Calls create packet endpoint
+* Navigates to `/claims/:claim_id/packet?corpusId=<id>&packetId=<packet_id>` or directly to `/packets/:packet_id` (choose one and keep consistent)
+
+### B) Packet view
+
+Display:
+
+* Packet header fields
+* Claim fields
+* Full anchors with:
+
+  * quote (verbatim, full)
+  * source_document
+  * page_ref / section_ref
+  * anchor id
+  * timeline_date
+
+Buttons:
+
+* **Verify Packet** (calls verify endpoint)
+* **Export JSON** (exact packet)
+* **Export PDF** (packet-only)
+
+PDF constraints:
+
+* Single-column
+* Deterministic ordering
+* No extra commentary
+* Filename: `lantern-packet-<packet_id>.pdf`
+
+---
+
+## 6) Acceptance tests
+
+1. Packet generation fails for RESTRICTED claims.
+2. Packet generated for DEFENSIBLE includes all anchors verbatim.
+3. Verify returns true immediately after generation.
+4. Export JSON equals GET packet response.
+5. PDF includes only allowed fields, no summaries.
+6. Hash is stable under re-fetch (no nondeterministic ordering).
+
+---
+
+## 7) What to send me when complete
+
+* Example packet JSON (header + 1 anchor is enough)
+* Verify response (true)
+* PDF text sample showing claim + full quote + citation fields
+* Confirmation of failure behavior for RESTRICTED claim
+
+Proceed to v1.4 exactly as written.

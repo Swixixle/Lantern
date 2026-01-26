@@ -1071,6 +1071,170 @@ export async function registerRoutes(
     res.status(204).send();
   }));
 
+  // === EVIDENCE PACKETS API ===
+  
+  function canonicalizePacketForHash(payload: {
+    corpus_id: string;
+    claim: {
+      id: string;
+      classification: string;
+      text: string;
+      confidence: number;
+      anchor_ids: string[];
+    };
+    anchors: {
+      id: string;
+      quote: string;
+      source_document: string;
+      page_ref: string;
+      section_ref?: string | null;
+      timeline_date: string;
+      source_id: string;
+    }[];
+  }) {
+    const sortedClaim = {
+      ...payload.claim,
+      anchor_ids: [...payload.claim.anchor_ids].sort()
+    };
+    const sortedAnchors = [...payload.anchors].sort((a, b) => a.id.localeCompare(b.id));
+    return JSON.stringify({ corpus_id: payload.corpus_id, claim: sortedClaim, anchors: sortedAnchors });
+  }
+
+  function computePacketHash(payload: Parameters<typeof canonicalizePacketForHash>[0]) {
+    const canonical = canonicalizePacketForHash(payload);
+    return createHash("sha256").update(canonical, "utf8").digest("hex");
+  }
+
+  // Create evidence packet
+  app.post("/api/corpus/:corpusId/claims/:claimId/packet", asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    const claimId = req.params.claimId as string;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const claim = await storage.getClaimRecord(claimId);
+    if (!claim || claim.corpusId !== corpusId) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Claim not found"
+      });
+    }
+    
+    if (claim.classification !== "DEFENSIBLE" || claim.anchorIds.length === 0) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "Evidence packet requires a DEFENSIBLE claim with at least one anchor."
+      });
+    }
+    
+    const anchors = await storage.getAnchorRecordsByIds(claim.anchorIds);
+    
+    const hashablePayload = {
+      corpus_id: corpusId,
+      claim: {
+        id: claim.id,
+        classification: claim.classification as "DEFENSIBLE",
+        text: claim.text,
+        confidence: claim.confidence,
+        anchor_ids: claim.anchorIds
+      },
+      anchors: anchors.map(a => ({
+        id: a.id,
+        quote: a.quote,
+        source_document: a.sourceDocument,
+        page_ref: a.pageRef,
+        section_ref: a.sectionRef,
+        timeline_date: a.timelineDate,
+        source_id: a.sourceId
+      }))
+    };
+    
+    const hashHex = computePacketHash(hashablePayload);
+    
+    const packetJson = JSON.stringify({
+      corpus_id: corpusId,
+      claim: hashablePayload.claim,
+      anchors: hashablePayload.anchors,
+      hash_alg: "SHA-256",
+      hash_hex: hashHex
+    });
+    
+    const packet = await storage.createEvidencePacket({
+      corpusId,
+      claimId,
+      packetJson,
+      hashAlg: "SHA-256",
+      hashHex
+    });
+    
+    const responsePacket = {
+      packet_id: packet.id,
+      created_at: packet.createdAt,
+      ...JSON.parse(packet.packetJson)
+    };
+    
+    res.status(201).json(responsePacket);
+  }));
+  
+  // Get evidence packet
+  app.get("/api/packets/:packetId", asyncHandler(async (req, res) => {
+    const packetId = req.params.packetId as string;
+    
+    const packet = await storage.getEvidencePacket(packetId);
+    if (!packet) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Packet not found"
+      });
+    }
+    
+    const responsePacket = {
+      packet_id: packet.id,
+      created_at: packet.createdAt,
+      ...JSON.parse(packet.packetJson)
+    };
+    
+    res.json(responsePacket);
+  }));
+  
+  // Verify evidence packet
+  app.get("/api/packets/:packetId/verify", asyncHandler(async (req, res) => {
+    const packetId = req.params.packetId as string;
+    
+    const packet = await storage.getEvidencePacket(packetId);
+    if (!packet) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Packet not found"
+      });
+    }
+    
+    const storedData = JSON.parse(packet.packetJson);
+    
+    const hashablePayload = {
+      corpus_id: storedData.corpus_id,
+      claim: storedData.claim,
+      anchors: storedData.anchors
+    };
+    
+    const recomputedHashHex = computePacketHash(hashablePayload);
+    const verified = recomputedHashHex === packet.hashHex;
+    
+    res.json({
+      packet_id: packet.id,
+      verified,
+      hash_alg: packet.hashAlg,
+      stored_hash_hex: packet.hashHex,
+      recomputed_hash_hex: recomputedHashHex
+    });
+  }));
+
   // === CONSTRAINTS API ===
   
   const MOCK_CONSTRAINTS = [

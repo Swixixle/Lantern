@@ -3,7 +3,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, Loader2, Anchor } from "lucide-react";
+import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, Loader2, Anchor, FileText } from "lucide-react";
 import { confidenceToBand, clampConfidence, type Claim } from "@/lib/schema/claims";
 
 interface SnapshotResult {
@@ -21,14 +21,38 @@ interface VerifyResult {
   recomputed_hash_hex: string;
 }
 
-function ClaimCard({ claim }: { claim: Claim }) {
+function ClaimCard({ claim, corpusId }: { claim: Claim; corpusId: string }) {
   const [, navigate] = useLocation();
+  const [generating, setGenerating] = useState(false);
   
   const handleViewEvidence = () => {
     if (claim.anchor_ids.length > 0) {
       navigate(`/anchors?ids=${claim.anchor_ids.join(",")}&claimId=${claim.id}`);
     } else {
       navigate(`/anchors?claimId=${claim.id}&empty=true`);
+    }
+  };
+
+  const handleGeneratePacket = async () => {
+    if (claim.classification !== "DEFENSIBLE" || claim.anchor_ids.length === 0) return;
+    
+    setGenerating(true);
+    try {
+      const res = await fetch(`/api/corpus/${corpusId}/claims/${claim.id}/packet`, {
+        method: "POST",
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || "Failed to generate packet");
+      }
+      
+      const packet = await res.json();
+      navigate(`/packets/${packet.packet_id}`);
+    } catch (err) {
+      console.error("Failed to generate packet:", err);
+    } finally {
+      setGenerating(false);
     }
   };
 
@@ -73,6 +97,24 @@ function ClaimCard({ claim }: { claim: Claim }) {
               <Eye className="w-3 h-3 mr-1" />
               View Evidence
             </Button>
+            
+            {claim.classification === "DEFENSIBLE" && claim.anchor_ids.length > 0 && (
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={handleGeneratePacket}
+                disabled={generating}
+                className="text-xs"
+                data-testid={`generate-packet-${claim.id}`}
+              >
+                {generating ? (
+                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                ) : (
+                  <FileText className="w-3 h-3 mr-1" />
+                )}
+                Generate Evidence Packet
+              </Button>
+            )}
           </div>
         </div>
       </CardContent>
@@ -84,12 +126,14 @@ function ClaimSection({
   title, 
   icon, 
   claims, 
-  emptyMessage 
+  emptyMessage,
+  corpusId 
 }: { 
   title: string; 
   icon: React.ReactNode; 
   claims: Claim[]; 
   emptyMessage: string;
+  corpusId: string;
 }) {
   return (
     <section className="mb-8">
@@ -108,7 +152,7 @@ function ClaimSection({
       ) : (
         <div className="space-y-3">
           {claims.map((claim) => (
-            <ClaimCard key={claim.id} claim={claim} />
+            <ClaimCard key={claim.id} claim={claim} corpusId={corpusId} />
           ))}
         </div>
       )}
@@ -361,6 +405,7 @@ export default function ClaimSpace() {
               icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
               claims={defensible}
               emptyMessage="No defensible claims in this corpus."
+              corpusId={corpusId}
             />
 
             <ClaimSection
@@ -368,6 +413,7 @@ export default function ClaimSpace() {
               icon={<AlertTriangle className="w-5 h-5 text-red-500" />}
               claims={restricted}
               emptyMessage="No restricted claims identified."
+              corpusId={corpusId}
             />
 
             <ClaimSection
@@ -375,6 +421,7 @@ export default function ClaimSpace() {
               icon={<HelpCircle className="w-5 h-5 text-amber-500" />}
               claims={ambiguous}
               emptyMessage="No ambiguous claims identified."
+              corpusId={corpusId}
             />
           </>
         )}

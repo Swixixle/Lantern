@@ -334,3 +334,25 @@ export const insertClaimRecordSchema = createInsertSchema(claimRecords).omit({
 
 export type InsertClaimRecord = z.infer<typeof insertClaimRecordSchema>;
 export type ClaimRecord = typeof claimRecords.$inferSelect;
+
+// Evidence packets table (per-claim, verifiable bundles)
+export const evidencePackets = pgTable("evidence_packets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  corpusId: varchar("corpus_id").notNull().references(() => corpora.id, { onDelete: "cascade" }),
+  claimId: varchar("claim_id").notNull().references(() => claimRecords.id, { onDelete: "cascade" }),
+  packetJson: text("packet_json").notNull(),
+  hashAlg: text("hash_alg").notNull().default("SHA-256"),
+  hashHex: text("hash_hex").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("evidence_packets_corpus_id_idx").on(table.corpusId),
+  index("evidence_packets_claim_id_idx").on(table.claimId),
+]);
+
+export const insertEvidencePacketSchema = createInsertSchema(evidencePackets).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertEvidencePacket = z.infer<typeof insertEvidencePacketSchema>;
+export type EvidencePacket = typeof evidencePackets.$inferSelect;
