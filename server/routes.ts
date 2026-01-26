@@ -1,7 +1,7 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertCaseSchema, insertUploadSchema, ingestionStateEnum, extractionJobStateEnum, claimSchema, anchorSchema, type Anchor } from "@shared/schema";
+import { insertCaseSchema, insertUploadSchema, ingestionStateEnum, extractionJobStateEnum, claimSchema, anchorSchema, corpusPurposeEnum, sourceRoleEnum, type Anchor } from "@shared/schema";
 import { z } from "zod";
 import { createHash } from "crypto";
 
@@ -643,13 +643,171 @@ export async function registerRoutes(
     res.json(response);
   }));
 
+  // === CORPUS API ===
+  
+  const corpusUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 20 * 1024 * 1024 }
+  });
+  
+  // Create corpus
+  app.post("/api/corpus", asyncHandler(async (req, res) => {
+    const { purpose } = req.body;
+    
+    const parseResult = corpusPurposeEnum.safeParse(purpose);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "Invalid purpose. Must be one of: Litigation support, Investigative journalism, Compliance/Internal Review, Research/Exploratory"
+      });
+    }
+    
+    const corpus = await storage.createCorpus({ purpose: parseResult.data });
+    
+    res.status(201).json({
+      corpus_id: corpus.id,
+      created_at: corpus.createdAt,
+      purpose: corpus.purpose
+    });
+  }));
+  
+  // Upload source into corpus
+  app.post("/api/corpus/:corpusId/sources", corpusUpload.single("file"), asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    const role = String(req.body.role || "");
+    const file = req.file;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const roleResult = sourceRoleEnum.safeParse(role);
+    if (!roleResult.success) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "Invalid role. Must be PRIMARY or SECONDARY"
+      });
+    }
+    
+    if (!file) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "File is required"
+      });
+    }
+    
+    const sha256Hex = createHash("sha256").update(file.buffer).digest("hex");
+    
+    const source = await storage.createCorpusSource({
+      corpusId,
+      role: roleResult.data,
+      filename: file.originalname,
+      sha256Hex
+    });
+    
+    res.status(201).json({
+      source_id: source.id,
+      corpus_id: source.corpusId,
+      role: source.role,
+      filename: source.filename,
+      uploaded_at: source.uploadedAt,
+      sha256_hex: source.sha256Hex
+    });
+  }));
+  
+  // List corpus sources
+  app.get("/api/corpus/:corpusId/sources", asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const sources = await storage.listCorpusSources(corpusId);
+    
+    res.json({
+      corpus_id: corpusId,
+      sources: sources.map(s => ({
+        source_id: s.id,
+        corpus_id: s.corpusId,
+        role: s.role,
+        filename: s.filename,
+        uploaded_at: s.uploadedAt,
+        sha256_hex: s.sha256Hex
+      }))
+    });
+  }));
+
+  // === CLAIMS API ===
+  
+  const MOCK_CLAIMS = [
+    {
+      id: "claim-def-001",
+      classification: "DEFENSIBLE",
+      text: "The contract was executed on March 15, 2024.",
+      confidence: 0.92,
+      refusal_reason: null,
+      anchor_ids: ["anchor-001"]
+    },
+    {
+      id: "claim-def-002",
+      classification: "DEFENSIBLE",
+      text: "Payment terms are net-30 from invoice date.",
+      confidence: 0.87,
+      refusal_reason: null,
+      anchor_ids: ["anchor-002", "anchor-003"]
+    },
+    {
+      id: "claim-res-001",
+      classification: "RESTRICTED",
+      text: "The vendor has a history of late deliveries.",
+      confidence: 0.45,
+      refusal_reason: "No documentary evidence in corpus supports this claim. Only primary sources dated after 2024-01-01 were reviewed.",
+      anchor_ids: []
+    },
+    {
+      id: "claim-res-002",
+      classification: "RESTRICTED",
+      text: "The regulatory environment is likely to become more favorable.",
+      confidence: 0.30,
+      refusal_reason: "Speculative claim about future events. Corpus contains no predictive analysis or forward-looking statements.",
+      anchor_ids: []
+    },
+    {
+      id: "claim-amb-001",
+      classification: "AMBIGUOUS",
+      text: "The agreement includes standard indemnification provisions.",
+      confidence: 0.65,
+      refusal_reason: null,
+      anchor_ids: ["anchor-001"]
+    }
+  ];
+  
+  app.get("/api/claims", asyncHandler(async (req, res) => {
+    const corpusId = (req.query.corpusId as string) || "corpus-demo-001";
+    
+    res.json({
+      corpus_id: corpusId,
+      claims: MOCK_CLAIMS
+    });
+  }));
+
   // === ANCHOR API ===
   
   app.get("/api/anchors", asyncHandler(async (req, res) => {
     const idsParam = req.query.ids as string;
+    const corpusId = (req.query.corpusId as string) || "corpus-demo-001";
     
     if (!idsParam) {
-      return res.json({ anchors: [], missing_ids: [] });
+      return res.json({ corpus_id: corpusId, anchors: [], missing_ids: [] });
     }
     
     const requestedIds = idsParam.split(",").map(id => id.trim()).filter(Boolean);
@@ -664,7 +822,7 @@ export async function registerRoutes(
       }
     }
     
-    res.json({ anchors, missing_ids });
+    res.json({ corpus_id: corpusId, anchors, missing_ids });
   }));
 
   // === CONSTRAINTS API ===

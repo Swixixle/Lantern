@@ -7,7 +7,9 @@ import {
   type ExtractionJob, type InsertExtractionJob,
   type ExtractionJobState,
   type Snapshot, type InsertSnapshot,
-  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots
+  type Corpus, type InsertCorpus,
+  type CorpusSource, type InsertCorpusSource,
+  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, isNull, desc } from "drizzle-orm";
@@ -54,6 +56,12 @@ export interface IStorage {
   // Snapshots
   createSnapshot(data: InsertSnapshot): Promise<Snapshot>;
   getSnapshot(id: string): Promise<Snapshot | undefined>;
+  
+  // Corpus
+  createCorpus(data: InsertCorpus): Promise<Corpus>;
+  getCorpus(id: string): Promise<Corpus | undefined>;
+  createCorpusSource(data: InsertCorpusSource): Promise<CorpusSource>;
+  listCorpusSources(corpusId: string): Promise<CorpusSource[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -236,6 +244,29 @@ export class DatabaseStorage implements IStorage {
       .where(eq(snapshots.id, id))
       .limit(1);
     return result[0];
+  }
+
+  async createCorpus(data: InsertCorpus): Promise<Corpus> {
+    const result = await db.insert(corpora).values(data).returning();
+    return result[0];
+  }
+
+  async getCorpus(id: string): Promise<Corpus | undefined> {
+    const result = await db.select().from(corpora)
+      .where(eq(corpora.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async createCorpusSource(data: InsertCorpusSource): Promise<CorpusSource> {
+    const result = await db.insert(corpusSources).values(data).returning();
+    return result[0];
+  }
+
+  async listCorpusSources(corpusId: string): Promise<CorpusSource[]> {
+    return db.select().from(corpusSources)
+      .where(eq(corpusSources.corpusId, corpusId))
+      .orderBy(corpusSources.uploadedAt);
   }
 }
 

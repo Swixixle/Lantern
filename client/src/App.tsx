@@ -17,9 +17,10 @@ import DossierEditor from "@/pages/dossier-editor";
 import DossierReport from "@/pages/dossier-report";
 import DossierComparison from "@/pages/dossier-comparison";
 import HowItWorks from "@/pages/how-it-works";
+import Intake from "@/pages/intake";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
-import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera } from "lucide-react";
+import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp } from "lucide-react";
 
 function Router() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -40,6 +41,12 @@ function Router() {
       {menuOpen && (
         <div className="fixed top-16 right-4 z-50 bg-background border border-border rounded-lg shadow-lg p-2 min-w-[200px] print:hidden">
           <nav className="flex flex-col gap-1">
+            <Link href="/intake" onClick={() => setMenuOpen(false)}>
+              <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
+                <FileUp className="w-4 h-4 mr-2" />
+                Corpus Intake
+              </Button>
+            </Link>
             <Link href="/" onClick={() => setMenuOpen(false)}>
               <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
                 <Layers className="w-4 h-4 mr-2" />
@@ -94,6 +101,7 @@ function Router() {
       )}
 
       <Switch>
+        <Route path="/intake" component={Intake} />
         <Route path="/" component={ClaimSpace} />
         <Route path="/anchors" component={AnchorView} />
         <Route path="/constraints" component={Constraints} />

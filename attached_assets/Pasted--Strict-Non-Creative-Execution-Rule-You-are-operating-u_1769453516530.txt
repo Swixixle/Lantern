@@ -1,0 +1,222 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+Screen 5 is compliant. LANTERN v1 Golden Path (Screens 1–5) is now functionally complete.
+
+The next specification is **not new UI**. It is the **minimum wiring required to turn your current mocked corpus into a governed corpus pipeline**, without introducing any “helpful” synthesis.
+
+# Next Specification — Corpus Intake + Source Registry (v1.1)
+
+## 0) Goal (scope-locked)
+
+Enable the system to:
+
+* Register a corpus
+* Register documents as **Primary** or **Secondary**
+* Persist that registry
+* Use `corpus_id` consistently across:
+
+  * Claims
+  * Anchors
+  * Constraints
+  * Snapshots
+
+This does **not** introduce extraction, summarization, or automatic claim generation.
+
+---
+
+## 1) Data Model
+
+Create `client/src/lib/schema/corpus.ts` (and server equivalents):
+
+```ts
+export type SourceRole = "PRIMARY" | "SECONDARY";
+
+export interface Corpus {
+  corpus_id: string;        // stable UUID
+  created_at: string;       // ISO
+  purpose: "Litigation support" | "Investigative journalism" | "Compliance/Internal Review" | "Research/Exploratory";
+}
+
+export interface CorpusSource {
+  source_id: string;        // UUID
+  corpus_id: string;
+  role: SourceRole;
+  filename: string;
+  uploaded_at: string;      // ISO
+  sha256_hex: string;       // hash of raw file bytes
+}
+```
+
+Hard rule:
+
+* `sha256_hex` must be computed from the uploaded file bytes. No approximations.
+
+---
+
+## 2) API Endpoints (minimum set)
+
+### A) Create corpus
+
+`POST /api/corpus`
+
+Request:
+
+```json
+{ "purpose": "Litigation support" }
+```
+
+Response:
+
+```json
+{ "corpus_id": "uuid", "created_at": "ISO", "purpose": "Litigation support" }
+```
+
+### B) Upload source into corpus
+
+`POST /api/corpus/:corpus_id/sources` (multipart/form-data)
+Fields:
+
+* `role`: PRIMARY | SECONDARY
+* `file`: binary
+
+Response:
+
+```json
+{
+  "source_id": "uuid",
+  "corpus_id": "uuid",
+  "role": "PRIMARY",
+  "filename": "Master Services Agreement v2.1.pdf",
+  "uploaded_at": "ISO",
+  "sha256_hex": "..."
+}
+```
+
+### C) List corpus sources
+
+`GET /api/corpus/:corpus_id/sources`
+
+Response:
+
+```json
+{ "corpus_id": "uuid", "sources": [ /* CorpusSource[] */ ] }
+```
+
+No other endpoints.
+
+---
+
+## 3) UI Requirements (Screen 1 only, minimal)
+
+Add a new landing screen at:
+
+`/intake`
+
+This is Screen 1 in the Golden Path (you have not implemented it yet, and it is now required to make the system real).
+
+### Intake screen must include:
+
+1. **Purpose dropdown** with exact options:
+
+* Litigation support
+* Investigative journalism
+* Compliance/Internal Review
+* Research/Exploratory
+
+2. **System limitations (always visible)** with exact bullets:
+
+* It won’t infer intent
+* It won’t draw legal conclusions
+* It won’t assign blame
+* It won’t speculate beyond the sources
+
+3. **Upload sources**
+   Two upload panels:
+
+* **Primary sources**
+* **Secondary sources**
+
+Each upload must call the upload endpoint with the corresponding `role`.
+
+4. After at least one source is uploaded:
+
+* show `corpus_id`
+* show a button: **Enter Claim Space**
+
+  * navigates to `/?corpusId=<corpus_id>`
+
+Hard rule:
+
+* Do not auto-generate claims after upload.
+* Claim Space should still use mocked claims until we explicitly wire extraction.
+
+---
+
+## 4) Integration requirements (strict)
+
+### A) All existing GETs must accept corpusId
+
+* `GET /api/claims?corpusId=...`
+* `GET /api/constraints?corpusId=...`
+
+They may continue returning mock data, but:
+
+* They must echo the provided `corpusId` in the response.
+* Snapshots must store the `corpus_id` from the UI route/query.
+
+### B) Anchors must be corpus-scoped (server-side)
+
+If you store anchors, store them with `corpus_id`.
+If you still mock anchors, include a corpus binding in the mock store.
+
+---
+
+## 5) Acceptance Tests
+
+1. User can create corpus with purpose selection.
+2. User can upload at least 1 PRIMARY and 1 SECONDARY file; each yields sha256_hex.
+3. User can list sources and see roles + hashes.
+4. User can enter Claim Space with `corpusId` in route/query.
+5. Creating a snapshot from Claim Space stores that same `corpus_id`.
+6. No claims are generated automatically on upload.
+7. No creative liberties taken; no inferred metadata beyond file hash + filename.
+
+---
+
+## 6) What to send me when complete
+
+* Example responses from:
+
+  * `POST /api/corpus`
+  * `POST /api/corpus/:id/sources`
+  * `GET /api/corpus/:id/sources`
+* Screenshot of `/intake` showing:
+
+  * Purpose dropdown
+  * Limitations bullets
+  * Primary/Secondary upload panels
+  * Corpus ID displayed after upload
+
+Once Intake + Source Registry exists, the next specification will be **the extraction pipeline boundaries** (how claims/anchors are allowed to be created from documents) without violating the non-creative mandate.

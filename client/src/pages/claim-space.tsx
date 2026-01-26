@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -122,6 +122,10 @@ function formatHash(hash: string): string {
 }
 
 export default function ClaimSpace() {
+  const searchString = useSearch();
+  const params = new URLSearchParams(searchString);
+  const corpusIdFromQuery = params.get("corpusId");
+  
   const [claims] = useState<Claim[]>(MOCK_CLAIMS);
   const [saving, setSaving] = useState(false);
   const [snapshot, setSnapshot] = useState<SnapshotResult | null>(null);
@@ -129,7 +133,7 @@ export default function ClaimSpace() {
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
-  const corpusId = "corpus-demo-001";
+  const corpusId = corpusIdFromQuery || "corpus-demo-001";
   
   const defensible = claims.filter(c => c.classification === "DEFENSIBLE");
   const restricted = claims.filter(c => c.classification === "RESTRICTED");
@@ -222,6 +226,11 @@ export default function ClaimSpace() {
             </Button>
           </div>
           <p className="text-muted-foreground">Claim Space</p>
+          {corpusIdFromQuery && (
+            <p className="text-xs font-mono text-muted-foreground mt-1" data-testid="corpus-id-display">
+              corpus_id: {corpusId}
+            </p>
+          )}
         </header>
 
         {error && (

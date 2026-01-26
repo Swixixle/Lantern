@@ -234,3 +234,53 @@ export const anchorSchema = z.object({
   timeline_date: z.string(),
 });
 export type Anchor = z.infer<typeof anchorSchema>;
+
+// Corpus purpose enum
+export const corpusPurposeEnum = z.enum([
+  "Litigation support",
+  "Investigative journalism",
+  "Compliance/Internal Review",
+  "Research/Exploratory"
+]);
+export type CorpusPurpose = z.infer<typeof corpusPurposeEnum>;
+
+// Source role enum
+export const sourceRoleEnum = z.enum(["PRIMARY", "SECONDARY"]);
+export type SourceRole = z.infer<typeof sourceRoleEnum>;
+
+// Corpus table
+export const corpora = pgTable("corpora", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  purpose: text("purpose").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("corpora_created_at_idx").on(table.createdAt),
+]);
+
+export const insertCorpusSchema = createInsertSchema(corpora).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertCorpus = z.infer<typeof insertCorpusSchema>;
+export type Corpus = typeof corpora.$inferSelect;
+
+// Corpus sources table
+export const corpusSources = pgTable("corpus_sources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  corpusId: varchar("corpus_id").notNull().references(() => corpora.id, { onDelete: "cascade" }),
+  role: text("role").notNull(),
+  filename: text("filename").notNull(),
+  sha256Hex: text("sha256_hex").notNull(),
+  uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
+}, (table) => [
+  index("corpus_sources_corpus_id_idx").on(table.corpusId),
+]);
+
+export const insertCorpusSourceSchema = createInsertSchema(corpusSources).omit({
+  id: true,
+  uploadedAt: true,
+});
+
+export type InsertCorpusSource = z.infer<typeof insertCorpusSourceSchema>;
+export type CorpusSource = typeof corpusSources.$inferSelect;
