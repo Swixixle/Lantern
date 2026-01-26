@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, index, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, index, timestamp, doublePrecision } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -311,3 +311,26 @@ export type AnchorRecord = typeof anchorRecords.$inferSelect;
 
 // Build mode enum
 export const buildModeEnum = z.enum(["anchors_only", "claims_from_anchors"]);
+
+// Claim records table (corpus-bound, user-authored)
+export const claimRecords = pgTable("claim_records", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  corpusId: varchar("corpus_id").notNull().references(() => corpora.id, { onDelete: "cascade" }),
+  classification: text("classification").notNull(),
+  text: text("text").notNull(),
+  confidence: doublePrecision("confidence").notNull(),
+  refusalReason: text("refusal_reason"),
+  anchorIds: text("anchor_ids").array().notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("claim_records_corpus_id_idx").on(table.corpusId),
+  index("claim_records_classification_idx").on(table.classification),
+]);
+
+export const insertClaimRecordSchema = createInsertSchema(claimRecords).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertClaimRecord = z.infer<typeof insertClaimRecordSchema>;
+export type ClaimRecord = typeof claimRecords.$inferSelect;

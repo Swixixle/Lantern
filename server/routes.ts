@@ -927,9 +927,11 @@ export async function registerRoutes(
     res.json({ corpus_id: corpusId, anchors, missing_ids });
   }));
 
-  // List anchor records by corpus
+  // List anchor records by corpus (with optional filters)
   app.get("/api/corpus/:corpusId/anchors", asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
+    const role = req.query.role as string | undefined;
+    const sourceId = req.query.source_id as string | undefined;
     
     const corpus = await storage.getCorpus(corpusId);
     if (!corpus) {
@@ -939,7 +941,7 @@ export async function registerRoutes(
       });
     }
     
-    const anchorRecords = await storage.listAnchorRecordsByCorpus(corpusId);
+    const anchorRecords = await storage.listAnchorRecordsByCorpusFiltered(corpusId, role, sourceId);
     
     res.json({
       corpus_id: corpusId,
@@ -954,6 +956,119 @@ export async function registerRoutes(
         timeline_date: a.timelineDate
       }))
     });
+  }));
+
+  // === CLAIM RECORDS API ===
+  
+  // Create claim (user-authored)
+  app.post("/api/corpus/:corpusId/claims", asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    const { text, anchor_ids } = req.body;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    if (!text || typeof text !== "string" || text.trim().length === 0) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "text is required and must be a non-empty string"
+      });
+    }
+    
+    const anchorIds = Array.isArray(anchor_ids) ? anchor_ids : [];
+    
+    let classification: "DEFENSIBLE" | "RESTRICTED";
+    let confidence: number;
+    let refusalReason: string | null;
+    
+    if (anchorIds.length >= 1) {
+      classification = "DEFENSIBLE";
+      confidence = 0.75;
+      refusalReason = null;
+    } else {
+      classification = "RESTRICTED";
+      confidence = 0.60;
+      refusalReason = "No anchors attached; claim is not defensible in current corpus.";
+    }
+    
+    const claimRecord = await storage.createClaimRecord({
+      corpusId,
+      classification,
+      text: text.trim(),
+      confidence,
+      refusalReason,
+      anchorIds
+    });
+    
+    res.status(201).json({
+      id: claimRecord.id,
+      corpus_id: claimRecord.corpusId,
+      classification: claimRecord.classification,
+      text: claimRecord.text,
+      confidence: claimRecord.confidence,
+      refusal_reason: claimRecord.refusalReason,
+      anchor_ids: claimRecord.anchorIds,
+      created_at: claimRecord.createdAt
+    });
+  }));
+  
+  // List claims (corpus-scoped)
+  app.get("/api/corpus/:corpusId/claims", asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const claimRecords = await storage.listClaimRecordsByCorpus(corpusId);
+    
+    res.json({
+      corpus_id: corpusId,
+      claims: claimRecords.map(c => ({
+        id: c.id,
+        corpus_id: c.corpusId,
+        classification: c.classification,
+        text: c.text,
+        confidence: c.confidence,
+        refusal_reason: c.refusalReason,
+        anchor_ids: c.anchorIds,
+        created_at: c.createdAt
+      }))
+    });
+  }));
+  
+  // Delete claim
+  app.delete("/api/corpus/:corpusId/claims/:claimId", asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    const claimId = req.params.claimId as string;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const claim = await storage.getClaimRecord(claimId);
+    if (!claim || claim.corpusId !== corpusId) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Claim not found"
+      });
+    }
+    
+    await storage.deleteClaimRecord(claimId);
+    res.status(204).send();
   }));
 
   // === CONSTRAINTS API ===

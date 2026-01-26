@@ -18,6 +18,7 @@ import DossierReport from "@/pages/dossier-report";
 import DossierComparison from "@/pages/dossier-comparison";
 import HowItWorks from "@/pages/how-it-works";
 import Intake from "@/pages/intake";
+import AnchorBrowser from "@/pages/anchor-browser";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
 import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp } from "lucide-react";
@@ -103,6 +104,7 @@ function Router() {
       <Switch>
         <Route path="/intake" component={Intake} />
         <Route path="/" component={ClaimSpace} />
+        <Route path="/anchors/browse" component={AnchorBrowser} />
         <Route path="/anchors" component={AnchorView} />
         <Route path="/constraints" component={Constraints} />
         <Route path="/snapshots" component={Snapshots} />

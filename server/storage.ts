@@ -10,7 +10,8 @@ import {
   type Corpus, type InsertCorpus,
   type CorpusSource, type InsertCorpusSource,
   type AnchorRecord, type InsertAnchorRecord,
-  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords
+  type ClaimRecord, type InsertClaimRecord,
+  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, isNull, desc } from "drizzle-orm";
@@ -68,7 +69,14 @@ export interface IStorage {
   // Anchor Records
   createAnchorRecord(data: InsertAnchorRecord): Promise<AnchorRecord>;
   listAnchorRecordsByCorpus(corpusId: string): Promise<AnchorRecord[]>;
+  listAnchorRecordsByCorpusFiltered(corpusId: string, role?: string, sourceId?: string): Promise<AnchorRecord[]>;
   countAnchorRecordsBySource(sourceId: string): Promise<number>;
+  
+  // Claim Records
+  createClaimRecord(data: InsertClaimRecord): Promise<ClaimRecord>;
+  listClaimRecordsByCorpus(corpusId: string): Promise<ClaimRecord[]>;
+  getClaimRecord(id: string): Promise<ClaimRecord | undefined>;
+  deleteClaimRecord(id: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -298,6 +306,50 @@ export class DatabaseStorage implements IStorage {
     const result = await db.select().from(anchorRecords)
       .where(eq(anchorRecords.sourceId, sourceId));
     return result.length;
+  }
+
+  async listAnchorRecordsByCorpusFiltered(corpusId: string, role?: string, sourceId?: string): Promise<AnchorRecord[]> {
+    let anchors = await db.select().from(anchorRecords)
+      .where(eq(anchorRecords.corpusId, corpusId))
+      .orderBy(anchorRecords.sourceDocument, anchorRecords.pageRef, anchorRecords.id);
+    
+    if (sourceId) {
+      anchors = anchors.filter(a => a.sourceId === sourceId);
+    }
+    
+    if (role) {
+      const sources = await db.select().from(corpusSources)
+        .where(and(eq(corpusSources.corpusId, corpusId), eq(corpusSources.role, role)));
+      const sourceIds = new Set(sources.map(s => s.id));
+      anchors = anchors.filter(a => sourceIds.has(a.sourceId));
+    }
+    
+    return anchors;
+  }
+
+  async createClaimRecord(data: InsertClaimRecord): Promise<ClaimRecord> {
+    const result = await db.insert(claimRecords).values(data).returning();
+    return result[0];
+  }
+
+  async listClaimRecordsByCorpus(corpusId: string): Promise<ClaimRecord[]> {
+    return db.select().from(claimRecords)
+      .where(eq(claimRecords.corpusId, corpusId))
+      .orderBy(claimRecords.createdAt);
+  }
+
+  async getClaimRecord(id: string): Promise<ClaimRecord | undefined> {
+    const result = await db.select().from(claimRecords)
+      .where(eq(claimRecords.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async deleteClaimRecord(id: string): Promise<boolean> {
+    const result = await db.delete(claimRecords)
+      .where(eq(claimRecords.id, id))
+      .returning();
+    return result.length > 0;
   }
 }
 

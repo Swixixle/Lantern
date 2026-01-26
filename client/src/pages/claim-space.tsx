@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, Loader2 } from "lucide-react";
-import { MOCK_CLAIMS, confidenceToBand, clampConfidence, type Claim } from "@/lib/schema/claims";
+import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, Loader2, Anchor } from "lucide-react";
+import { confidenceToBand, clampConfidence, type Claim } from "@/lib/schema/claims";
 
 interface SnapshotResult {
   snapshot_id: string;
@@ -122,11 +122,13 @@ function formatHash(hash: string): string {
 }
 
 export default function ClaimSpace() {
+  const [, navigate] = useLocation();
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
   const corpusIdFromQuery = params.get("corpusId");
   
-  const [claims] = useState<Claim[]>(MOCK_CLAIMS);
+  const [claims, setClaims] = useState<Claim[]>([]);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [snapshot, setSnapshot] = useState<SnapshotResult | null>(null);
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
@@ -134,6 +136,36 @@ export default function ClaimSpace() {
   const [error, setError] = useState<string | null>(null);
   
   const corpusId = corpusIdFromQuery || "corpus-demo-001";
+  
+  useEffect(() => {
+    if (!corpusIdFromQuery) return;
+    
+    const fetchClaims = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const response = await fetch(`/api/corpus/${corpusIdFromQuery}/claims`);
+        if (!response.ok) throw new Error("Failed to load claims");
+        
+        const data = await response.json();
+        setClaims(data.claims.map((c: any) => ({
+          id: c.id,
+          classification: c.classification,
+          text: c.text,
+          confidence: c.confidence,
+          refusal_reason: c.refusal_reason,
+          anchor_ids: c.anchor_ids
+        })));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Unknown error");
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchClaims();
+  }, [corpusIdFromQuery]);
   
   const defensible = claims.filter(c => c.classification === "DEFENSIBLE");
   const restricted = claims.filter(c => c.classification === "RESTRICTED");
@@ -297,26 +329,55 @@ export default function ClaimSpace() {
           </Card>
         )}
 
-        <ClaimSection
-          title="Defensible Claims"
-          icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
-          claims={defensible}
-          emptyMessage="No defensible claims in this corpus."
-        />
+        {corpusIdFromQuery && (
+          <div className="mb-6">
+            <Button
+              onClick={() => navigate(`/anchors/browse?corpusId=${corpusId}`)}
+              variant="outline"
+              className="w-full"
+              data-testid="button-anchor-browser"
+            >
+              <Anchor className="w-4 h-4 mr-2" />
+              Browse Anchors & Create Claims
+            </Button>
+          </div>
+        )}
 
-        <ClaimSection
-          title="Restricted / Unsupported Claims"
-          icon={<AlertTriangle className="w-5 h-5 text-red-500" />}
-          claims={restricted}
-          emptyMessage="No restricted claims identified."
-        />
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : claims.length === 0 && corpusIdFromQuery ? (
+          <Card className="border-dashed mb-8">
+            <CardContent className="py-8 text-center text-muted-foreground">
+              <p>No claims have been created for this corpus.</p>
+              <p className="text-sm mt-2">Use the Anchor Browser to create claims from anchors.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <ClaimSection
+              title="Defensible Claims"
+              icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
+              claims={defensible}
+              emptyMessage="No defensible claims in this corpus."
+            />
 
-        <ClaimSection
-          title="Ambiguous Claims"
-          icon={<HelpCircle className="w-5 h-5 text-amber-500" />}
-          claims={ambiguous}
-          emptyMessage="No ambiguous claims identified."
-        />
+            <ClaimSection
+              title="Restricted / Unsupported Claims"
+              icon={<AlertTriangle className="w-5 h-5 text-red-500" />}
+              claims={restricted}
+              emptyMessage="No restricted claims identified."
+            />
+
+            <ClaimSection
+              title="Ambiguous Claims"
+              icon={<HelpCircle className="w-5 h-5 text-amber-500" />}
+              claims={ambiguous}
+              emptyMessage="No ambiguous claims identified."
+            />
+          </>
+        )}
 
         <div className="mt-8 pt-6 border-t border-border/50">
           <Link href={`/constraints?corpusId=${corpusId}`}>
