@@ -1,0 +1,151 @@
+Good. That acknowledgment is exactly what we needed. Now we move from “requirements” to **implementation contract** so the build doesn’t drift.
+
+Below is what you (or the agent) should implement next, in **precise deliverables**, with a **minimal schema**, **routes**, and **acceptance tests**. This is the view I need in place to proceed to Anchors + Snapshot without rework.
+
+---
+
+## Step 1 — Claim Space View: Implementation Contract
+
+### A. Data model (minimum viable)
+
+Use this exact shape. Keep it boring and typed.
+
+**Claim**
+
+* `id` (string, stable UUID)
+* `classification` (`"DEFENSIBLE" | "RESTRICTED" | "AMBIGUOUS"`)
+* `text` (string)
+* `confidence` (number; enforce `< 1.0` and `<= 0.90` for v1 unless you have a reason)
+* `refusal_reason` (string | null)
+
+  * **Required** for `RESTRICTED`
+* `anchor_ids` (string[])
+
+  * Empty allowed for `RESTRICTED` and `AMBIGUOUS`
+  * **Must be non-empty** for `DEFENSIBLE`
+
+**Confidence band display rule**
+
+* Convert number to band text:
+
+  * `0.60–0.69 = "60–70%"`
+  * `0.70–0.79 = "70–80%"`
+  * `0.80–0.89 = "80–90%"`
+  * `0.90–0.99 = "90–99%"` (still not 100)
+* If confidence would be `1.0`, clamp to `0.95` and log a warning.
+
+---
+
+### B. API contract (minimum viable)
+
+You can hardcode data initially, but the **interface must exist**.
+
+* `GET /api/claims?corpusId=<id>`
+
+  * returns `{ corpusId, claims: Claim[] }`
+
+* (Optional now, required later) `GET /api/anchors?ids=<comma-separated>`
+
+  * returns `{ anchors: Anchor[] }`
+
+If you already have a “Deep Read” endpoint, this Claim list can be mocked now and later derived from the extraction pipeline.
+
+---
+
+### C. UI behavior (must match Monday spec)
+
+**Default landing page:** Claim Space View.
+
+Layout requirements:
+
+* Three sections with headings exactly:
+
+  1. **Defensible Claims**
+  2. **Restricted / Unsupported Claims**
+  3. **Ambiguous Claims**
+
+Each claim row/card must show:
+
+* Claim text
+* Confidence band (not raw decimals)
+* Button: **View Evidence**
+
+**View Evidence button logic**
+
+* If `classification = DEFENSIBLE` and `anchor_ids.length > 0` → navigate to Anchor View with those ids
+* Otherwise (Restricted/Ambiguous with no anchors) → still open Anchor View but show:
+
+  * “No anchors available for this claim in the current corpus.”
+
+**Restricted claims: refusal language**
+Every Restricted claim must include:
+
+* A visible refusal label (e.g., “Not supported by corpus”)
+* `refusal_reason` rendered verbatim (1–2 lines)
+
+Hard rule:
+
+* No summaries
+* No inferred policy intent
+* No rankings
+* No “insights”
+
+---
+
+## Step 2 — Mock data to ship with the view (so it’s testable)
+
+Include **at least**:
+
+### 2 Defensible
+
+* Each with 1–2 anchor_ids
+
+### 2 Restricted
+
+* Each with refusal_reason
+* No anchors
+
+### 1 Ambiguous
+
+* Either: no anchors, or anchors but flagged as incomplete (your choice)
+
+This ensures all three sections render in demo conditions.
+
+---
+
+## Step 3 — Acceptance tests (if these pass, we proceed)
+
+You should be able to verify these in <2 minutes:
+
+1. **Claim Space is the first thing shown on app load.**
+2. **Three sections render even if one is empty** (show “No items” state).
+3. **No claim displays 100%** (assert).
+4. **Restricted claims always show refusal language** (assert).
+5. Clicking **View Evidence**:
+
+   * Defensible → opens Anchor View with anchor IDs in route
+   * Restricted → opens Anchor View with “no anchors” message (not an error)
+
+---
+
+## Step 4 — What I need from you when this is done (one update)
+
+When the Claim Space View is implemented, send me:
+
+* A screenshot of Claim Space with at least 1 item in each section
+* The exact `Claim` interface/type you used
+* The route you chose for Anchor View (e.g., `/anchors?ids=...`)
+* Whether claims are mocked or coming from an endpoint
+
+With that, I’ll give you the **Anchor View implementation contract** and then the **Snapshot + hash** implementation in a way that won’t force rewrites.
+
+---
+
+## One discipline rule for today (Monday)
+
+If anything you’re about to add feels like “helpful summary” or “takeaway,” don’t.
+This week’s win condition is:
+
+**Claim classification + anchor navigation + refusal language.**
+
+Proceed.

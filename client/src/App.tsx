@@ -3,6 +3,8 @@ import { Switch, Route, Link } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import ClaimSpace from "@/pages/claim-space";
+import AnchorView from "@/pages/anchor-view";
 import Library from "@/pages/library";
 import Cases from "@/pages/cases";
 import Dashboard from "@/pages/dashboard";
@@ -14,7 +16,7 @@ import DossierComparison from "@/pages/dossier-comparison";
 import HowItWorks from "@/pages/how-it-works";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
-import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen } from "lucide-react";
+import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers } from "lucide-react";
 
 function Router() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -36,6 +38,12 @@ function Router() {
         <div className="fixed top-16 right-4 z-50 bg-background border border-border rounded-lg shadow-lg p-2 min-w-[200px] print:hidden">
           <nav className="flex flex-col gap-1">
             <Link href="/" onClick={() => setMenuOpen(false)}>
+              <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
+                <Layers className="w-4 h-4 mr-2" />
+                Claim Space
+              </Button>
+            </Link>
+            <Link href="/library" onClick={() => setMenuOpen(false)}>
               <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
                 <Home className="w-4 h-4 mr-2" />
                 Library
@@ -71,7 +79,9 @@ function Router() {
       )}
 
       <Switch>
-        <Route path="/" component={Library} />
+        <Route path="/" component={ClaimSpace} />
+        <Route path="/anchors" component={AnchorView} />
+        <Route path="/library" component={Library} />
         <Route path="/extract" component={LanternExtract} />
         <Route path="/dossier/:id" component={DossierEditor} />
         <Route path="/dossier/:id/report" component={DossierReport} />
