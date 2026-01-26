@@ -6,6 +6,8 @@ import { Toaster } from "@/components/ui/toaster";
 import ClaimSpace from "@/pages/claim-space";
 import AnchorView from "@/pages/anchor-view";
 import Constraints from "@/pages/constraints";
+import Snapshots from "@/pages/snapshots";
+import SnapshotDetail from "@/pages/snapshot-detail";
 import Library from "@/pages/library";
 import Cases from "@/pages/cases";
 import Dashboard from "@/pages/dashboard";
@@ -17,7 +19,7 @@ import DossierComparison from "@/pages/dossier-comparison";
 import HowItWorks from "@/pages/how-it-works";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
-import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle } from "lucide-react";
+import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera } from "lucide-react";
 
 function Router() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -48,6 +50,12 @@ function Router() {
               <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
                 <AlertTriangle className="w-4 h-4 mr-2" />
                 Constraints & Friction
+              </Button>
+            </Link>
+            <Link href="/snapshots" onClick={() => setMenuOpen(false)}>
+              <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
+                <Camera className="w-4 h-4 mr-2" />
+                Snapshot & Export
               </Button>
             </Link>
             <Link href="/library" onClick={() => setMenuOpen(false)}>
@@ -89,6 +97,8 @@ function Router() {
         <Route path="/" component={ClaimSpace} />
         <Route path="/anchors" component={AnchorView} />
         <Route path="/constraints" component={Constraints} />
+        <Route path="/snapshots" component={Snapshots} />
+        <Route path="/snapshots/:snapshot_id" component={SnapshotDetail} />
         <Route path="/library" component={Library} />
         <Route path="/extract" component={LanternExtract} />
         <Route path="/dossier/:id" component={DossierEditor} />
