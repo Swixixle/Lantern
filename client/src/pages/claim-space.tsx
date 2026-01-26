@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, ExternalLink, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, Loader2 } from "lucide-react";
 import { MOCK_CLAIMS, confidenceToBand, clampConfidence, type Claim } from "@/lib/schema/claims";
 
 interface SnapshotResult {
@@ -308,6 +308,15 @@ export default function ClaimSpace() {
           claims={ambiguous}
           emptyMessage="No ambiguous claims identified."
         />
+
+        <div className="mt-8 pt-6 border-t border-border/50">
+          <Link href={`/constraints?corpusId=${corpusId}`}>
+            <Button variant="outline" className="w-full" data-testid="button-constraints">
+              <AlertTriangle className="w-4 h-4 mr-2" />
+              View Constraints & Friction
+            </Button>
+          </Link>
+        </div>
 
         <footer className="mt-12 pt-6 border-t border-border/50 text-center text-xs text-muted-foreground">
           <p>Lantern v1.0 — Claim Governance Interface</p>

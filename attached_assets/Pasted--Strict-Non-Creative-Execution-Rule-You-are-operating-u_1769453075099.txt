@@ -1,0 +1,206 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+Your Anchor + Snapshot layer is correctly shaped. We proceed to **Screen 4: Conflict & Gaps**.
+
+# Screen 4 — Conflict & Gaps (v1) Implementation Contract
+
+## 1) Purpose (scope-locked)
+
+This screen must answer only:
+
+* **Where do sources conflict?**
+* **Where is evidence missing for commonly attempted claims?**
+* **Where is there a time-based mismatch (source predates/ postdates relevant reference points)?**
+
+It must not:
+
+* Resolve contradictions
+* Suggest which side is “correct”
+* Offer conclusions, rankings, or intent
+
+Label is fixed:
+
+**Screen title:** `Constraints & Friction`
+
+---
+
+## 2) Data model (minimum viable)
+
+Create: `client/src/lib/schema/constraints.ts`
+
+```ts
+export type ConstraintType = "CONFLICT" | "MISSING_EVIDENCE" | "TIME_MISMATCH";
+
+export interface ConstraintItem {
+  id: string;                 // stable UUID
+  type: ConstraintType;
+
+  // Plain description of what the constraint is (no conclusions)
+  summary: string;
+
+  // Optional: the claim this constraint affects
+  claim_id?: string | null;
+
+  // References into evidence (anchors) when applicable
+  anchor_ids: string[];       // may be empty for MISSING_EVIDENCE
+
+  // Required when type = TIME_MISMATCH
+  time_context?: {
+    earlier_date?: string | null;   // ISO
+    later_date?: string | null;     // ISO
+    note: string;                  // e.g. "Primary source predates statutory update referenced in secondary source"
+  } | null;
+
+  // Required when type = MISSING_EVIDENCE
+  missing?: {
+    requested_assertion: string;    // e.g. "Ranking jurisdictions by strictness"
+    reason: string;                // e.g. "No anchored comparative ranking exists in primary source"
+  } | null;
+
+  // Required when type = CONFLICT
+  conflict?: {
+    left: { anchor_id: string; source_document: string; page_ref: string };
+    right:{ anchor_id: string; source_document: string; page_ref: string };
+  } | null;
+}
+```
+
+Hard requirements:
+
+* `summary` must be descriptive, not interpretive.
+* `anchor_ids` must be a union of any relevant anchors (including `conflict.left/right.anchor_id`).
+
+---
+
+## 3) API contract
+
+### Endpoint
+
+`GET /api/constraints?corpusId=<id>`
+
+### Response
+
+```json
+{
+  "corpus_id": "corpus-001",
+  "constraints": [ /* ConstraintItem[] */ ]
+}
+```
+
+You may mock initially, but the endpoint signature must exist.
+
+---
+
+## 4) UI requirements
+
+### A) Entry point
+
+Add a navigation element from Claim Space to:
+
+`/constraints?corpusId=<id>`
+
+(If corpusId is not yet real, pass a placeholder string consistently.)
+
+### B) Layout
+
+Render three sections in this order:
+
+1. **Conflicts**
+2. **Missing Evidence**
+3. **Time Mismatches**
+
+Each item must show:
+
+* `summary`
+* `type` label (small)
+* Button: **View Evidence**
+
+**View Evidence behavior**
+
+* If `anchor_ids.length > 0` → route to Anchor View: `/anchors?ids=...`
+* If `anchor_ids` empty → show neutral message inline:
+
+  > “No anchors are available for this item in the current corpus.”
+
+### C) Conflict item specifics
+
+For `type = CONFLICT`, render two sub-panels:
+
+* Left source (document + page_ref + anchor_id)
+* Right source (document + page_ref + anchor_id)
+
+Do not add any “which is stronger” or “likely correct” indicator.
+
+### D) Missing Evidence item specifics
+
+Render:
+
+* `missing.requested_assertion`
+* `missing.reason`
+
+No remediation suggestions beyond what is in `reason`.
+
+### E) Time mismatch specifics
+
+Render:
+
+* earlier_date, later_date (if present)
+* `time_context.note` verbatim
+
+No inferences like “therefore outdated”; only “predates/postdates” when explicitly encoded by the data.
+
+---
+
+## 5) Mock data requirements (for v1 completeness)
+
+Provide at minimum:
+
+* 1 `CONFLICT` with two anchors
+* 1 `MISSING_EVIDENCE` with empty anchor_ids
+* 1 `TIME_MISMATCH` with at least one date + a note
+
+---
+
+## 6) Acceptance tests (must all pass)
+
+1. `Constraints & Friction` renders as a dedicated screen.
+2. Items are partitioned into the correct three sections.
+3. No item contains conclusions, rankings, or intent language.
+4. **View Evidence** for conflict opens Anchor View with both anchors.
+5. Missing Evidence items render without error and do not pretend anchors exist.
+6. Time mismatch shows dates and note without “helpful” interpretation.
+
+---
+
+## 7) What to send me when complete
+
+To proceed to Screen 5 (Snapshot & Export polish), send:
+
+* `ConstraintItem` interface as implemented
+* One sample object for each type (3 objects)
+* Screenshot of the screen showing all three sections
+* Confirmation that no content was autogenerated beyond specified fields (i.e., `summary` is from pipeline or explicit mock)
+
+Once this is in place, Screen 5 becomes a controlled, non-risky extension of your existing snapshot infrastructure.
