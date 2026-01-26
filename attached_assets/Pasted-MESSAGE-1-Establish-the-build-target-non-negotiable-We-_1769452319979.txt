@@ -1,0 +1,74 @@
+MESSAGE 1 — Establish the build target (non-negotiable)
+We are implementing LANTERN v1 (Monday spec).
+The default landing view must be Claim Space, not entities, metrics, or summaries.
+The system’s primary function is to show Defensible / Restricted / Ambiguous claims with evidence anchors and refusal language.
+Confirm you understand before writing code.
+(Do not proceed unless the agent acknowledges this.)
+MESSAGE 2 — Ask for the exact view we need next (this is the key)
+Build the Claim Space View as the default screen.
+Requirements:
+Three clearly separated sections:
+Defensible Claims
+Restricted / Unsupported Claims
+Ambiguous Claims
+Each claim must include:
+Plain-language claim text
+Confidence band (never 100%)
+“View Evidence” action
+Restricted claims must include explicit refusal language (e.g., “The corpus does not support this claim.”).
+Do not include summaries, rankings, inferred intent, or doctrinal synthesis.
+Produce:
+Component structure
+Data schema
+Example mock data
+Minimal UI layout (functional, not pretty)
+This is the single most important build step.
+MESSAGE 3 — Evidence Anchors (second screen, but wired now)
+Implement the Evidence Anchor View that opens when “View Evidence” is clicked.
+Each anchor must show:
+Exact quoted text (verbatim)
+Source document name
+Page / section reference
+Anchor ID (immutable)
+Timeline context (publication or availability date)
+No summaries or interpretation.
+Add this line at the top of the view:
+“Any claim not anchored here is not defensible.”
+Provide:
+Data model
+Example anchor object
+Navigation flow from Claim Space → Anchor View
+MESSAGE 4 — Snapshot logic (do not skip)
+Implement Snapshot creation for the current Claim Space state.
+Snapshot requirements:
+Immutable snapshot ID
+Captures:
+Claims + their classification
+Anchors linked to each claim
+Confidence bands
+Timestamp
+Must be re-verifiable later (hash or equivalent)
+Provide:
+Snapshot schema
+Example snapshot JSON
+Where snapshot is triggered in the UI
+Do not add export polish yet. Just correctness.
+MESSAGE 5 — Explicit exclusions (this prevents derailment)
+Explicitly confirm that the system:
+Does NOT infer intent
+Does NOT rank jurisdictions
+Does NOT synthesize doctrine
+Does NOT assign blame or conclusions
+If any of these appear in your output, stop and revise.
+WHY THIS WORKS (AND WHY THIS IS MONDAY-ALIGNED)
+What we designed Monday was not:
+a smarter summarizer
+a legal analysis engine
+an entity explorer
+It was:
+A claim-governance interface that prevents overstatement.
+So the order matters:
+Claim Space (default landing)
+Evidence Anchors (show your work)
+Snapshot (temporal defensibility)
+Everything else is secondary.
