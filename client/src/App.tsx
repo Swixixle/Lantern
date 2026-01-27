@@ -20,9 +20,10 @@ import HowItWorks from "@/pages/how-it-works";
 import Intake from "@/pages/intake";
 import AnchorBrowser from "@/pages/anchor-browser";
 import EvidencePacket from "@/pages/evidence-packet";
+import Ledger from "@/pages/ledger";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
-import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp } from "lucide-react";
+import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp, ScrollText } from "lucide-react";
 
 function Router() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -67,6 +68,12 @@ function Router() {
                 Snapshot & Export
               </Button>
             </Link>
+            <Link href="/ledger" onClick={() => setMenuOpen(false)}>
+              <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
+                <ScrollText className="w-4 h-4 mr-2" />
+                Revision Ledger
+              </Button>
+            </Link>
             <Link href="/library" onClick={() => setMenuOpen(false)}>
               <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
                 <Home className="w-4 h-4 mr-2" />
@@ -107,6 +114,7 @@ function Router() {
         <Route path="/" component={ClaimSpace} />
         <Route path="/anchors/browse" component={AnchorBrowser} />
         <Route path="/packets/:packetId" component={EvidencePacket} />
+        <Route path="/ledger" component={Ledger} />
         <Route path="/anchors" component={AnchorView} />
         <Route path="/constraints" component={Constraints} />
         <Route path="/snapshots" component={Snapshots} />

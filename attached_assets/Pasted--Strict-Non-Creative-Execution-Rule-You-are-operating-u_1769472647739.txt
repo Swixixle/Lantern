@@ -1,0 +1,323 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+# v1.6 — Revision Ledger (Append-Only, Deterministic)
+
+## 0) Goal (scope-locked)
+
+Create an **append-only event ledger** recording actions across the system. The ledger is:
+
+* Immutable (no update endpoint)
+* Deterministic fields only
+* Queryable by corpus
+
+It must not:
+
+* Provide narrative “why”
+* Infer user intent
+* Reconstruct meaning beyond recorded fields
+
+---
+
+## 1) Schema
+
+Create `client/src/lib/schema/ledger.ts` and server equivalents.
+
+### A) Event types (enum)
+
+```ts
+export type LedgerEventType =
+  | "CORPUS_CREATED"
+  | "SOURCE_UPLOADED"
+  | "BUILD_RUN"
+  | "CLAIM_CREATED"
+  | "CLAIM_DELETED"
+  | "SNAPSHOT_CREATED"
+  | "PACKET_CREATED";
+```
+
+### B) LedgerEvent (canonical)
+
+```ts
+export interface LedgerEvent {
+  event_id: string;          // UUID
+  occurred_at: string;        // ISO datetime
+  corpus_id: string;
+  event_type: LedgerEventType;
+
+  // entity linkage (exactly one primary entity per event)
+  entity: {
+    entity_type: "CORPUS" | "SOURCE" | "BUILD" | "CLAIM" | "SNAPSHOT" | "PACKET";
+    entity_id: string;        // the id for the entity type
+  };
+
+  // deterministic payload (event-specific)
+  payload: Record<string, any>; // constrained by rules below
+
+  // hash for event integrity
+  hash_alg: "SHA-256";
+  hash_hex: string;
+}
+```
+
+### C) Payload constraints (strict)
+
+Payload must contain **only** these fields per event type:
+
+1. `CORPUS_CREATED`
+
+```json
+{ "purpose": "<exact string>" }
+```
+
+2. `SOURCE_UPLOADED`
+
+```json
+{
+  "source_id": "uuid",
+  "role": "PRIMARY|SECONDARY",
+  "filename": "string",
+  "sha256_hex": "64-hex"
+}
+```
+
+3. `BUILD_RUN`
+
+```json
+{
+  "mode": "anchors_only|claims_from_anchors",
+  "status": "COMPLETED|FAILED",
+  "anchors_created": 0,
+  "claims_created": 0,
+  "constraints_created": 0
+}
+```
+
+4. `CLAIM_CREATED`
+
+```json
+{
+  "claim_id": "uuid",
+  "classification": "DEFENSIBLE|RESTRICTED|AMBIGUOUS",
+  "anchor_count": 0
+}
+```
+
+5. `CLAIM_DELETED`
+
+```json
+{ "claim_id": "uuid" }
+```
+
+6. `SNAPSHOT_CREATED`
+
+```json
+{
+  "snapshot_id": "uuid",
+  "hash_hex": "64-hex"
+}
+```
+
+7. `PACKET_CREATED`
+
+```json
+{
+  "packet_id": "uuid",
+  "claim_id": "uuid",
+  "snapshot_id": "uuid",
+  "hash_hex": "64-hex"
+}
+```
+
+No additional keys permitted.
+
+---
+
+## 2) Event hashing (deterministic)
+
+Each ledger event must have its own hash.
+
+Hash over canonical payload excluding:
+
+* `event_id`
+* `occurred_at`
+* `hash_alg`
+* `hash_hex`
+
+Canonicalization:
+
+* JSON.stringify stable
+* Keys must be written in deterministic order:
+
+  * `corpus_id`, `event_type`, `entity`, `payload`
+
+SHA-256 hex.
+
+---
+
+## 3) Storage (minimum acceptable)
+
+SQLite table `ledger_events`:
+
+* `event_id TEXT PRIMARY KEY`
+* `occurred_at TEXT NOT NULL`
+* `corpus_id TEXT NOT NULL`
+* `event_type TEXT NOT NULL`
+* `entity_type TEXT NOT NULL`
+* `entity_id TEXT NOT NULL`
+* `payload_json TEXT NOT NULL`
+* `hash_alg TEXT NOT NULL`
+* `hash_hex TEXT NOT NULL`
+
+Indexes:
+
+* `(corpus_id, occurred_at)`
+* `(entity_type, entity_id)`
+
+No updates. Inserts only.
+
+---
+
+## 4) API endpoints (minimal)
+
+### A) List events for a corpus
+
+`GET /api/corpus/:corpus_id/ledger`
+
+Optional query params:
+
+* `limit` (default 100, max 500)
+* `after` (ISO datetime; return strictly greater)
+* `event_type` (filter exact match)
+
+Response:
+
+```json
+{
+  "corpus_id": "uuid",
+  "events": [ /* LedgerEvent[] */ ]
+}
+```
+
+### B) Verify one event
+
+`GET /api/ledger/:event_id/verify`
+
+Response:
+
+```json
+{
+  "event_id": "uuid",
+  "verified": true,
+  "hash_alg": "SHA-256",
+  "stored_hash_hex": "...",
+  "recomputed_hash_hex": "..."
+}
+```
+
+No create endpoint is exposed publicly in v1.6. Events are written internally by server when actions occur.
+
+---
+
+## 5) Wiring rules (where events must be written)
+
+Write a ledger event on these server actions:
+
+1. `POST /api/corpus` → CORPUS_CREATED
+2. `POST /api/corpus/:id/sources` → SOURCE_UPLOADED
+3. `POST /api/corpus/:id/build` → BUILD_RUN
+4. `POST /api/corpus/:id/claims` → CLAIM_CREATED
+5. `DELETE /api/corpus/:id/claims/:claim_id` → CLAIM_DELETED
+6. `POST /api/snapshots` → SNAPSHOT_CREATED
+7. `POST /api/corpus/:id/claims/:claim_id/packet` → PACKET_CREATED
+
+Hard rule:
+
+* If the underlying action fails, do not write the event.
+* If the action succeeds, the event must be written once.
+
+---
+
+## 6) UI (minimal)
+
+### A) New screen: Ledger
+
+Route:
+`/ledger?corpusId=<id>`
+
+Must show:
+
+* Header: `Revision Ledger`
+* Corpus ID displayed
+* Filter controls:
+
+  * Event type dropdown (ALL + exact event types)
+  * Limit select (100, 200, 500)
+
+Event list rows (one per event):
+
+* occurred_at
+* event_type
+* entity_type + entity_id
+* hash_hex (full)
+* Button: **Verify**
+
+Click Verify:
+
+* Calls `/api/ledger/:event_id/verify`
+* Displays verified boolean + both hashes inline (no modal required)
+
+Ordering:
+
+* occurred_at descending (newest first)
+
+No additional analytics, grouping, or narrative.
+
+---
+
+## 7) Acceptance tests
+
+1. Creating corpus writes CORPUS_CREATED event.
+2. Uploading a source writes SOURCE_UPLOADED event with sha256_hex.
+3. Running build writes BUILD_RUN event with counts.
+4. Creating a claim writes CLAIM_CREATED with anchor_count.
+5. Deleting a claim writes CLAIM_DELETED.
+6. Creating snapshot writes SNAPSHOT_CREATED with snapshot hash.
+7. Creating packet writes PACKET_CREATED with packet + claim + snapshot ids.
+8. Ledger screen lists events newest-first and verifies at least one event hash true.
+9. No endpoint allows updating or deleting ledger events.
+
+---
+
+## 8) What to send me when complete
+
+* Example `GET /api/corpus/:id/ledger` with at least 5 events (redact nothing except if you must)
+* One `GET /api/ledger/:event_id/verify` response (verified true)
+* Screenshot of `/ledger?corpusId=...` showing:
+
+  * filter controls
+  * at least 3 events
+  * one expanded verify result inline
+
+Proceed exactly to this contract.

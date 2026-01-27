@@ -12,10 +12,13 @@ import {
   type AnchorRecord, type InsertAnchorRecord,
   type ClaimRecord, type InsertClaimRecord,
   type EvidencePacket, type InsertEvidencePacket,
-  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords, evidencePackets
+  type LedgerEventRow, type InsertLedgerEvent,
+  type LedgerEventType, type LedgerEntityType,
+  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords, evidencePackets, ledgerEvents
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, gt } from "drizzle-orm";
+import * as crypto from "crypto";
 import pg from "pg";
 
 const pool = new pg.Pool({
@@ -84,6 +87,20 @@ export interface IStorage {
   createEvidencePacket(data: InsertEvidencePacket): Promise<EvidencePacket>;
   getEvidencePacket(id: string): Promise<EvidencePacket | undefined>;
   getAnchorRecordsByIds(ids: string[]): Promise<AnchorRecord[]>;
+  
+  // Ledger Events (append-only)
+  createLedgerEvent(
+    corpusId: string,
+    eventType: LedgerEventType,
+    entityType: LedgerEntityType,
+    entityId: string,
+    payload: Record<string, any>
+  ): Promise<LedgerEventRow>;
+  listLedgerEvents(
+    corpusId: string,
+    options?: { limit?: number; after?: string; event_type?: LedgerEventType }
+  ): Promise<LedgerEventRow[]>;
+  getLedgerEvent(id: string): Promise<LedgerEventRow | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -382,6 +399,61 @@ export class DatabaseStorage implements IStorage {
     if (ids.length === 0) return [];
     const allAnchors = await db.select().from(anchorRecords);
     return allAnchors.filter(a => ids.includes(a.id));
+  }
+
+  async createLedgerEvent(
+    corpusId: string,
+    eventType: LedgerEventType,
+    entityType: LedgerEntityType,
+    entityId: string,
+    payload: Record<string, any>
+  ): Promise<LedgerEventRow> {
+    const canonicalObj = {
+      corpus_id: corpusId,
+      event_type: eventType,
+      entity: { entity_type: entityType, entity_id: entityId },
+      payload: payload
+    };
+    const canonicalJson = JSON.stringify(canonicalObj);
+    const hashHex = crypto.createHash("sha256").update(canonicalJson).digest("hex");
+
+    const result = await db.insert(ledgerEvents).values({
+      corpusId,
+      eventType,
+      entityType,
+      entityId,
+      payloadJson: JSON.stringify(payload),
+      hashAlg: "SHA-256",
+      hashHex
+    }).returning();
+    return result[0];
+  }
+
+  async listLedgerEvents(
+    corpusId: string,
+    options?: { limit?: number; after?: string; event_type?: LedgerEventType }
+  ): Promise<LedgerEventRow[]> {
+    const limit = Math.min(options?.limit || 100, 500);
+    let result = await db.select().from(ledgerEvents)
+      .where(eq(ledgerEvents.corpusId, corpusId))
+      .orderBy(desc(ledgerEvents.occurredAt))
+      .limit(limit);
+
+    if (options?.after) {
+      const afterDate = new Date(options.after);
+      result = result.filter(e => e.occurredAt > afterDate);
+    }
+    if (options?.event_type) {
+      result = result.filter(e => e.eventType === options.event_type);
+    }
+    return result;
+  }
+
+  async getLedgerEvent(id: string): Promise<LedgerEventRow | undefined> {
+    const result = await db.select().from(ledgerEvents)
+      .where(eq(ledgerEvents.id, id))
+      .limit(1);
+    return result[0];
   }
 }
 

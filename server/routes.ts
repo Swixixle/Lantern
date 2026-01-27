@@ -702,6 +702,14 @@ export async function registerRoutes(
     
     const corpus = await storage.createCorpus({ purpose: parseResult.data });
     
+    await storage.createLedgerEvent(
+      corpus.id,
+      "CORPUS_CREATED",
+      "CORPUS",
+      corpus.id,
+      { purpose: parseResult.data }
+    );
+    
     res.status(201).json({
       corpus_id: corpus.id,
       created_at: corpus.createdAt,
@@ -746,6 +754,19 @@ export async function registerRoutes(
       filename: file.originalname,
       sha256Hex
     });
+    
+    await storage.createLedgerEvent(
+      corpusId,
+      "SOURCE_UPLOADED",
+      "SOURCE",
+      source.id,
+      {
+        source_id: source.id,
+        role: roleResult.data,
+        filename: file.originalname,
+        sha256_hex: sha256Hex
+      }
+    );
     
     res.status(201).json({
       source_id: source.id,
@@ -837,6 +858,21 @@ export async function registerRoutes(
         }
       }
     }
+    
+    const buildId = `build-${Date.now()}`;
+    await storage.createLedgerEvent(
+      corpusId,
+      "BUILD_RUN",
+      "BUILD",
+      buildId,
+      {
+        mode: modeResult.data,
+        status: "COMPLETED",
+        anchors_created: anchorsCreated,
+        claims_created: claimsCreated,
+        constraints_created: constraintsCreated
+      }
+    );
     
     res.status(201).json({
       corpus_id: corpusId,
@@ -1005,6 +1041,18 @@ export async function registerRoutes(
       anchorIds
     });
     
+    await storage.createLedgerEvent(
+      corpusId,
+      "CLAIM_CREATED",
+      "CLAIM",
+      claimRecord.id,
+      {
+        claim_id: claimRecord.id,
+        classification: claimRecord.classification,
+        anchor_count: anchorIds.length
+      }
+    );
+    
     res.status(201).json({
       id: claimRecord.id,
       corpus_id: claimRecord.corpusId,
@@ -1068,6 +1116,15 @@ export async function registerRoutes(
     }
     
     await storage.deleteClaimRecord(claimId);
+    
+    await storage.createLedgerEvent(
+      corpusId,
+      "CLAIM_DELETED",
+      "CLAIM",
+      claimId,
+      { claim_id: claimId }
+    );
+    
     res.status(204).send();
   }));
 
@@ -1220,6 +1277,19 @@ export async function registerRoutes(
       hashAlg: "SHA-256",
       hashHex
     });
+    
+    await storage.createLedgerEvent(
+      corpusId,
+      "PACKET_CREATED",
+      "PACKET",
+      packet.id,
+      {
+        packet_id: packet.id,
+        claim_id: claimId,
+        snapshot_id: snapshot_id,
+        hash_hex: hashHex
+      }
+    );
     
     const responsePacket = {
       packet_id: packet.id,
@@ -1449,6 +1519,17 @@ export async function registerRoutes(
       hashHex
     });
     
+    await storage.createLedgerEvent(
+      corpus_id,
+      "SNAPSHOT_CREATED",
+      "SNAPSHOT",
+      snapshot.id,
+      {
+        snapshot_id: snapshot.id,
+        hash_hex: hashHex
+      }
+    );
+    
     console.log(`[Snapshot API] Created snapshot ${snapshot.id} for corpus ${corpus_id}`);
     
     res.status(201).json({
@@ -1532,6 +1613,80 @@ export async function registerRoutes(
       hash_alg: snapshot.hashAlg,
       stored_hash_hex: snapshot.hashHex,
       recomputed_hash_hex: recomputedHash
+    });
+  }));
+
+  // === LEDGER API ===
+  
+  // List ledger events for a corpus
+  app.get("/api/corpus/:corpusId/ledger", asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    const limitParam = req.query.limit ? parseInt(String(req.query.limit), 10) : 100;
+    const afterParam = req.query.after ? String(req.query.after) : undefined;
+    const eventTypeParam = req.query.event_type ? String(req.query.event_type) : undefined;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const limit = Math.min(Math.max(1, limitParam), 500);
+    
+    const events = await storage.listLedgerEvents(corpusId, {
+      limit,
+      after: afterParam,
+      event_type: eventTypeParam as any
+    });
+    
+    res.json({
+      corpus_id: corpusId,
+      events: events.map(e => ({
+        event_id: e.id,
+        occurred_at: e.occurredAt.toISOString(),
+        corpus_id: e.corpusId,
+        event_type: e.eventType,
+        entity: {
+          entity_type: e.entityType,
+          entity_id: e.entityId
+        },
+        payload: JSON.parse(e.payloadJson),
+        hash_alg: e.hashAlg,
+        hash_hex: e.hashHex
+      }))
+    });
+  }));
+  
+  // Verify a ledger event
+  app.get("/api/ledger/:eventId/verify", asyncHandler(async (req, res) => {
+    const eventId = req.params.eventId as string;
+    
+    const event = await storage.getLedgerEvent(eventId);
+    if (!event) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Event not found"
+      });
+    }
+    
+    const payload = JSON.parse(event.payloadJson);
+    const canonicalObj = {
+      corpus_id: event.corpusId,
+      event_type: event.eventType,
+      entity: { entity_type: event.entityType, entity_id: event.entityId },
+      payload: payload
+    };
+    const canonicalJson = JSON.stringify(canonicalObj);
+    const recomputedHashHex = createHash("sha256").update(canonicalJson).digest("hex");
+    
+    res.json({
+      event_id: event.id,
+      verified: event.hashHex === recomputedHashHex,
+      hash_alg: event.hashAlg,
+      stored_hash_hex: event.hashHex,
+      recomputed_hash_hex: recomputedHashHex
     });
   }));
 

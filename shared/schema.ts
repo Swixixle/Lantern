@@ -360,3 +360,50 @@ export const insertEvidencePacketSchema = createInsertSchema(evidencePackets).om
 
 export type InsertEvidencePacket = z.infer<typeof insertEvidencePacketSchema>;
 export type EvidencePacket = typeof evidencePackets.$inferSelect;
+
+// Ledger event type enum
+export const ledgerEventTypeEnum = z.enum([
+  "CORPUS_CREATED",
+  "SOURCE_UPLOADED",
+  "BUILD_RUN",
+  "CLAIM_CREATED",
+  "CLAIM_DELETED",
+  "SNAPSHOT_CREATED",
+  "PACKET_CREATED"
+]);
+export type LedgerEventType = z.infer<typeof ledgerEventTypeEnum>;
+
+// Ledger entity type enum
+export const ledgerEntityTypeEnum = z.enum([
+  "CORPUS",
+  "SOURCE",
+  "BUILD",
+  "CLAIM",
+  "SNAPSHOT",
+  "PACKET"
+]);
+export type LedgerEntityType = z.infer<typeof ledgerEntityTypeEnum>;
+
+// Ledger events table (append-only)
+export const ledgerEvents = pgTable("ledger_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  occurredAt: timestamp("occurred_at").notNull().defaultNow(),
+  corpusId: text("corpus_id").notNull(),
+  eventType: text("event_type").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id").notNull(),
+  payloadJson: text("payload_json").notNull(),
+  hashAlg: text("hash_alg").notNull().default("SHA-256"),
+  hashHex: text("hash_hex").notNull(),
+}, (table) => [
+  index("ledger_events_corpus_occurred_idx").on(table.corpusId, table.occurredAt),
+  index("ledger_events_entity_idx").on(table.entityType, table.entityId),
+]);
+
+export const insertLedgerEventSchema = createInsertSchema(ledgerEvents).omit({
+  id: true,
+  occurredAt: true,
+});
+
+export type InsertLedgerEvent = z.infer<typeof insertLedgerEventSchema>;
+export type LedgerEventRow = typeof ledgerEvents.$inferSelect;
