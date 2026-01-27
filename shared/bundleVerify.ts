@@ -44,6 +44,9 @@ export interface BundleVerifyResult {
   packet_index_ok: boolean | null;
   packet_index_checked: number;
   packet_index_issues: string[];
+  snapshot_index_ok: boolean | null;
+  snapshot_index_checked: number;
+  snapshot_index_issues: string[];
 }
 
 export function computeManifestHash(manifest: BundleManifest): string {
@@ -104,6 +107,9 @@ export async function verifyBundle(
     packet_index_ok: null,
     packet_index_checked: 0,
     packet_index_issues: [],
+    snapshot_index_ok: null,
+    snapshot_index_checked: 0,
+    snapshot_index_issues: [],
   };
 
   const entries = await zipReader.getEntries();
@@ -457,6 +463,73 @@ export async function verifyBundle(
     }
   }
 
+  const snapshotIndexEntry = entryMap.get("snapshot_proof_index.json");
+  if (!snapshotIndexEntry) {
+    result.snapshot_index_ok = null;
+    result.snapshot_index_checked = 0;
+    result.snapshot_index_issues = ["snapshot_proof_index.json not present; skipping"];
+  } else {
+    try {
+      const snapshotIndexData = await snapshotIndexEntry.getData();
+      const snapshotIndex = JSON.parse(snapshotIndexData.toString("utf8"));
+      
+      const requiredKeys = ["corpus_id", "snapshots"];
+      const indexKeys = Object.keys(snapshotIndex);
+      const hasAllKeys = requiredKeys.every(k => indexKeys.includes(k));
+      const hasNoExtras = indexKeys.every(k => requiredKeys.includes(k));
+      
+      if (!hasAllKeys || !hasNoExtras) {
+        result.snapshot_index_issues.push("SNAPSHOT_INDEX_KEYS_INVALID");
+      }
+      
+      if (!Array.isArray(snapshotIndex.snapshots)) {
+        result.snapshot_index_issues.push("SNAPSHOT_INDEX_NOT_ARRAY");
+      } else {
+        for (let i = 1; i < snapshotIndex.snapshots.length; i++) {
+          if (snapshotIndex.snapshots[i].snapshot_id.localeCompare(snapshotIndex.snapshots[i - 1].snapshot_id) < 0) {
+            result.snapshot_index_issues.push("SNAPSHOT_INDEX_NOT_SORTED");
+            break;
+          }
+        }
+        
+        const entryRequiredKeys = ["snapshot_id", "created_at", "hash_alg", "hash_hex"];
+        const is64Hex = (s: unknown): boolean => typeof s === "string" && /^[a-f0-9]{64}$/.test(s);
+        
+        for (const snap of snapshotIndex.snapshots) {
+          const snapKeys = Object.keys(snap);
+          const hasAllEntryKeys = entryRequiredKeys.every(k => snapKeys.includes(k));
+          const hasNoExtraEntryKeys = snapKeys.every(k => entryRequiredKeys.includes(k));
+          
+          if (!hasAllEntryKeys || !hasNoExtraEntryKeys) {
+            if (!result.snapshot_index_issues.includes("SNAPSHOT_INDEX_ENTRY_KEYS_INVALID")) {
+              result.snapshot_index_issues.push("SNAPSHOT_INDEX_ENTRY_KEYS_INVALID");
+            }
+          }
+          
+          if (snap.hash_alg !== "SHA-256" || !is64Hex(snap.hash_hex)) {
+            if (!result.snapshot_index_issues.includes("SNAPSHOT_INDEX_HASH_INVALID")) {
+              result.snapshot_index_issues.push("SNAPSHOT_INDEX_HASH_INVALID");
+            }
+          }
+          
+          const snapshotPath = `snapshots/${snap.snapshot_id}.json`;
+          if (!entryMap.has(snapshotPath)) {
+            if (!result.snapshot_index_issues.includes("SNAPSHOT_INDEX_FILE_MISSING")) {
+              result.snapshot_index_issues.push("SNAPSHOT_INDEX_FILE_MISSING");
+            }
+          }
+          
+          result.snapshot_index_checked++;
+        }
+      }
+      
+      result.snapshot_index_ok = result.snapshot_index_issues.length === 0;
+    } catch (e) {
+      result.snapshot_index_ok = false;
+      result.snapshot_index_issues.push(`Failed to parse: ${e}`);
+    }
+  }
+
   result.bundle_ok =
     result.manifest_ok &&
     result.manifest_hash_match &&
@@ -465,7 +538,8 @@ export async function verifyBundle(
     result.extra_files.length === 0 &&
     (result.anchors_index_ok === null || result.anchors_index_ok === true) &&
     (result.audit_summary_ok === null || result.audit_summary_ok === true) &&
-    (result.packet_index_ok === null || result.packet_index_ok === true);
+    (result.packet_index_ok === null || result.packet_index_ok === true) &&
+    (result.snapshot_index_ok === null || result.snapshot_index_ok === true);
 
   return result;
 }
