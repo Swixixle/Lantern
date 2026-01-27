@@ -537,6 +537,19 @@ export async function registerRoutes(
     const ledgerProofIndexJson = JSON.stringify(ledgerProofIndex);
     files.push({ path: "ledger_proof_index.json", sha256_hex: createHash("sha256").update(ledgerProofIndexJson).digest("hex") });
     
+    // v1.29: Generate audit_lines.txt
+    const auditLines: string[] = [];
+    for (const entry of anchorsProofEntries) {
+      const pdfPage = await storage.getPdfPage(entry.source_id, entry.page_index);
+      if (!pdfPage) continue;
+      const substring = pdfPage.pageText.slice(entry.quote_start_char, entry.quote_end_char);
+      const substringSha256Hex = createHash("sha256").update(substring, "utf8").digest("hex");
+      auditLines.push(`${entry.anchor_id}|${entry.source_id}|${entry.page_index}|${entry.quote_start_char}|${entry.quote_end_char}|${pdfPage.pageTextSha256Hex}|${substringSha256Hex}`);
+    }
+    auditLines.sort((a, b) => a.localeCompare(b));
+    const auditLinesTxt = auditLines.join("\n") + "\n";
+    files.push({ path: "audit_lines.txt", sha256_hex: createHash("sha256").update(auditLinesTxt).digest("hex") });
+    
     files.sort((a, b) => a.path.localeCompare(b.path));
     
     const manifestWithoutHash = {
@@ -583,6 +596,7 @@ export async function registerRoutes(
     archive.append(packetProofIndexJson, { name: `${bundleDir}/packet_proof_index.json` });
     archive.append(snapshotProofIndexJson, { name: `${bundleDir}/snapshot_proof_index.json` });
     archive.append(ledgerProofIndexJson, { name: `${bundleDir}/ledger_proof_index.json` });
+    archive.append(auditLinesTxt, { name: `${bundleDir}/audit_lines.txt` });
     
     await archive.finalize();
   }));
@@ -2611,6 +2625,19 @@ export async function registerRoutes(
     const ledgerProofIndexJson = JSON.stringify(ledgerProofIndex);
     files.push({ path: "ledger_proof_index.json", sha256_hex: createHash("sha256").update(ledgerProofIndexJson).digest("hex") });
     
+    // v1.29: Generate audit_lines.txt
+    const auditLines: string[] = [];
+    for (const entry of anchorsProofEntries) {
+      const pdfPage = await storage.getPdfPage(entry.source_id, entry.page_index);
+      if (!pdfPage) continue;
+      const substring = pdfPage.pageText.slice(entry.quote_start_char, entry.quote_end_char);
+      const substringSha256Hex = createHash("sha256").update(substring, "utf8").digest("hex");
+      auditLines.push(`${entry.anchor_id}|${entry.source_id}|${entry.page_index}|${entry.quote_start_char}|${entry.quote_end_char}|${pdfPage.pageTextSha256Hex}|${substringSha256Hex}`);
+    }
+    auditLines.sort((a, b) => a.localeCompare(b));
+    const auditLinesTxt = auditLines.join("\n") + "\n";
+    files.push({ path: "audit_lines.txt", sha256_hex: createHash("sha256").update(auditLinesTxt).digest("hex") });
+    
     if (includeRawSources) {
       for (const src of sources) {
         const rawPath = `raw_sources/${src.id}__${src.filename}`;
@@ -2694,6 +2721,7 @@ export async function registerRoutes(
     archive.append(packetProofIndexJson, { name: `${bundleDir}/packet_proof_index.json` });
     archive.append(snapshotProofIndexJson, { name: `${bundleDir}/snapshot_proof_index.json` });
     archive.append(ledgerProofIndexJson, { name: `${bundleDir}/ledger_proof_index.json` });
+    archive.append(auditLinesTxt, { name: `${bundleDir}/audit_lines.txt` });
     
     await archive.finalize();
   }));

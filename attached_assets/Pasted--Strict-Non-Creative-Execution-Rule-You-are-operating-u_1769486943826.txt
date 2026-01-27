@@ -1,0 +1,94 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.28 is **accepted as complete and compliant** based on your evidence packet:
+
+* Audit lines returned in required pipe-delimited format ✅
+* Only eligible anchors included and sorted ✅
+* 401 payload matches exactly when public_readonly=false ✅
+* Substring sha256 cross-check matches the audit line last field ✅
+
+---
+
+# v1.29 — Export audit_lines.txt inside deterministic bundle
+
+## 0) Goal (scope-locked)
+
+Include the same deterministic corpus-level audit lines export (v1.28) inside the **deterministic v1.7 bundle export**.
+
+No new inference. No new fields. Reuse v1.28 line format and ordering.
+
+---
+
+## 1) Bundle structure change
+
+Add file at bundle root:
+`audit_lines.txt`
+
+Include it in `MANIFEST.json` `files[]` with sha256 like all other files.
+
+---
+
+## 2) File content (exact)
+
+`audit_lines.txt` must contain exactly the same content as:
+
+`GET /api/review/:corpusId/audit_lines` when `public_readonly=true`
+
+Rules:
+
+* Include only anchors with `provenance.extractor.name === "pdfjs-text-v1"`
+* Sort lexicographically by `anchor_id`
+* Each line exactly:
+
+```
+<anchor_id>|<source_id>|<page_index>|<quote_start_char>|<quote_end_char>|<page_text_sha256_hex>|<substring_sha256_hex>
+```
+
+* File must end with exactly one trailing newline `\n`
+
+---
+
+## 3) Determinism requirements
+
+* Two deterministic bundle exports with unchanged corpus produce identical sha256 for `audit_lines.txt`.
+* Line ordering and newline behavior must be stable.
+
+---
+
+## 4) Acceptance tests
+
+1. Deterministic export includes `audit_lines.txt` at bundle root.
+2. `audit_lines.txt` content exactly equals the server endpoint output for the same corpus.
+3. MANIFEST includes `audit_lines.txt` with correct sha256.
+4. Determinism: sha256 identical across two deterministic exports.
+
+---
+
+## 5) What to send me when complete
+
+Return ONLY:
+
+1. Full contents of `audit_lines.txt` (verbatim)
+2. MANIFEST entry for `audit_lines.txt` (path + sha256_hex)
+3. Determinism check (two sha256 sums for `audit_lines.txt` across two deterministic exports)
+4. One statement of equality: show the first line from `audit_lines.txt` and the first line from the endpoint response are identical (paste both)
+
+Proceed exactly to v1.29.
