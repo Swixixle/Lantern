@@ -67,6 +67,7 @@ export interface IStorage {
   
   // Corpus
   createCorpus(data: InsertCorpus): Promise<Corpus>;
+  createCorpusWithId(data: InsertCorpus & { id: string }): Promise<Corpus>;
   getCorpus(id: string): Promise<Corpus | undefined>;
   createCorpusSource(data: InsertCorpusSource): Promise<CorpusSource>;
   getCorpusSource(id: string): Promise<CorpusSource | undefined>;
@@ -301,6 +302,11 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCorpus(data: InsertCorpus): Promise<Corpus> {
+    const result = await db.insert(corpora).values(data).returning();
+    return result[0];
+  }
+
+  async createCorpusWithId(data: InsertCorpus & { id: string }): Promise<Corpus> {
     const result = await db.insert(corpora).values(data).returning();
     return result[0];
   }

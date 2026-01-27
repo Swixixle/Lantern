@@ -198,12 +198,86 @@ function computeSha256(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
+async function seedDemoCorpusIfMissing() {
+  const DEMO_CORPUS_ID = "corpus-demo-001";
+  const FIXTURE_FILENAME = "demo.pdf";
+  const FIXTURE_PATH = join(process.cwd(), "client/public/fixtures", FIXTURE_FILENAME);
+  
+  const existing = await storage.getCorpus(DEMO_CORPUS_ID);
+  if (existing) {
+    console.log("[DemoSeeder] Demo corpus already exists, skipping seed");
+    return;
+  }
+  
+  console.log("[DemoSeeder] Creating demo corpus...");
+  
+  try {
+    const pdfBuffer = await readFile(FIXTURE_PATH);
+    const sha256Hex = createHash("sha256").update(pdfBuffer).digest("hex");
+    
+    await storage.createCorpusWithId({
+      id: DEMO_CORPUS_ID,
+      purpose: "CLAIM_GOVERNANCE"
+    });
+    
+    const corpusDir = join(UPLOADS_DIR, "corpus", DEMO_CORPUS_ID);
+    await mkdir(corpusDir, { recursive: true });
+    const storagePath = join(corpusDir, `${sha256Hex}-${FIXTURE_FILENAME}`);
+    await writeFile(storagePath, pdfBuffer);
+    
+    const source = await storage.createCorpusSource({
+      corpusId: DEMO_CORPUS_ID,
+      role: "PRIMARY",
+      filename: FIXTURE_FILENAME,
+      sha256Hex,
+      storagePath: `/uploads/corpus/${DEMO_CORPUS_ID}/${sha256Hex}-${FIXTURE_FILENAME}`
+    });
+    
+    await storage.createLedgerEvent(
+      DEMO_CORPUS_ID,
+      "SOURCE_UPLOADED",
+      "SOURCE",
+      source.id,
+      { source_id: source.id, filename: FIXTURE_FILENAME, sha256_hex: sha256Hex }
+    );
+    
+    console.log(`[DemoSeeder] Created demo corpus with source ${source.id}`);
+    
+    const { extractPdfPages } = await import("./pdfProcessor");
+    const pages = await extractPdfPages(pdfBuffer, source.id);
+    
+    for (const page of pages) {
+      await storage.createPdfPage({
+        sourceId: source.id,
+        pageIndex: page.pageIndex,
+        pageText: page.pageText,
+        pageTextSha256Hex: page.pageTextSha256Hex,
+        pagePngPath: page.pagePngPath
+      });
+    }
+    
+    await storage.createLedgerEvent(
+      DEMO_CORPUS_ID,
+      "BUILD_RUN",
+      "SOURCE",
+      source.id,
+      { source_id: source.id, pages_extracted: pages.length }
+    );
+    
+    console.log(`[DemoSeeder] PDF processed successfully with ${pages.length} pages`);
+    
+  } catch (err) {
+    console.error("[DemoSeeder] Failed to seed demo corpus:", err);
+  }
+}
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
   
   await ensureUploadsDir();
+  await seedDemoCorpusIfMissing();
   
   app.get("/__boot", (_req, res) => {
     if (!isDev) {
