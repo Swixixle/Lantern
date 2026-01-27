@@ -43,7 +43,7 @@ const LIMIT_OPTIONS = [100, 200, 500];
 export default function Ledger() {
   const [, navigate] = useLocation();
   const params = new URLSearchParams(window.location.search);
-  const corpusId = params.get("corpusId") || "";
+  const corpusId = params.get("corpusId") || "corpus-demo-001";
 
   const [events, setEvents] = useState<LedgerEvent[]>([]);
   const [loading, setLoading] = useState(true);

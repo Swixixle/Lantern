@@ -39,7 +39,7 @@ export default function AnchorBrowser() {
   const [, navigate] = useLocation();
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
-  const corpusId = params.get("corpusId");
+  const corpusId = params.get("corpusId") || "corpus-demo-001";
 
   const [anchors, setAnchors] = useState<AnchorRecord[]>([]);
   const [sources, setSources] = useState<SourceRecord[]>([]);

@@ -15,7 +15,7 @@ interface Source {
 export default function Sources() {
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
-  const corpusId = params.get("corpusId");
+  const corpusId = params.get("corpusId") || "corpus-demo-001";
 
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
