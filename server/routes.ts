@@ -2180,6 +2180,20 @@ export async function registerRoutes(
     const packetProofIndexJson = JSON.stringify(packetProofIndex);
     files.push({ path: "packet_proof_index.json", sha256_hex: createHash("sha256").update(packetProofIndexJson).digest("hex") });
     
+    const snapshotProofEntries = snapshotsList.map(snap => ({
+      snapshot_id: snap.id,
+      created_at: snap.createdAt,
+      hash_alg: snap.hashAlg,
+      hash_hex: snap.hashHex
+    })).sort((a, b) => a.snapshot_id.localeCompare(b.snapshot_id));
+    
+    const snapshotProofIndex = {
+      corpus_id: corpusId,
+      snapshots: snapshotProofEntries
+    };
+    const snapshotProofIndexJson = JSON.stringify(snapshotProofIndex);
+    files.push({ path: "snapshot_proof_index.json", sha256_hex: createHash("sha256").update(snapshotProofIndexJson).digest("hex") });
+    
     if (includeRawSources) {
       for (const src of sources) {
         const rawPath = `raw_sources/${src.id}__${src.filename}`;
@@ -2261,6 +2275,7 @@ export async function registerRoutes(
     archive.append(anchorsProofIndexJson, { name: `${bundleDir}/anchors_proof_index.json` });
     archive.append(auditSummaryJson, { name: `${bundleDir}/audit_summary.json` });
     archive.append(packetProofIndexJson, { name: `${bundleDir}/packet_proof_index.json` });
+    archive.append(snapshotProofIndexJson, { name: `${bundleDir}/snapshot_proof_index.json` });
     
     await archive.finalize();
   }));
