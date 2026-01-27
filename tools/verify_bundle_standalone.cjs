@@ -60,6 +60,8 @@ async function verifyBundle(zipReader, strict = true) {
     anchors_index_ok: null,
     anchors_index_checked: 0,
     anchors_index_mismatches: [],
+    audit_summary_ok: null,
+    audit_summary_issues: [],
   };
 
   const entries = await zipReader.getEntries();
@@ -252,13 +254,107 @@ async function verifyBundle(zipReader, strict = true) {
     }
   }
 
+  const auditSummaryEntry = entryMap.get("audit_summary.json");
+  if (!auditSummaryEntry) {
+    result.audit_summary_ok = null;
+    result.audit_summary_issues = ["audit_summary.json not present; skipping"];
+  } else {
+    try {
+      const auditData = await auditSummaryEntry.getData();
+      const audit = JSON.parse(auditData.toString("utf8"));
+      
+      const requiredKeys = ["corpus_id", "sources", "pages", "anchors", "claims", "snapshots", "packets", "ledger_events", "extractor"];
+      const auditKeys = Object.keys(audit);
+      const hasAllKeys = requiredKeys.every(k => auditKeys.includes(k));
+      const hasNoExtras = auditKeys.every(k => requiredKeys.includes(k));
+      
+      if (!hasAllKeys || !hasNoExtras) {
+        result.audit_summary_issues.push("AUDIT_SUMMARY_KEYS_INVALID");
+      }
+      
+      const hasPagesInBundle = Array.from(entryMap.keys()).some(p => p.startsWith("pages/") && p.endsWith(".json"));
+      
+      if (hasPagesInBundle) {
+        if (audit.extractor?.name !== "pdfjs-text-v1" || audit.extractor?.version !== "1.0.0") {
+          result.audit_summary_issues.push("AUDIT_SUMMARY_EXTRACTOR_INVALID");
+        }
+      } else {
+        if (audit.extractor?.name !== null || audit.extractor?.version !== null) {
+          result.audit_summary_issues.push("AUDIT_SUMMARY_EXTRACTOR_INVALID");
+        }
+      }
+      
+      const isNonNegInt = (v) => typeof v === "number" && Number.isInteger(v) && v >= 0;
+      let countsValid = true;
+      
+      if (!isNonNegInt(audit.sources?.count)) countsValid = false;
+      if (!isNonNegInt(audit.pages?.count)) countsValid = false;
+      if (!isNonNegInt(audit.anchors?.count)) countsValid = false;
+      if (!isNonNegInt(audit.claims?.count)) countsValid = false;
+      if (!isNonNegInt(audit.snapshots?.count)) countsValid = false;
+      if (!isNonNegInt(audit.packets?.count)) countsValid = false;
+      if (!isNonNegInt(audit.ledger_events?.count)) countsValid = false;
+      
+      if (audit.sources?.by_role) {
+        for (const v of Object.values(audit.sources.by_role)) {
+          if (!isNonNegInt(v)) countsValid = false;
+        }
+      }
+      if (audit.anchors?.by_source_id) {
+        for (const v of Object.values(audit.anchors.by_source_id)) {
+          if (!isNonNegInt(v)) countsValid = false;
+        }
+      }
+      if (audit.claims?.by_classification) {
+        for (const v of Object.values(audit.claims.by_classification)) {
+          if (!isNonNegInt(v)) countsValid = false;
+        }
+      }
+      if (audit.ledger_events?.by_type) {
+        for (const v of Object.values(audit.ledger_events.by_type)) {
+          if (!isNonNegInt(v)) countsValid = false;
+        }
+      }
+      
+      if (!countsValid) {
+        result.audit_summary_issues.push("AUDIT_SUMMARY_COUNTS_INVALID");
+      }
+      
+      let structureValid = true;
+      if (typeof audit.sources?.by_role !== "object" || audit.sources?.by_role === null) structureValid = false;
+      if (typeof audit.anchors?.by_source_id !== "object" || audit.anchors?.by_source_id === null) structureValid = false;
+      if (typeof audit.claims?.by_classification !== "object" || audit.claims?.by_classification === null) structureValid = false;
+      if (typeof audit.ledger_events?.by_type !== "object" || audit.ledger_events?.by_type === null) structureValid = false;
+      
+      if (!structureValid) {
+        result.audit_summary_issues.push("AUDIT_SUMMARY_STRUCTURE_INVALID");
+      }
+      
+      const sumValues = (obj) => Object.values(obj || {}).reduce((a, b) => a + b, 0);
+      
+      if (audit.sources?.count !== sumValues(audit.sources?.by_role)) {
+        result.audit_summary_issues.push("AUDIT_SUMMARY_SUM_MISMATCH");
+      } else if (audit.anchors?.count !== sumValues(audit.anchors?.by_source_id)) {
+        result.audit_summary_issues.push("AUDIT_SUMMARY_SUM_MISMATCH");
+      } else if (audit.claims?.count !== sumValues(audit.claims?.by_classification)) {
+        result.audit_summary_issues.push("AUDIT_SUMMARY_SUM_MISMATCH");
+      }
+      
+      result.audit_summary_ok = result.audit_summary_issues.length === 0;
+    } catch (e) {
+      result.audit_summary_ok = false;
+      result.audit_summary_issues.push(`Failed to parse: ${e}`);
+    }
+  }
+
   result.bundle_ok =
     result.manifest_ok &&
     result.manifest_hash_match &&
     result.files_ok &&
     result.raw_sources_ok &&
     result.extra_files.length === 0 &&
-    (result.anchors_index_ok === null || result.anchors_index_ok === true);
+    (result.anchors_index_ok === null || result.anchors_index_ok === true) &&
+    (result.audit_summary_ok === null || result.audit_summary_ok === true);
 
   return result;
 }

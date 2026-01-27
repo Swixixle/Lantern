@@ -1,0 +1,160 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.16 is **accepted as complete and compliant** based on your evidence packet:
+
+* `audit_summary.json` present at bundle root with required sections ✅
+* MANIFEST includes `audit_summary.json` with sha256 ✅
+* Determinism verified (sha256 identical across exports) ✅
+* Key ordering constraints appear satisfied in the provided JSON ✅
+
+---
+
+# v1.17 — Verifier Enhancement (audit_summary.json validation)
+
+## 0) Goal (scope-locked)
+
+Extend the v1.8/v1.15 bundle verifier to validate `audit_summary.json` if present.
+
+No new bundle content. Only verification.
+
+---
+
+## 1) Output schema additions (extend, do not remove)
+
+Add:
+
+```json
+{
+  "audit_summary_ok": true,
+  "audit_summary_issues": []
+}
+```
+
+If `audit_summary.json` missing:
+
+* `audit_summary_ok: null`
+* `audit_summary_issues: ["audit_summary.json not present; skipping"]`
+
+If present and any check fails:
+
+* `audit_summary_ok: false`
+* `bundle_ok` must be false
+* `audit_summary_issues` lists exact issue codes (strings) from §2.
+
+---
+
+## 2) Verification rules (exact)
+
+If `audit_summary.json` exists:
+
+### A) Required top-level keys present (exact set)
+
+Must contain exactly these keys (no extras):
+
+* `corpus_id`
+* `sources`
+* `pages`
+* `anchors`
+* `claims`
+* `snapshots`
+* `packets`
+* `ledger_events`
+* `extractor`
+
+Issue code if fail:
+
+* `AUDIT_SUMMARY_KEYS_INVALID`
+
+### B) Extractor rule
+
+* If any `pages/<source_id>/page-<n>.json` exists in bundle:
+
+  * extractor.name must equal `"pdfjs-text-v1"`
+  * extractor.version must equal `"1.0.0"`
+    Else:
+  * extractor.name must be null
+  * extractor.version must be null
+
+Issue code:
+
+* `AUDIT_SUMMARY_EXTRACTOR_INVALID`
+
+### C) Counts are non-negative integers
+
+Validate these are integers >= 0:
+
+* sources.count
+* pages.count
+* anchors.count
+* claims.count
+* snapshots.count
+* packets.count
+* ledger_events.count
+  All values inside:
+* sources.by_role[*]
+* anchors.by_source_id[*]
+* claims.by_classification[*]
+* ledger_events.by_type[*]
+
+Issue code:
+
+* `AUDIT_SUMMARY_COUNTS_INVALID`
+
+### D) Required subkeys exist
+
+* sources.by_role exists (object)
+* anchors.by_source_id exists (object)
+* claims.by_classification exists (object)
+* ledger_events.by_type exists (object)
+
+Issue code:
+
+* `AUDIT_SUMMARY_STRUCTURE_INVALID`
+
+### E) Cross-check minimal internal consistency (no inference)
+
+* sources.count must equal sum of sources.by_role values
+* anchors.count must equal sum of anchors.by_source_id values
+* claims.count must equal sum of claims.by_classification values
+
+Issue code:
+
+* `AUDIT_SUMMARY_SUM_MISMATCH`
+
+Do **not** validate ledger_events.count against by_type sum (event types may be partial). Only validate that by_type values are valid integers.
+
+---
+
+## 3) Acceptance tests
+
+1. Valid bundle with audit_summary.json → `audit_summary_ok: true` and bundle_ok unchanged.
+2. Remove audit_summary.json → `audit_summary_ok: null` and note present.
+3. Tamper sources.count so it doesn’t equal by_role sum → `audit_summary_ok: false` with `AUDIT_SUMMARY_SUM_MISMATCH` and bundle_ok false.
+4. If pages/ exists but extractor null → `audit_summary_ok: false` with `AUDIT_SUMMARY_EXTRACTOR_INVALID`.
+
+---
+
+## 4) What to send me when complete
+
+* Verifier output JSON for a valid bundle (audit_summary_ok=true)
+* Verifier output JSON for one failing case (SUM_MISMATCH or EXTRACTOR_INVALID)
+
+Proceed exactly to v1.17.
