@@ -1,0 +1,159 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.25 is **accepted as complete and compliant** based on your evidence packet:
+
+* `ledger_proof_index.json` present at bundle root with correct schema ✅
+* MANIFEST includes it with sha256 ✅
+* Determinism verified (sha256 identical across exports) ✅
+* Sample event cross-check matches `ledger.json` on `event_id` and `hash_hex` ✅
+* `hash_alg` is `"SHA-256"` and `hash_hex` appears 64-hex lowercase in entries ✅
+
+---
+
+# v1.26 — Verifier Enhancement (ledger_proof_index.json validation)
+
+## 0) Goal (scope-locked)
+
+Extend the bundle verifier to validate `ledger_proof_index.json` if present.
+
+No new exports. Only verification.
+
+---
+
+## 1) Output schema additions (extend, do not remove)
+
+Add:
+
+```json
+{
+  "ledger_index_ok": true,
+  "ledger_index_checked": 0,
+  "ledger_index_issues": []
+}
+```
+
+If `ledger_proof_index.json` missing:
+
+* `ledger_index_ok: null`
+* `ledger_index_checked: 0`
+* `ledger_index_issues: ["ledger_proof_index.json not present; skipping"]`
+
+If present and any check fails:
+
+* `ledger_index_ok: false`
+* `bundle_ok` must be false
+* `ledger_index_issues` contains issue codes from §2 (strings)
+
+---
+
+## 2) Verification rules (exact)
+
+If `ledger_proof_index.json` exists:
+
+### A) Required top-level keys (exact set)
+
+Must contain exactly:
+
+* `corpus_id`
+* `events`
+
+Issue:
+
+* `LEDGER_INDEX_KEYS_INVALID`
+
+### B) events is array
+
+Issue:
+
+* `LEDGER_INDEX_NOT_ARRAY`
+
+### C) Sorting
+
+Verify `events[]` sorted lexicographically by `event_id`.
+
+Issue:
+
+* `LEDGER_INDEX_NOT_SORTED`
+
+### D) Entry schema + hash validation
+
+For each entry, keys must be exactly:
+
+* `event_id`
+* `occurred_at`
+* `event_type`
+* `entity_type`
+* `entity_id`
+* `hash_alg`
+* `hash_hex`
+
+Validate:
+
+* `hash_alg` must equal `"SHA-256"`
+* `hash_hex` must be 64-hex lowercase
+
+Issues:
+
+* `LEDGER_INDEX_ENTRY_KEYS_INVALID`
+* `LEDGER_INDEX_HASH_INVALID`
+
+### E) Cross-file existence + hash match vs ledger.json
+
+Require `ledger.json` to exist. If missing:
+
+Issue:
+
+* `LEDGER_JSON_MISSING`
+
+If present:
+
+* Parse `ledger.json` and build map by `event_id`
+* For each index entry:
+
+  * Verify `event_id` exists in ledger.json events
+  * Verify `hash_hex` equals ledger.json event `hash_hex`
+
+Issues:
+
+* `LEDGER_INDEX_EVENT_MISSING`
+* `LEDGER_INDEX_HASH_MISMATCH`
+
+Set `ledger_index_checked` = number of index entries processed.
+
+---
+
+## 3) Acceptance tests
+
+1. Valid bundle → `ledger_index_ok:true`, checked=N, bundle_ok true.
+2. Remove ledger.json → `LEDGER_JSON_MISSING`, ledger_index_ok false, bundle_ok false.
+3. Tamper one ledger_proof_index hash_hex → `LEDGER_INDEX_HASH_MISMATCH`, bundle_ok false.
+4. Shuffle ordering → `LEDGER_INDEX_NOT_SORTED`.
+
+---
+
+## 4) What to send me when complete
+
+Return ONLY:
+
+1. Verifier output JSON for valid bundle (ledger_index_ok=true)
+2. Verifier output JSON for failing case (LEDGER_JSON_MISSING or LEDGER_INDEX_HASH_MISMATCH)
+
+Proceed exactly to v1.26.

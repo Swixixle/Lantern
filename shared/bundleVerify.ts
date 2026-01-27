@@ -47,6 +47,9 @@ export interface BundleVerifyResult {
   snapshot_index_ok: boolean | null;
   snapshot_index_checked: number;
   snapshot_index_issues: string[];
+  ledger_index_ok: boolean | null;
+  ledger_index_checked: number;
+  ledger_index_issues: string[];
 }
 
 export function computeManifestHash(manifest: BundleManifest): string {
@@ -110,6 +113,9 @@ export async function verifyBundle(
     snapshot_index_ok: null,
     snapshot_index_checked: 0,
     snapshot_index_issues: [],
+    ledger_index_ok: null,
+    ledger_index_checked: 0,
+    ledger_index_issues: [],
   };
 
   const entries = await zipReader.getEntries();
@@ -530,6 +536,89 @@ export async function verifyBundle(
     }
   }
 
+  // Validate ledger_proof_index.json
+  const ledgerIndexEntry = entries.find((e) => e.path.endsWith("/ledger_proof_index.json"));
+  if (!ledgerIndexEntry) {
+    result.ledger_index_ok = null;
+    result.ledger_index_issues = ["ledger_proof_index.json not present; skipping"];
+  } else {
+    try {
+      const ledgerIndexContent = await zipReader.readText(ledgerIndexEntry);
+      const ledgerIndex = JSON.parse(ledgerIndexContent);
+      
+      // A) Required top-level keys (exact set)
+      const ledgerIndexKeys = Object.keys(ledgerIndex).sort();
+      if (ledgerIndexKeys.length !== 2 || ledgerIndexKeys[0] !== "corpus_id" || ledgerIndexKeys[1] !== "events") {
+        result.ledger_index_issues.push("LEDGER_INDEX_KEYS_INVALID");
+      } else if (!Array.isArray(ledgerIndex.events)) {
+        // B) events is array
+        result.ledger_index_issues.push("LEDGER_INDEX_NOT_ARRAY");
+      } else {
+        // C) Sorting
+        for (let i = 1; i < ledgerIndex.events.length; i++) {
+          if (ledgerIndex.events[i].event_id.localeCompare(ledgerIndex.events[i - 1].event_id) < 0) {
+            result.ledger_index_issues.push("LEDGER_INDEX_NOT_SORTED");
+            break;
+          }
+        }
+        
+        // Find ledger.json for cross-reference
+        const ledgerJsonEntry = entries.find((e) => e.path.endsWith("/ledger.json"));
+        let ledgerEventsMap: Map<string, any> | null = null;
+        
+        if (!ledgerJsonEntry) {
+          result.ledger_index_issues.push("LEDGER_JSON_MISSING");
+        } else {
+          const ledgerJsonContent = await zipReader.readText(ledgerJsonEntry);
+          const ledgerJson = JSON.parse(ledgerJsonContent);
+          ledgerEventsMap = new Map();
+          for (const ev of ledgerJson.events || []) {
+            ledgerEventsMap.set(ev.event_id, ev);
+          }
+        }
+        
+        // D) Entry schema + hash validation + E) Cross-file existence + hash match
+        const requiredEntryKeys = ["entity_id", "entity_type", "event_id", "event_type", "hash_alg", "hash_hex", "occurred_at"];
+        
+        for (const entry of ledgerIndex.events) {
+          result.ledger_index_checked++;
+          
+          const entryKeys = Object.keys(entry).sort();
+          if (entryKeys.length !== 7 || !requiredEntryKeys.every((k, i) => entryKeys[i] === k)) {
+            if (!result.ledger_index_issues.includes("LEDGER_INDEX_ENTRY_KEYS_INVALID")) {
+              result.ledger_index_issues.push("LEDGER_INDEX_ENTRY_KEYS_INVALID");
+            }
+          }
+          
+          if (entry.hash_alg !== "SHA-256" || !/^[0-9a-f]{64}$/.test(entry.hash_hex)) {
+            if (!result.ledger_index_issues.includes("LEDGER_INDEX_HASH_INVALID")) {
+              result.ledger_index_issues.push("LEDGER_INDEX_HASH_INVALID");
+            }
+          }
+          
+          // E) Cross-file checks
+          if (ledgerEventsMap) {
+            const ledgerEvent = ledgerEventsMap.get(entry.event_id);
+            if (!ledgerEvent) {
+              if (!result.ledger_index_issues.includes("LEDGER_INDEX_EVENT_MISSING")) {
+                result.ledger_index_issues.push("LEDGER_INDEX_EVENT_MISSING");
+              }
+            } else if (ledgerEvent.hash_hex !== entry.hash_hex) {
+              if (!result.ledger_index_issues.includes("LEDGER_INDEX_HASH_MISMATCH")) {
+                result.ledger_index_issues.push("LEDGER_INDEX_HASH_MISMATCH");
+              }
+            }
+          }
+        }
+      }
+      
+      result.ledger_index_ok = result.ledger_index_issues.length === 0;
+    } catch (e) {
+      result.ledger_index_ok = false;
+      result.ledger_index_issues.push(`Failed to parse: ${e}`);
+    }
+  }
+
   result.bundle_ok =
     result.manifest_ok &&
     result.manifest_hash_match &&
@@ -539,7 +628,8 @@ export async function verifyBundle(
     (result.anchors_index_ok === null || result.anchors_index_ok === true) &&
     (result.audit_summary_ok === null || result.audit_summary_ok === true) &&
     (result.packet_index_ok === null || result.packet_index_ok === true) &&
-    (result.snapshot_index_ok === null || result.snapshot_index_ok === true);
+    (result.snapshot_index_ok === null || result.snapshot_index_ok === true) &&
+    (result.ledger_index_ok === null || result.ledger_index_ok === true);
 
   return result;
 }
