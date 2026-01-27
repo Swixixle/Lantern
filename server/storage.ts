@@ -86,6 +86,7 @@ export interface IStorage {
   // Evidence Packets
   createEvidencePacket(data: InsertEvidencePacket): Promise<EvidencePacket>;
   getEvidencePacket(id: string): Promise<EvidencePacket | undefined>;
+  listEvidencePacketsByCorpus(corpusId: string): Promise<EvidencePacket[]>;
   getAnchorRecordsByIds(ids: string[]): Promise<AnchorRecord[]>;
   
   // Ledger Events (append-only)
@@ -393,6 +394,12 @@ export class DatabaseStorage implements IStorage {
       .where(eq(evidencePackets.id, id))
       .limit(1);
     return result[0];
+  }
+
+  async listEvidencePacketsByCorpus(corpusId: string): Promise<EvidencePacket[]> {
+    return db.select().from(evidencePackets)
+      .where(eq(evidencePackets.corpusId, corpusId))
+      .orderBy(evidencePackets.createdAt);
   }
 
   async getAnchorRecordsByIds(ids: string[]): Promise<AnchorRecord[]> {

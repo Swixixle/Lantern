@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2 } from "lucide-react";
+import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2, Download } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { CORPUS_PURPOSES, SYSTEM_LIMITATIONS, type CorpusPurpose, type CorpusSource } from "@/lib/schema/corpus";
 
 interface BuildResult {
@@ -30,6 +31,8 @@ export default function Intake() {
   
   const [building, setBuilding] = useState(false);
   const [buildResult, setBuildResult] = useState<BuildResult | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [includeRawSources, setIncludeRawSources] = useState(false);
   
   const primaryInputRef = useRef<HTMLInputElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
@@ -142,6 +145,35 @@ export default function Intake() {
   };
 
   const hasAnySources = primarySources.length > 0 || secondarySources.length > 0;
+
+  const handleExportBundle = async () => {
+    if (!corpusId) return;
+    
+    setExporting(true);
+    setError(null);
+    
+    try {
+      const url = `/api/corpus/${corpusId}/export_bundle${includeRawSources ? "?include_raw_sources=true" : ""}`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to export bundle");
+      }
+      
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = `lantern-corpus-${corpusId}.zip`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground font-sans">
@@ -345,6 +377,34 @@ export default function Intake() {
                   <CheckCircle className="w-4 h-4 mr-2" />
                   Enter Claim Space
                 </Button>
+                
+                <div className="border-t border-border pt-4 mt-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="include-raw-sources"
+                      checked={includeRawSources}
+                      onCheckedChange={(checked) => setIncludeRawSources(checked === true)}
+                      data-testid="checkbox-include-raw-sources"
+                    />
+                    <label htmlFor="include-raw-sources" className="text-sm text-muted-foreground">
+                      Include raw sources (PDFs)
+                    </label>
+                  </div>
+                  <Button
+                    onClick={handleExportBundle}
+                    disabled={exporting}
+                    variant="outline"
+                    className="w-full"
+                    data-testid="button-export-bundle"
+                  >
+                    {exporting ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    Export Corpus Bundle (ZIP)
+                  </Button>
+                </div>
               </div>
             )}
           </>

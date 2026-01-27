@@ -52,11 +52,12 @@ function computeSnapshotHash(corpusId: string, claims: z.infer<typeof claimSchem
   const canonical = canonicalizeForHash(corpusId, claims);
   return createHash("sha256").update(canonical, "utf8").digest("hex");
 }
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, writeFile, readFile } from "fs/promises";
 import { join, extname } from "path";
 import multer from "multer";
 import PDFParser from "pdf2json";
 import { startJobProcessor } from "./extractionProcessor";
+import archiver from "archiver";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -1688,6 +1689,172 @@ export async function registerRoutes(
       stored_hash_hex: event.hashHex,
       recomputed_hash_hex: recomputedHashHex
     });
+  }));
+
+  // === EXPORT BUNDLE API ===
+  
+  app.get("/api/corpus/:corpusId/export_bundle", asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    const includeRawSources = req.query.include_raw_sources === "true";
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const ledgerEvents = await storage.listLedgerEvents(corpusId, { limit: 501 });
+    if (ledgerEvents.length > 500) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "Ledger exceeds export limit; increase limit support before exporting."
+      });
+    }
+    
+    const sources = await storage.listCorpusSources(corpusId);
+    const snapshotsList = await storage.listSnapshotsByCorpus(corpusId);
+    const packetsList = await storage.listEvidencePacketsByCorpus(corpusId);
+    
+    const bundleDir = `lantern-corpus-${corpusId}`;
+    const files: { path: string; sha256_hex: string }[] = [];
+    
+    const corpusJson = JSON.stringify({
+      corpus_id: corpus.id,
+      created_at: corpus.createdAt,
+      purpose: corpus.purpose
+    });
+    
+    const sourcesJson = JSON.stringify({
+      corpus_id: corpusId,
+      sources: sources.map(s => ({
+        source_id: s.id,
+        corpus_id: s.corpusId,
+        role: s.role,
+        filename: s.filename,
+        uploaded_at: s.uploadedAt,
+        sha256_hex: s.sha256Hex
+      }))
+    });
+    
+    const ledgerJson = JSON.stringify({
+      corpus_id: corpusId,
+      events: ledgerEvents.map(e => ({
+        event_id: e.id,
+        occurred_at: e.occurredAt.toISOString(),
+        corpus_id: e.corpusId,
+        event_type: e.eventType,
+        entity: {
+          entity_type: e.entityType,
+          entity_id: e.entityId
+        },
+        payload: JSON.parse(e.payloadJson),
+        hash_alg: e.hashAlg,
+        hash_hex: e.hashHex
+      }))
+    });
+    
+    files.push({ path: "corpus.json", sha256_hex: createHash("sha256").update(corpusJson).digest("hex") });
+    files.push({ path: "ledger.json", sha256_hex: createHash("sha256").update(ledgerJson).digest("hex") });
+    files.push({ path: "sources.json", sha256_hex: createHash("sha256").update(sourcesJson).digest("hex") });
+    
+    const snapshotContents: { id: string; json: string }[] = [];
+    for (const snap of snapshotsList) {
+      const snapData = JSON.parse(snap.snapshotJson);
+      const snapScope = snap.snapshotScopeJson ? JSON.parse(snap.snapshotScopeJson) : null;
+      const snapJson = JSON.stringify({
+        snapshot_id: snap.id,
+        created_at: snap.createdAt,
+        corpus_id: snap.corpusId,
+        hash_alg: snap.hashAlg,
+        hash_hex: snap.hashHex,
+        claims: snapData.claims,
+        snapshot_scope: snapScope
+      });
+      snapshotContents.push({ id: snap.id, json: snapJson });
+      files.push({ path: `snapshots/${snap.id}.json`, sha256_hex: createHash("sha256").update(snapJson).digest("hex") });
+    }
+    
+    const packetContents: { id: string; json: string }[] = [];
+    for (const pkt of packetsList) {
+      const pktJson = JSON.stringify({
+        packet_id: pkt.id,
+        created_at: pkt.createdAt,
+        ...JSON.parse(pkt.packetJson)
+      });
+      packetContents.push({ id: pkt.id, json: pktJson });
+      files.push({ path: `packets/${pkt.id}.json`, sha256_hex: createHash("sha256").update(pktJson).digest("hex") });
+    }
+    
+    if (includeRawSources) {
+      for (const src of sources) {
+        const rawPath = `raw_sources/${src.id}__${src.filename}`;
+        files.push({ path: rawPath, sha256_hex: src.sha256Hex });
+      }
+    }
+    
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    
+    const manifestWithoutHash = {
+      bundle_format: "lantern-corpus-bundle-v1",
+      corpus_id: corpusId,
+      include_raw_sources: includeRawSources,
+      files: files,
+      manifest_hash_alg: "SHA-256"
+    };
+    const manifestCanonical = JSON.stringify(manifestWithoutHash);
+    const manifestHashHex = createHash("sha256").update(manifestCanonical).digest("hex");
+    
+    const manifest = {
+      bundle_format: "lantern-corpus-bundle-v1",
+      corpus_id: corpusId,
+      generated_at: new Date().toISOString(),
+      include_raw_sources: includeRawSources,
+      files: files,
+      manifest_hash_alg: "SHA-256",
+      manifest_hash_hex: manifestHashHex
+    };
+    
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="lantern-corpus-${corpusId}.zip"`);
+    
+    const archive = archiver("zip", { zlib: { level: 9 } });
+    archive.on("error", (err) => {
+      throw err;
+    });
+    archive.pipe(res);
+    
+    const sortedPaths = [
+      "MANIFEST.json",
+      "corpus.json",
+      "ledger.json",
+      "sources.json",
+      ...snapshotContents.map(s => `snapshots/${s.id}.json`).sort(),
+      ...packetContents.map(p => `packets/${p.id}.json`).sort()
+    ];
+    
+    if (includeRawSources) {
+      for (const src of sources) {
+        sortedPaths.push(`raw_sources/${src.id}__${src.filename}`);
+      }
+      sortedPaths.sort();
+    }
+    
+    archive.append(JSON.stringify(manifest, null, 2), { name: `${bundleDir}/MANIFEST.json` });
+    archive.append(corpusJson, { name: `${bundleDir}/corpus.json` });
+    archive.append(ledgerJson, { name: `${bundleDir}/ledger.json` });
+    archive.append(sourcesJson, { name: `${bundleDir}/sources.json` });
+    
+    for (const snap of snapshotContents) {
+      archive.append(snap.json, { name: `${bundleDir}/snapshots/${snap.id}.json` });
+    }
+    
+    for (const pkt of packetContents) {
+      archive.append(pkt.json, { name: `${bundleDir}/packets/${pkt.id}.json` });
+    }
+    
+    await archive.finalize();
   }));
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
