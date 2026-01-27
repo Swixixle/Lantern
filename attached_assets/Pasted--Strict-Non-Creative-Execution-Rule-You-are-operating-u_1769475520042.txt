@@ -1,0 +1,90 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+I cannot see your UI. I can only confirm what you show me (screenshots) or what you can prove deterministically (DOM checks / exact outputs). So I **cannot confirm** the Sources table or read-only nav visually from your message alone.
+
+### Deterministic confirmation (no screenshots required)
+
+Run these in the browser DevTools console while on the Sources page and paste the outputs.
+
+#### 1) Confirm Review Mode banner exists
+
+```js
+[...document.querySelectorAll("[data-testid='banner-review-mode']")]
+  .map(el => el.textContent.trim());
+```
+
+Pass condition: array contains `"Review Mode (Read-Only)"` (may include icon text; but must include the exact phrase).
+
+#### 2) Confirm read-only nav links exist with exact labels and hrefs
+
+If you added testids, use them. If not, this checks by link text:
+
+```js
+const links = [...document.querySelectorAll("a")]
+  .map(a => ({ text: a.textContent.trim(), href: a.getAttribute("href") }))
+  .filter(x => ["Claim Space","Sources","Anchors","Ledger","Snapshots"].includes(x.text));
+
+links;
+```
+
+Pass condition: list contains 5 entries with hrefs exactly:
+
+* `/?corpusId=<id>`
+* `/sources?corpusId=<id>`
+* `/anchors/browse?corpusId=<id>`
+* `/ledger?corpusId=<id>`
+* `/snapshots?corpusId=<id>`
+
+#### 3) Confirm Sources table columns exist
+
+This checks table header text:
+
+```js
+[...document.querySelectorAll("table thead th")]
+  .map(th => th.textContent.trim());
+```
+
+Pass condition: contains at least these headers (exact text depends on your implementation, but must correspond to):
+`role, filename, sha256_hex, uploaded_at, source_id`
+
+#### 4) Confirm no write buttons are present
+
+```js
+const forbidden = ["Create Corpus","Upload Primary","Upload Secondary","Build Anchors","Save Snapshot","Generate Evidence Packet"];
+forbidden.map(t => ({ t, present: [...document.querySelectorAll("button,a")].some(el => el.textContent.trim()===t) }));
+```
+
+Pass condition: every `present` is false.
+
+---
+
+### If you want me to confirm “yes” directly
+
+Upload **two screenshots**:
+
+1. The Sources page showing the table and at least one row
+2. The top nav showing the five links
+
+With either the screenshot set or the console outputs above, I can confirm v1.12 UI requirements were met.
