@@ -1,0 +1,119 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+v1.11 is **accepted as complete and compliant** based on your required outputs:
+
+* `/api/config` returns `public_readonly: true` ✅
+* Unauthenticated GET to an allowed endpoint returns 200 ✅
+* Unauthenticated POST to a protected endpoint returns 401 with exact AUTH_ERROR shape ✅
+* Banner rendering uses exact text “Review Mode (Read-Only)” ✅
+* Write actions are gated behind `!isReadOnly` across intake/claim-space/snapshots ✅
+
+Next specification is **v1.12 — Public Review Link (Read-only corpus deep link + minimal routing)**.
+
+# v1.12 — Public Review Link (Read-only Deep Link)
+
+## 0) Goal (scope-locked)
+
+When `LANTERN_PUBLIC_READONLY=true`, enable a reviewer to open a single URL and land directly on a corpus’s Claim Space, with navigation to:
+
+* Sources
+* Anchors browser
+* Ledger
+* Snapshots list
+* Packets view (by packet id if shared)
+
+No writes. No auth.
+
+---
+
+## 1) New route (client)
+
+Add:
+`/review/:corpus_id`
+
+Behavior:
+
+* On load, navigate internally to Claim Space with that corpus id:
+
+  * `/?corpusId=<corpus_id>`
+* Must preserve review context (i.e., do not require API key input).
+
+No additional UI beyond redirect/routing.
+
+---
+
+## 2) Read-only navigation bar (client)
+
+When `isReadOnly=true`, show a simple nav (top or side) with exact links:
+
+* Claim Space → `/?corpusId=<id>`
+* Sources → `/sources?corpusId=<id>`
+* Anchors → `/anchors/browse?corpusId=<id>`
+* Ledger → `/ledger?corpusId=<id>`
+* Snapshots → `/snapshots?corpusId=<id>`
+
+No other items.
+
+If `isReadOnly=false`, do not show this nav (unchanged behavior).
+
+---
+
+## 3) New Sources page (client) — read-only
+
+Route:
+`/sources?corpusId=<id>`
+
+Calls:
+`GET /api/corpus/:corpus_id/sources`
+
+Displays table:
+
+* role
+* filename
+* sha256_hex
+* uploaded_at
+* source_id
+
+No upload controls on this page (ever).
+
+---
+
+## 4) Acceptance tests
+
+1. With `public_readonly=true`, open `/review/<corpus_id>` with no auth → lands on Claim Space for that corpus.
+2. Read-only nav is visible and links resolve.
+3. Sources page loads and displays sources via unauthenticated GET.
+4. No write controls appear anywhere in review mode.
+
+---
+
+## 5) What to send me when complete
+
+* The `/review/<id>` URL you tested (path only is fine)
+* One unauthenticated GET response from `/api/corpus/:id/sources`
+* Screenshot of Sources page showing table
+* Screenshot of nav visible in read-only mode
+
+Proceed exactly to v1.12.

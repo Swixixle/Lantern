@@ -22,13 +22,63 @@ import Intake from "@/pages/intake";
 import AnchorBrowser from "@/pages/anchor-browser";
 import EvidencePacket from "@/pages/evidence-packet";
 import Ledger from "@/pages/ledger";
+import Sources from "@/pages/sources";
+import Review from "@/pages/review";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
-import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp, ScrollText, Eye } from "lucide-react";
+import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp, ScrollText, Eye, FileText, Anchor } from "lucide-react";
+import { useSearch } from "wouter";
+
+function ReadOnlyNav({ corpusId }: { corpusId: string | null }) {
+  if (!corpusId) return null;
+  
+  return (
+    <nav 
+      className="fixed top-10 left-0 right-0 z-30 bg-background/95 backdrop-blur border-b border-border py-2 px-4 print:hidden"
+      data-testid="readonly-nav"
+    >
+      <div className="max-w-4xl mx-auto flex items-center gap-4 text-sm">
+        <Link href={`/?corpusId=${corpusId}`}>
+          <Button variant="ghost" size="sm" className="text-xs">
+            <Layers className="w-3 h-3 mr-1" />
+            Claim Space
+          </Button>
+        </Link>
+        <Link href={`/sources?corpusId=${corpusId}`}>
+          <Button variant="ghost" size="sm" className="text-xs">
+            <FileText className="w-3 h-3 mr-1" />
+            Sources
+          </Button>
+        </Link>
+        <Link href={`/anchors/browse?corpusId=${corpusId}`}>
+          <Button variant="ghost" size="sm" className="text-xs">
+            <Anchor className="w-3 h-3 mr-1" />
+            Anchors
+          </Button>
+        </Link>
+        <Link href={`/ledger?corpusId=${corpusId}`}>
+          <Button variant="ghost" size="sm" className="text-xs">
+            <ScrollText className="w-3 h-3 mr-1" />
+            Ledger
+          </Button>
+        </Link>
+        <Link href={`/snapshots?corpusId=${corpusId}`}>
+          <Button variant="ghost" size="sm" className="text-xs">
+            <Camera className="w-3 h-3 mr-1" />
+            Snapshots
+          </Button>
+        </Link>
+      </div>
+    </nav>
+  );
+}
 
 function Router() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { isReadOnly } = useReadOnlyMode();
+  const searchString = useSearch();
+  const params = new URLSearchParams(searchString);
+  const corpusIdFromQuery = params.get("corpusId");
 
   return (
     <div className="relative">
@@ -43,19 +93,24 @@ function Router() {
         </div>
       )}
       
-      {/* Hamburger Menu Button */}
-      <button 
-        onClick={() => setMenuOpen(!menuOpen)}
-        className={`fixed ${isReadOnly ? 'top-14' : 'top-4'} right-4 z-50 p-2 bg-background/80 backdrop-blur border border-border/50 rounded-lg print:hidden`}
-        aria-label="Menu"
-        data-testid="button-menu"
-      >
-        {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-      </button>
+      {/* v1.12 Read-Only Navigation */}
+      {isReadOnly && <ReadOnlyNav corpusId={corpusIdFromQuery} />}
+      
+      {/* Hamburger Menu Button - hidden in read-only mode */}
+      {!isReadOnly && (
+        <button 
+          onClick={() => setMenuOpen(!menuOpen)}
+          className="fixed top-4 right-4 z-50 p-2 bg-background/80 backdrop-blur border border-border/50 rounded-lg print:hidden"
+          aria-label="Menu"
+          data-testid="button-menu"
+        >
+          {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+      )}
 
-      {/* Menu Panel */}
-      {menuOpen && (
-        <div className={`fixed ${isReadOnly ? 'top-24' : 'top-16'} right-4 z-50 bg-background border border-border rounded-lg shadow-lg p-2 min-w-[200px] print:hidden`}>
+      {/* Menu Panel - hidden in read-only mode */}
+      {menuOpen && !isReadOnly && (
+        <div className="fixed top-16 right-4 z-50 bg-background border border-border rounded-lg shadow-lg p-2 min-w-[200px] print:hidden">
           <nav className="flex flex-col gap-1">
             <Link href="/intake" onClick={() => setMenuOpen(false)}>
               <Button variant="ghost" size="sm" className="w-full justify-start text-sm">
@@ -123,8 +178,10 @@ function Router() {
       )}
 
       <Switch>
+        <Route path="/review/:corpusId" component={Review} />
         <Route path="/intake" component={Intake} />
         <Route path="/" component={ClaimSpace} />
+        <Route path="/sources" component={Sources} />
         <Route path="/anchors/browse" component={AnchorBrowser} />
         <Route path="/packets/:packetId" component={EvidencePacket} />
         <Route path="/ledger" component={Ledger} />
