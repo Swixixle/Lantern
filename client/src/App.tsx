@@ -26,6 +26,7 @@ import Sources from "@/pages/sources";
 import Review from "@/pages/review";
 import AnchorProof from "@/pages/anchor-proof";
 import ReviewBundle from "@/pages/review-bundle";
+import ReviewAuditLines from "@/pages/review-audit-lines";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
 import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp, ScrollText, Eye, FileText, Anchor } from "lucide-react";
@@ -181,6 +182,7 @@ function Router() {
 
       <Switch>
         <Route path="/review/:corpusId/bundle" component={ReviewBundle} />
+        <Route path="/review/:corpusId/audit_lines" component={ReviewAuditLines} />
         <Route path="/review/:corpusId" component={Review} />
         <Route path="/intake" component={Intake} />
         <Route path="/" component={ClaimSpace} />

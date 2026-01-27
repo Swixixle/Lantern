@@ -23,7 +23,8 @@ export default function Review() {
     { label: "Anchors", href: `/anchors/browse?corpusId=${corpusId}` },
     { label: "Ledger", href: `/ledger?corpusId=${corpusId}` },
     { label: "Snapshots", href: `/snapshots?corpusId=${corpusId}` },
-    { label: "Download Bundle", href: `/review/${corpusId}/bundle` }
+    { label: "Download Bundle", href: `/review/${corpusId}/bundle` },
+    { label: "Audit Lines", href: `/review/${corpusId}/audit_lines` }
   ];
 
   return (

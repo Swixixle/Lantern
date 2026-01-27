@@ -1,0 +1,105 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.27 is **accepted as complete and compliant** based on your evidence packet:
+
+* Both outputs include the full required key set ✅
+* Optional index `*_ok` fields are `true` when present and `null` when absent ✅
+* Counters/arrays default correctly with no “skipping” notes ✅
+* Key order asserted as exact ✅
+
+---
+
+# v1.28 — Review Mode: Deterministic “Audit Line” Export (Corpus-Level)
+
+## 0) Goal (scope-locked)
+
+Add a deterministic corpus-level plaintext export that lists one line per **anchor** in the corpus in a stable format for external audit.
+
+No inference. Only stored fields already present in anchor proof / provenance.
+
+---
+
+## 1) Server endpoint (public-readonly aware)
+
+Add:
+
+`GET /api/review/:corpusId/audit_lines`
+
+Rules:
+
+* If `public_readonly=false`: return 401 AUTH_ERROR with `{"type":"AUTH_ERROR","message":"Unauthorized"}`
+* If `public_readonly=true`: return 200 `text/plain; charset=utf-8`
+
+Body: newline-separated lines, each line formatted exactly:
+
+```
+<anchor_id>|<source_id>|<page_index>|<quote_start_char>|<quote_end_char>|<page_text_sha256_hex>|<substring_sha256_hex>
+```
+
+Where:
+
+* All fields come from stored data:
+
+  * `anchor_id` from anchor.id
+  * `source_id`, `page_index`, `quote_start_char`, `quote_end_char` from anchor.provenance
+  * `page_text_sha256_hex` from `pdf_pages` for (source_id,page_index)
+  * `substring_sha256_hex` must equal sha256 of the exact substring defined by [quote_start_char, quote_end_char] from the stored page text (same substring used by anchor proof repro)
+* Include **only anchors that have provenance.extractor.name === "pdfjs-text-v1"**
+* Sort lines lexicographically by `anchor_id` (string compare)
+* Final output must end with a single trailing newline `\n`
+
+---
+
+## 2) Client route (read-only)
+
+Add:
+
+`/review/:corpusId/audit_lines`
+
+Page shows:
+
+* Title: `Audit Lines`
+* Corpus ID displayed
+* One button: `Download audit_lines.txt`
+
+  * links to `/api/review/:corpusId/audit_lines`
+* No other UI
+
+---
+
+## 3) Acceptance tests
+
+1. public_readonly=true: GET returns text/plain with N lines for eligible anchors, sorted by anchor_id, trailing newline present.
+2. public_readonly=false: GET returns 401 Unauthorized payload exactly.
+3. For one anchor, computed substring sha256 matches the last field in its line.
+4. `/review/:corpusId/audit_lines` route loads and download link points to correct endpoint.
+
+---
+
+## 4) What to send me when complete
+
+Return ONLY:
+
+1. First 3 lines of the audit_lines response (verbatim)
+2. One 401 JSON body for public_readonly=false (exact)
+3. One cross-check: show an anchor’s proof endpoint `repro.substring_sha256_hex` and the matching audit line last field are identical
+
+Proceed exactly to v1.28.

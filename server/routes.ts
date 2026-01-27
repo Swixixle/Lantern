@@ -587,6 +587,67 @@ export async function registerRoutes(
     await archive.finalize();
   }));
 
+  // v1.28 Audit Lines endpoint
+  app.get("/api/review/:corpusId/audit_lines", asyncHandler(async (req, res) => {
+    const isPublicReadOnly = process.env.LANTERN_PUBLIC_READONLY === "true";
+    
+    if (!isPublicReadOnly) {
+      return res.status(401).json({
+        type: "AUTH_ERROR",
+        message: "Unauthorized"
+      });
+    }
+    
+    const corpusId = req.params.corpusId as string;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const anchors = await storage.listAnchorRecordsByCorpusFiltered(corpusId);
+    
+    // Filter to only anchors with provenance.extractor.name === "pdfjs-text-v1"
+    const eligibleAnchors = anchors.filter(a => {
+      if (!a.provenanceJson) return false;
+      try {
+        const prov = JSON.parse(a.provenanceJson);
+        return prov.extractor?.name === "pdfjs-text-v1";
+      } catch { return false; }
+    });
+    
+    const lines: string[] = [];
+    
+    for (const anchor of eligibleAnchors) {
+      const prov = JSON.parse(anchor.provenanceJson!);
+      const sourceId = prov.source_id;
+      const pageIndex = prov.page_index;
+      const quoteStartChar = prov.quote_start_char;
+      const quoteEndChar = prov.quote_end_char;
+      
+      // Get page text hash
+      const pdfPage = await storage.getPdfPage(sourceId, pageIndex);
+      if (!pdfPage) continue;
+      
+      const pageTextSha256Hex = pdfPage.pageTextSha256Hex;
+      
+      // Compute substring sha256
+      const substring = pdfPage.pageText.slice(quoteStartChar, quoteEndChar);
+      const substringSha256Hex = createHash("sha256").update(substring, "utf8").digest("hex");
+      
+      lines.push(`${anchor.id}|${sourceId}|${pageIndex}|${quoteStartChar}|${quoteEndChar}|${pageTextSha256Hex}|${substringSha256Hex}`);
+    }
+    
+    // Sort by anchor_id lexicographically
+    lines.sort((a, b) => a.localeCompare(b));
+    
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send(lines.join("\n") + "\n");
+  }));
+
   app.post("/api/upload", (req, res, next) => {
     textUpload.single("file")(req, res, (err: any) => {
       if (err) {
