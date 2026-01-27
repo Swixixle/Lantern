@@ -1,0 +1,66 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+I cannot see your UI from here unless you provide a screenshot or the exact DOM/text output. So I **cannot confirm visually** that the banner is present or that the buttons are hidden based only on your description.
+
+### Deterministic confirmation method (no screenshots required)
+
+Run these in your browser DevTools console on the page you want to verify (top-level app view):
+
+#### 1) Confirm banner exists (exact text)
+
+```js
+[...document.querySelectorAll("*")]
+  .some(el => el.textContent?.trim() === "Review Mode (Read-Only)");
+```
+
+Pass condition: returns `true`.
+
+#### 2) Confirm specific write-action labels are not present as clickable buttons/links
+
+Run each:
+
+```js
+const hasClickable = (label) =>
+  [...document.querySelectorAll("button,a")]
+    .some(el => el.textContent?.trim() === label && !el.disabled);
+
+["Create Corpus","Upload","Build Anchors","Create Claim","Save Snapshot","Generate Evidence Packet","Export Corpus Bundle (ZIP)","Export Repro Pack (ZIP)"]
+  .map(l => ({ label: l, clickable: hasClickable(l) }));
+```
+
+Pass condition: every `clickable` is `false`.
+
+If your UI uses slightly different labels, test by checking the actual label strings you used.
+
+---
+
+### If you want me to confirm “yes” directly
+
+Paste **either**:
+
+* A screenshot of the top portion of the UI showing the banner + the relevant area where those buttons would normally appear, **or**
+* The outputs of the two console checks above.
+
+With that, I can confirm banner visibility and that write actions are hidden/disabled per v1.11.
