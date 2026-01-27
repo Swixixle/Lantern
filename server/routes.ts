@@ -2083,6 +2083,88 @@ export async function registerRoutes(
     const anchorsProofIndexJson = JSON.stringify(anchorsProofIndex);
     files.push({ path: "anchors_proof_index.json", sha256_hex: createHash("sha256").update(anchorsProofIndexJson).digest("hex") });
     
+    const claimsList = await storage.listClaimRecordsByCorpus(corpusId);
+    
+    const sourcesByRole: Record<string, number> = {};
+    for (const src of sources) {
+      sourcesByRole[src.role] = (sourcesByRole[src.role] || 0) + 1;
+    }
+    const sortedSourcesByRole: Record<string, number> = {};
+    for (const key of Object.keys(sourcesByRole).sort()) {
+      sortedSourcesByRole[key] = sourcesByRole[key];
+    }
+    
+    const anchorsBySourceId: Record<string, number> = {};
+    for (const anchor of allAnchors) {
+      anchorsBySourceId[anchor.sourceId] = (anchorsBySourceId[anchor.sourceId] || 0) + 1;
+    }
+    const sortedAnchorsBySourceId: Record<string, number> = {};
+    for (const key of Object.keys(anchorsBySourceId).sort()) {
+      sortedAnchorsBySourceId[key] = anchorsBySourceId[key];
+    }
+    
+    const claimsByClassification: Record<string, number> = {
+      "AMBIGUOUS": 0,
+      "DEFENSIBLE": 0,
+      "RESTRICTED": 0
+    };
+    for (const claim of claimsList) {
+      if (claim.classification && claimsByClassification.hasOwnProperty(claim.classification)) {
+        claimsByClassification[claim.classification]++;
+      }
+    }
+    
+    const ledgerByType: Record<string, number> = {
+      "BUILD_RUN": 0,
+      "CLAIM_CREATED": 0,
+      "CLAIM_DELETED": 0,
+      "CORPUS_CREATED": 0,
+      "PACKET_CREATED": 0,
+      "SNAPSHOT_CREATED": 0,
+      "SOURCE_UPLOADED": 0
+    };
+    for (const evt of ledgerEvents) {
+      if (ledgerByType.hasOwnProperty(evt.eventType)) {
+        ledgerByType[evt.eventType]++;
+      }
+    }
+    
+    const hasPdfPages = pageProofContents.length > 0;
+    
+    const auditSummary = {
+      corpus_id: corpusId,
+      sources: {
+        count: sources.length,
+        by_role: sortedSourcesByRole
+      },
+      pages: {
+        count: pageProofContents.length
+      },
+      anchors: {
+        count: allAnchors.length,
+        by_source_id: sortedAnchorsBySourceId
+      },
+      claims: {
+        count: claimsList.length,
+        by_classification: claimsByClassification
+      },
+      snapshots: {
+        count: snapshotsList.length
+      },
+      packets: {
+        count: packetsList.length
+      },
+      ledger_events: {
+        count: ledgerEvents.length,
+        by_type: ledgerByType
+      },
+      extractor: hasPdfPages 
+        ? { name: "pdfjs-text-v1", version: "1.0.0" }
+        : { name: null, version: null }
+    };
+    const auditSummaryJson = JSON.stringify(auditSummary);
+    files.push({ path: "audit_summary.json", sha256_hex: createHash("sha256").update(auditSummaryJson).digest("hex") });
+    
     if (includeRawSources) {
       for (const src of sources) {
         const rawPath = `raw_sources/${src.id}__${src.filename}`;
@@ -2162,6 +2244,7 @@ export async function registerRoutes(
     }
     
     archive.append(anchorsProofIndexJson, { name: `${bundleDir}/anchors_proof_index.json` });
+    archive.append(auditSummaryJson, { name: `${bundleDir}/audit_summary.json` });
     
     await archive.finalize();
   }));

@@ -1,0 +1,136 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.15 is **accepted as complete and compliant** based on your evidence packet:
+
+* Valid bundle reports `anchors_index_ok: true` with `anchors_index_checked: 2` ✅
+* Missing page JSON produces `anchors_index_ok: false` and `bundle_ok: false`, with `PAGE_JSON_MISSING` mismatches for each affected anchor ✅
+* Output schema extends without removing prior keys ✅
+
+---
+
+# v1.16 — Deterministic “Audit Summary” Export (Read-only, No Inference)
+
+## 0) Goal (scope-locked)
+
+Add a **single JSON file** to the v1.7 export bundle that summarizes the corpus state for audit workflows using **only existing stored fields** and **counts**.
+
+No rankings. No interpretation. No summaries. No text generation beyond fixed keys.
+
+---
+
+## 1) Bundle change
+
+Add file at bundle root:
+`audit_summary.json`
+
+Include it in MANIFEST `files[]` like all others.
+
+---
+
+## 2) File format (exact)
+
+```json
+{
+  "corpus_id": "uuid",
+  "sources": {
+    "count": 2,
+    "by_role": {
+      "PRIMARY": 1,
+      "SECONDARY": 1
+    }
+  },
+  "pages": {
+    "count": 12
+  },
+  "anchors": {
+    "count": 120,
+    "by_source_id": {
+      "uuid": 80,
+      "uuid2": 40
+    }
+  },
+  "claims": {
+    "count": 0,
+    "by_classification": {
+      "DEFENSIBLE": 0,
+      "RESTRICTED": 0,
+      "AMBIGUOUS": 0
+    }
+  },
+  "snapshots": {
+    "count": 3
+  },
+  "packets": {
+    "count": 5
+  },
+  "ledger_events": {
+    "count": 42,
+    "by_type": {
+      "CORPUS_CREATED": 1,
+      "SOURCE_UPLOADED": 2,
+      "BUILD_RUN": 1,
+      "CLAIM_CREATED": 0,
+      "CLAIM_DELETED": 0,
+      "SNAPSHOT_CREATED": 3,
+      "PACKET_CREATED": 5
+    }
+  },
+  "extractor": {
+    "name": "pdfjs-text-v1",
+    "version": "1.0.0"
+  }
+}
+```
+
+Hard rules:
+
+* Use only counts derived from stored data.
+* `by_source_id` keys must be actual source_ids present (string).
+* All `by_*` objects must have keys sorted lexicographically.
+* Top-level key order must be exactly as shown.
+* If a section has no data (e.g., no packets), still include the section with count 0 and required sub-objects.
+* `extractor` must be included and fixed to `pdfjs-text-v1@1.0.0` if any pdf_pages exist; otherwise set both values to null.
+
+---
+
+## 3) Determinism
+
+* Same corpus state + same exporter code => identical `audit_summary.json` bytes.
+* Stable JSON serialization with fixed key order and consistent whitespace (choose minified or 2-space indent; must be consistent).
+
+---
+
+## 4) Acceptance tests
+
+1. Export bundle includes `audit_summary.json` and MANIFEST entry.
+2. Counts match database rows for corpus.
+3. `by_role`, `by_source_id`, `by_classification`, `by_type` keys are sorted lexicographically.
+4. Determinism: two exports unchanged corpus produce identical `audit_summary.json` bytes (sha256 same).
+
+---
+
+## 5) What to send me when complete
+
+* Full `audit_summary.json`
+* MANIFEST entry for `audit_summary.json` (path + sha256_hex)
+* Two sha256 sums of `audit_summary.json` from two exports (must match)
+
+Proceed exactly to v1.16.
