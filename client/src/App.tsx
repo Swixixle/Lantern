@@ -1,13 +1,15 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch, Route, Link } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { ConfigProvider, useReadOnlyMode } from "./lib/config";
 import { AuthProvider, useAuth, apiGet } from "./lib/auth";
+import { TutorialProvider, useTutorial } from "./lib/tutorial";
+import { TutorialOverlay } from "./components/TutorialOverlay";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Loader2, LogOut } from "lucide-react";
+import { Lock, Loader2, LogOut, GraduationCap } from "lucide-react";
 import ClaimSpace from "@/pages/claim-space";
 import AnchorView from "@/pages/anchor-view";
 import Constraints from "@/pages/constraints";
@@ -145,6 +147,34 @@ function LogoutButton() {
       data-testid="button-logout"
     >
       <LogOut className="w-4 h-4" />
+    </button>
+  );
+}
+
+function TutorialButton() {
+  const { isAuthenticated } = useAuth();
+  const { isReadOnly } = useReadOnlyMode();
+  const { startTutorial, hasCompletedTutorial, isActive } = useTutorial();
+  
+  useEffect(() => {
+    if (isAuthenticated && !hasCompletedTutorial && !isActive) {
+      const timer = setTimeout(() => {
+        startTutorial();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isAuthenticated, hasCompletedTutorial, isActive, startTutorial]);
+  
+  if (isReadOnly || !isAuthenticated || isActive) return null;
+  
+  return (
+    <button
+      onClick={startTutorial}
+      className="fixed top-4 left-14 z-50 p-2 bg-background/80 backdrop-blur border border-border/50 rounded-lg print:hidden flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      title="Start Tutorial"
+      data-testid="button-tutorial"
+    >
+      <GraduationCap className="w-4 h-4" />
     </button>
   );
 }
@@ -332,11 +362,15 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ConfigProvider>
         <AuthProvider>
-          <Toaster />
-          <AuthGate>
-            <LogoutButton />
-            <Router />
-          </AuthGate>
+          <TutorialProvider>
+            <Toaster />
+            <AuthGate>
+              <LogoutButton />
+              <TutorialButton />
+              <TutorialOverlay />
+              <Router />
+            </AuthGate>
+          </TutorialProvider>
         </AuthProvider>
       </ConfigProvider>
     </QueryClientProvider>

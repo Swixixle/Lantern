@@ -7,9 +7,8 @@ export interface TutorialStep {
   id: string;
   title: string;
   description: string;
-  targetSelector?: string;
   route?: string;
-  position?: "top" | "bottom" | "left" | "right" | "center";
+  position?: "center";
 }
 
 export const TUTORIAL_STEPS: TutorialStep[] = [
@@ -23,35 +22,35 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     id: "claim_space",
     title: "Claim Space",
     description: "This is where you view and manage claims. Claims are categorized as Defensible (supported by evidence), Restricted (not supported), or Ambiguous (unclear).",
-    route: "/?corpusId=corpus-demo-001",
+    route: "/?corpusId={corpusId}",
     position: "center",
   },
   {
     id: "sources",
     title: "Sources",
     description: "The Sources page shows all documents uploaded to a corpus. Each source has a cryptographic hash for verification.",
-    route: "/sources?corpusId=corpus-demo-001",
+    route: "/sources?corpusId={corpusId}",
     position: "center",
   },
   {
     id: "anchors",
     title: "Evidence Anchors",
     description: "Anchors are verbatim quotes extracted from source documents. They provide the evidence foundation for claims with exact byte-level provenance.",
-    route: "/anchors/browse?corpusId=corpus-demo-001",
+    route: "/anchors/browse?corpusId={corpusId}",
     position: "center",
   },
   {
     id: "ledger",
     title: "Revision Ledger",
     description: "The ledger is an append-only audit trail. Every corpus action is recorded with cryptographic hashes for verification.",
-    route: "/ledger?corpusId=corpus-demo-001",
+    route: "/ledger?corpusId={corpusId}",
     position: "center",
   },
   {
     id: "snapshots",
     title: "Snapshots",
     description: "Snapshots capture the complete corpus state at a point in time. They enable reproducible exports and verification.",
-    route: "/snapshots?corpusId=corpus-demo-001",
+    route: "/snapshots?corpusId={corpusId}",
     position: "center",
   },
   {
@@ -61,6 +60,11 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     position: "center",
   },
 ];
+
+export function getStepRoute(step: TutorialStep, corpusId: string): string | undefined {
+  if (!step.route) return undefined;
+  return step.route.replace("{corpusId}", corpusId);
+}
 
 interface TutorialContextValue {
   isActive: boolean;
@@ -89,8 +93,14 @@ const TutorialContext = createContext<TutorialContextValue>({
 });
 
 export function TutorialProvider({ children }: { children: ReactNode }) {
-  const [isActive, setIsActive] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
+  const [isActive, setIsActive] = useState(() => {
+    const savedStep = localStorage.getItem(TUTORIAL_STEP_KEY);
+    return savedStep !== null;
+  });
+  const [currentStep, setCurrentStep] = useState(() => {
+    const savedStep = localStorage.getItem(TUTORIAL_STEP_KEY);
+    return savedStep !== null ? parseInt(savedStep, 10) : 0;
+  });
   const [hasCompletedTutorial, setHasCompletedTutorial] = useState(() => {
     return localStorage.getItem(TUTORIAL_STORAGE_KEY) === "true";
   });

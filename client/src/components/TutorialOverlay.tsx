@@ -1,12 +1,15 @@
-import { useEffect } from "react";
-import { useLocation } from "wouter";
+import { useEffect, useMemo } from "react";
+import { useLocation, useSearch } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useTutorial } from "@/lib/tutorial";
+import { useTutorial, getStepRoute } from "@/lib/tutorial";
 import { ChevronLeft, ChevronRight, X, GraduationCap } from "lucide-react";
+
+const DEFAULT_CORPUS_ID = "corpus-demo-001";
 
 export function TutorialOverlay() {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
   const {
     isActive,
     currentStep,
@@ -17,11 +20,19 @@ export function TutorialOverlay() {
     totalSteps,
   } = useTutorial();
 
+  const corpusId = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    return params.get("corpusId") || DEFAULT_CORPUS_ID;
+  }, [searchString]);
+
   useEffect(() => {
     if (isActive && currentStepData?.route) {
-      navigate(currentStepData.route);
+      const resolvedRoute = getStepRoute(currentStepData, corpusId);
+      if (resolvedRoute) {
+        navigate(resolvedRoute);
+      }
     }
-  }, [isActive, currentStepData?.route, navigate]);
+  }, [isActive, currentStepData, corpusId, navigate]);
 
   if (!isActive || !currentStepData) return null;
 
