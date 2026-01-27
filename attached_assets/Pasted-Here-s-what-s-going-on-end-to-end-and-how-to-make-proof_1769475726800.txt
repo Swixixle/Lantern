@@ -1,0 +1,125 @@
+Here’s what’s going on, end-to-end, and how to make “proof” automatic so we stop looping.
+
+## What’s going on (current state)
+
+You’ve been building **Lantern** as a **claim-governance interface** with hard epistemic constraints:
+
+* **Claim Space (default landing)**: claims split into **DEFENSIBLE / RESTRICTED / AMBIGUOUS**. Confidence is clamped (no 100%). Defensible claims require anchors. Restricted claims show explicit refusal language.
+* **Anchors**: verbatim excerpts with source doc + page/section + timeline date (upload timestamp). No summaries.
+* **Constraints & Friction**: conflict / missing evidence / time mismatch objects (no interpretation).
+* **Snapshots**: immutable, hash-verified state captures.
+* **Evidence Packets**: per-claim verbatim packets + hash verification.
+* **Chain-of-custody** (v1.5): packets must reference a **snapshot_id + snapshot_hash** and verify the chain (packet hash + snapshot hash + scope checks).
+* **Revision Ledger** (v1.6): append-only event log with per-event hashes.
+* **Corpus Export Bundle** (v1.7) + **Bundle Verifier** (v1.8).
+* **Auth Gate** (v1.9): static API key for all write endpoints.
+* **Repro Pack** (v1.10 + v1.10.1): deterministic ZIP that contains the bundle + verifier + instructions; now truly byte-stable.
+* **Public Read-Only Review Mode** (v1.11): env flag allows unauthenticated **GET** to a strict list of read endpoints; UI hides all write actions and shows a banner.
+* **Public Review Link + Read-Only Nav + Sources Page** (v1.12): `/review/:corpus_id` redirects into Claim Space for that corpus; when read-only, the UI shows nav links to Claim Space / Sources / Anchors / Ledger / Snapshots and Sources page shows the required table.
+
+### v1.12 status
+
+Based on what you pasted (review route, nav link code, banner code, sources endpoint response, sources table headers), **v1.12 requirements are satisfied**. I can’t “see” your UI, but your supplied outputs are the exact evidence the contract asked for.
+
+---
+
+## Why it feels like we’re wasting money
+
+Because I can’t directly view your browser, every “can you see it?” question forces a back-and-forth unless you provide **deterministic proof artifacts** (DOM checks, screenshots, or endpoint outputs). The solution is: **make proof capture a standard, automatic step** so you paste one bundle of evidence and we’re done.
+
+---
+
+## Make proof automatic (recommended workflow)
+
+### Option A (fastest): always paste this “Review Proof Packet” after UI work
+
+After you implement something UI-visible, run these **three things** and paste the outputs in one message:
+
+1. **/api/config**
+2. **Unauthenticated GET** to the relevant read endpoint (e.g., sources/claims)
+3. **DOM proof script output** (below)
+
+This is cheaper than screenshots and doesn’t require my eyesight.
+
+#### DOM proof script (copy/paste into DevTools console)
+
+Run this on the page you’re validating (Sources page, Claim Space, etc.):
+
+```js
+(() => {
+  const textExists = (t) =>
+    [...document.querySelectorAll("*")].some(el => el.textContent?.trim() === t);
+
+  const linkHrefByText = (t) => {
+    const a = [...document.querySelectorAll("a")].find(x => x.textContent?.trim() === t);
+    return a ? a.getAttribute("href") : null;
+  };
+
+  const tableHeaders = () =>
+    [...document.querySelectorAll("table thead th")].map(th => th.textContent.trim());
+
+  const forbiddenPresent = (labels) =>
+    labels.map(t => ({
+      label: t,
+      present: [...document.querySelectorAll("button,a")].some(el => el.textContent?.trim() === t)
+    }));
+
+  const result = {
+    banner: {
+      exists: textExists("Review Mode (Read-Only)")
+    },
+    nav: {
+      claimSpace: linkHrefByText("Claim Space"),
+      sources: linkHrefByText("Sources"),
+      anchors: linkHrefByText("Anchors"),
+      ledger: linkHrefByText("Ledger"),
+      snapshots: linkHrefByText("Snapshots")
+    },
+    sourcesTableHeaders: tableHeaders(),
+    forbiddenWriteActionsPresent: forbiddenPresent([
+      "Create Corpus",
+      "Upload Primary",
+      "Upload Secondary",
+      "Build Anchors",
+      "Save Snapshot",
+      "Generate Evidence Packet",
+      "Export Corpus Bundle (ZIP)",
+      "Export Repro Pack (ZIP)"
+    ])
+  };
+
+  console.log(JSON.stringify(result, null, 2));
+  return result;
+})();
+```
+
+**Pass conditions for v1.12/v1.11 review-mode UI:**
+
+* `banner.exists === true`
+* `nav.*` hrefs are non-null and match the corpusId routes
+* `sourcesTableHeaders` includes: `role, filename, sha256_hex, uploaded_at, source_id`
+* every `forbiddenWriteActionsPresent[].present === false`
+
+If you paste that JSON, I can confirm immediately with no extra steps.
+
+---
+
+### Option B (even better): add an internal “Proof” endpoint for UI contracts
+
+If you want this truly automatic, add a **/api/proof/review/:corpus_id** endpoint that returns a deterministic JSON proving:
+
+* config public_readonly true
+* allowed unauth GETs work
+* sources list shape is correct
+* nav link templates match (from server config constants if you centralize them)
+
+But that’s a new spec; Option A is enough right now.
+
+---
+
+## Where we are now
+
+* v1.12 is **functionally done** given your outputs.
+* Next work should be chosen based on what you want: **hardening**, **polish**, or **core extraction pipeline expansion**.
+
+If you tell me which direction you want next (e.g., “real extraction into anchors from PDFs” vs “review UX hardening”), I’ll draft the next contract.
