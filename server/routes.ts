@@ -520,6 +520,23 @@ export async function registerRoutes(
     const snapshotProofIndexJson = JSON.stringify(snapshotProofIndex);
     files.push({ path: "snapshot_proof_index.json", sha256_hex: createHash("sha256").update(snapshotProofIndexJson).digest("hex") });
     
+    const ledgerProofEntries = ledgerEvents.map(e => ({
+      event_id: e.id,
+      occurred_at: e.occurredAt.toISOString(),
+      event_type: e.eventType,
+      entity_type: e.entityType,
+      entity_id: e.entityId,
+      hash_alg: e.hashAlg,
+      hash_hex: e.hashHex
+    })).sort((a, b) => a.event_id.localeCompare(b.event_id));
+    
+    const ledgerProofIndex = {
+      corpus_id: corpusId,
+      events: ledgerProofEntries
+    };
+    const ledgerProofIndexJson = JSON.stringify(ledgerProofIndex);
+    files.push({ path: "ledger_proof_index.json", sha256_hex: createHash("sha256").update(ledgerProofIndexJson).digest("hex") });
+    
     files.sort((a, b) => a.path.localeCompare(b.path));
     
     const manifestWithoutHash = {
@@ -565,6 +582,7 @@ export async function registerRoutes(
     archive.append(auditSummaryJson, { name: `${bundleDir}/audit_summary.json` });
     archive.append(packetProofIndexJson, { name: `${bundleDir}/packet_proof_index.json` });
     archive.append(snapshotProofIndexJson, { name: `${bundleDir}/snapshot_proof_index.json` });
+    archive.append(ledgerProofIndexJson, { name: `${bundleDir}/ledger_proof_index.json` });
     
     await archive.finalize();
   }));
@@ -2515,6 +2533,23 @@ export async function registerRoutes(
     const snapshotProofIndexJson = JSON.stringify(snapshotProofIndex);
     files.push({ path: "snapshot_proof_index.json", sha256_hex: createHash("sha256").update(snapshotProofIndexJson).digest("hex") });
     
+    const ledgerProofEntries = ledgerEvents.map(e => ({
+      event_id: e.id,
+      occurred_at: e.occurredAt.toISOString(),
+      event_type: e.eventType,
+      entity_type: e.entityType,
+      entity_id: e.entityId,
+      hash_alg: e.hashAlg,
+      hash_hex: e.hashHex
+    })).sort((a, b) => a.event_id.localeCompare(b.event_id));
+    
+    const ledgerProofIndex = {
+      corpus_id: corpusId,
+      events: ledgerProofEntries
+    };
+    const ledgerProofIndexJson = JSON.stringify(ledgerProofIndex);
+    files.push({ path: "ledger_proof_index.json", sha256_hex: createHash("sha256").update(ledgerProofIndexJson).digest("hex") });
+    
     if (includeRawSources) {
       for (const src of sources) {
         const rawPath = `raw_sources/${src.id}__${src.filename}`;
@@ -2597,6 +2632,7 @@ export async function registerRoutes(
     archive.append(auditSummaryJson, { name: `${bundleDir}/audit_summary.json` });
     archive.append(packetProofIndexJson, { name: `${bundleDir}/packet_proof_index.json` });
     archive.append(snapshotProofIndexJson, { name: `${bundleDir}/snapshot_proof_index.json` });
+    archive.append(ledgerProofIndexJson, { name: `${bundleDir}/ledger_proof_index.json` });
     
     await archive.finalize();
   }));
