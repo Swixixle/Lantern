@@ -146,9 +146,15 @@ export function extractAnchorsWithProvenance(
         continue;
       }
       
-      const startChar = sentences[i].start;
-      const endChar = sentences[endIdx - 1].end;
-      const quote = page.pageText.slice(startChar, endChar).trim();
+      let startChar = sentences[i].start;
+      let endChar = sentences[endIdx - 1].end;
+      let quote = page.pageText.slice(startChar, endChar);
+      
+      const leadingSpaces = quote.length - quote.trimStart().length;
+      const trailingSpaces = quote.length - quote.trimEnd().length;
+      startChar += leadingSpaces;
+      endChar -= trailingSpaces;
+      quote = page.pageText.slice(startChar, endChar);
       
       if (quote.length >= 20) {
         const provenance: AnchorProvenance = {
