@@ -14,7 +14,8 @@ import {
   type EvidencePacket, type InsertEvidencePacket,
   type LedgerEventRow, type InsertLedgerEvent,
   type LedgerEventType, type LedgerEntityType,
-  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords, evidencePackets, ledgerEvents
+  type PdfPage, type InsertPdfPage,
+  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords, evidencePackets, ledgerEvents, pdfPages
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, isNull, desc, gt } from "drizzle-orm";
@@ -102,6 +103,12 @@ export interface IStorage {
     options?: { limit?: number; after?: string; event_type?: LedgerEventType }
   ): Promise<LedgerEventRow[]>;
   getLedgerEvent(id: string): Promise<LedgerEventRow | undefined>;
+  
+  // PDF Pages
+  createPdfPage(data: InsertPdfPage): Promise<PdfPage>;
+  getPdfPage(sourceId: string, pageIndex: number): Promise<PdfPage | undefined>;
+  listPdfPagesBySource(sourceId: string): Promise<PdfPage[]>;
+  getAnchorRecord(id: string): Promise<AnchorRecord | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -459,6 +466,30 @@ export class DatabaseStorage implements IStorage {
   async getLedgerEvent(id: string): Promise<LedgerEventRow | undefined> {
     const result = await db.select().from(ledgerEvents)
       .where(eq(ledgerEvents.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async createPdfPage(data: InsertPdfPage): Promise<PdfPage> {
+    const result = await db.insert(pdfPages).values(data).returning();
+    return result[0];
+  }
+
+  async getPdfPage(sourceId: string, pageIndex: number): Promise<PdfPage | undefined> {
+    const result = await db.select().from(pdfPages)
+      .where(and(eq(pdfPages.sourceId, sourceId), eq(pdfPages.pageIndex, pageIndex)))
+      .limit(1);
+    return result[0];
+  }
+
+  async listPdfPagesBySource(sourceId: string): Promise<PdfPage[]> {
+    return db.select().from(pdfPages)
+      .where(eq(pdfPages.sourceId, sourceId));
+  }
+
+  async getAnchorRecord(id: string): Promise<AnchorRecord | undefined> {
+    const result = await db.select().from(anchorRecords)
+      .where(eq(anchorRecords.id, id))
       .limit(1);
     return result[0];
   }
