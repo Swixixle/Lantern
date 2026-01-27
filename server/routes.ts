@@ -248,6 +248,327 @@ export async function registerRoutes(
     res.json({ public_readonly: process.env.LANTERN_PUBLIC_READONLY === "true" });
   });
 
+  // v1.23 Public Review Bundle Download (read-only, no auth when public_readonly=true)
+  app.get("/api/review/:corpusId/bundle", asyncHandler(async (req, res) => {
+    const isPublicReadOnly = process.env.LANTERN_PUBLIC_READONLY === "true";
+    
+    if (!isPublicReadOnly) {
+      return res.status(401).json({
+        type: "AUTH_ERROR",
+        message: "Authentication required"
+      });
+    }
+    
+    if (req.query.deterministic !== "true") {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "deterministic=true required"
+      });
+    }
+    
+    const corpusId = req.params.corpusId as string;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const ledgerEvents = await storage.listLedgerEvents(corpusId, { limit: 501 });
+    if (ledgerEvents.length > 500) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "Ledger exceeds export limit; increase limit support before exporting."
+      });
+    }
+    
+    const sources = await storage.listCorpusSources(corpusId);
+    const snapshotsList = await storage.listSnapshotsByCorpus(corpusId);
+    const packetsList = await storage.listEvidencePacketsByCorpus(corpusId);
+    
+    const bundleDir = `lantern-corpus-${corpusId}`;
+    const files: { path: string; sha256_hex: string }[] = [];
+    
+    const corpusJson = JSON.stringify({
+      corpus_id: corpus.id,
+      created_at: corpus.createdAt,
+      purpose: corpus.purpose
+    });
+    
+    const sourcesJson = JSON.stringify({
+      corpus_id: corpusId,
+      sources: sources.map(s => ({
+        source_id: s.id,
+        corpus_id: s.corpusId,
+        role: s.role,
+        filename: s.filename,
+        uploaded_at: s.uploadedAt,
+        sha256_hex: s.sha256Hex
+      }))
+    });
+    
+    const ledgerJson = JSON.stringify({
+      corpus_id: corpusId,
+      events: ledgerEvents.map(e => ({
+        event_id: e.id,
+        occurred_at: e.occurredAt.toISOString(),
+        corpus_id: e.corpusId,
+        event_type: e.eventType,
+        entity: {
+          entity_type: e.entityType,
+          entity_id: e.entityId
+        },
+        payload: JSON.parse(e.payloadJson),
+        hash_alg: e.hashAlg,
+        hash_hex: e.hashHex
+      }))
+    });
+    
+    files.push({ path: "corpus.json", sha256_hex: createHash("sha256").update(corpusJson).digest("hex") });
+    files.push({ path: "ledger.json", sha256_hex: createHash("sha256").update(ledgerJson).digest("hex") });
+    files.push({ path: "sources.json", sha256_hex: createHash("sha256").update(sourcesJson).digest("hex") });
+    
+    const snapshotContents: { id: string; json: string }[] = [];
+    for (const snap of snapshotsList) {
+      const snapData = JSON.parse(snap.snapshotJson);
+      const snapScope = snap.snapshotScopeJson ? JSON.parse(snap.snapshotScopeJson) : null;
+      const snapJson = JSON.stringify({
+        snapshot_id: snap.id,
+        created_at: snap.createdAt,
+        corpus_id: snap.corpusId,
+        hash_alg: snap.hashAlg,
+        hash_hex: snap.hashHex,
+        claims: snapData.claims,
+        snapshot_scope: snapScope
+      });
+      snapshotContents.push({ id: snap.id, json: snapJson });
+      files.push({ path: `snapshots/${snap.id}.json`, sha256_hex: createHash("sha256").update(snapJson).digest("hex") });
+    }
+    
+    const packetContents: { id: string; json: string }[] = [];
+    for (const pkt of packetsList) {
+      const pktJson = JSON.stringify({
+        packet_id: pkt.id,
+        created_at: pkt.createdAt,
+        ...JSON.parse(pkt.packetJson)
+      });
+      packetContents.push({ id: pkt.id, json: pktJson });
+      files.push({ path: `packets/${pkt.id}.json`, sha256_hex: createHash("sha256").update(pktJson).digest("hex") });
+    }
+    
+    const pageProofContents: { sourceId: string; pageIndex: number; json: string }[] = [];
+    for (const src of sources) {
+      const pdfPages = await storage.listPdfPagesBySource(src.id);
+      for (const page of pdfPages) {
+        const pageJsonData = {
+          source_id: src.id,
+          page_index: page.pageIndex,
+          page_text_sha256_hex: page.pageTextSha256Hex
+        };
+        const pageJson = JSON.stringify(pageJsonData);
+        pageProofContents.push({
+          sourceId: src.id,
+          pageIndex: page.pageIndex,
+          json: pageJson
+        });
+        files.push({ path: `pages/${src.id}/page-${page.pageIndex}.json`, sha256_hex: createHash("sha256").update(pageJson).digest("hex") });
+      }
+    }
+    
+    const allAnchors = await storage.listAnchorRecordsByCorpus(corpusId);
+    const pdfJsAnchors = allAnchors.filter(a => {
+      if (!a.provenanceJson) return false;
+      try {
+        const prov = JSON.parse(a.provenanceJson);
+        return prov.extractor?.name === "pdfjs-text-v1";
+      } catch { return false; }
+    });
+    
+    const pageTextHashMap = new Map<string, string>();
+    for (const pageProof of pageProofContents) {
+      const parsed = JSON.parse(pageProof.json);
+      const key = `${pageProof.sourceId}:${pageProof.pageIndex}`;
+      pageTextHashMap.set(key, parsed.page_text_sha256_hex);
+    }
+    
+    const anchorsProofEntries = pdfJsAnchors.map(a => {
+      const prov = JSON.parse(a.provenanceJson!);
+      const key = `${prov.source_id}:${prov.page_index}`;
+      return {
+        anchor_id: a.id,
+        source_id: prov.source_id,
+        page_index: prov.page_index,
+        quote_start_char: prov.quote_start_char,
+        quote_end_char: prov.quote_end_char,
+        page_text_sha256_hex: pageTextHashMap.get(key) || ""
+      };
+    }).sort((a, b) => a.anchor_id.localeCompare(b.anchor_id));
+    
+    const anchorsProofIndex = {
+      corpus_id: corpusId,
+      extractor: { name: "pdfjs-text-v1", version: "1.0.0" },
+      anchors: anchorsProofEntries
+    };
+    const anchorsProofIndexJson = JSON.stringify(anchorsProofIndex);
+    files.push({ path: "anchors_proof_index.json", sha256_hex: createHash("sha256").update(anchorsProofIndexJson).digest("hex") });
+    
+    const claimsList = await storage.listClaimRecordsByCorpus(corpusId);
+    
+    const sourcesByRole: Record<string, number> = {};
+    for (const src of sources) {
+      sourcesByRole[src.role] = (sourcesByRole[src.role] || 0) + 1;
+    }
+    const sortedSourcesByRole: Record<string, number> = {};
+    for (const key of Object.keys(sourcesByRole).sort()) {
+      sortedSourcesByRole[key] = sourcesByRole[key];
+    }
+    
+    const anchorsBySourceId: Record<string, number> = {};
+    for (const anchor of allAnchors) {
+      anchorsBySourceId[anchor.sourceId] = (anchorsBySourceId[anchor.sourceId] || 0) + 1;
+    }
+    const sortedAnchorsBySourceId: Record<string, number> = {};
+    for (const key of Object.keys(anchorsBySourceId).sort()) {
+      sortedAnchorsBySourceId[key] = anchorsBySourceId[key];
+    }
+    
+    const claimsByClassification: Record<string, number> = {
+      "AMBIGUOUS": 0,
+      "DEFENSIBLE": 0,
+      "RESTRICTED": 0
+    };
+    for (const claim of claimsList) {
+      if (claim.classification && claimsByClassification.hasOwnProperty(claim.classification)) {
+        claimsByClassification[claim.classification]++;
+      }
+    }
+    
+    const ledgerByType: Record<string, number> = {
+      "BUILD_RUN": 0,
+      "CLAIM_CREATED": 0,
+      "CLAIM_DELETED": 0,
+      "CORPUS_CREATED": 0,
+      "PACKET_CREATED": 0,
+      "SNAPSHOT_CREATED": 0,
+      "SOURCE_UPLOADED": 0
+    };
+    for (const evt of ledgerEvents) {
+      if (ledgerByType.hasOwnProperty(evt.eventType)) {
+        ledgerByType[evt.eventType]++;
+      }
+    }
+    
+    const auditSummary = {
+      corpus_id: corpusId,
+      sources: {
+        count: sources.length,
+        by_role: sortedSourcesByRole
+      },
+      pages: {
+        count: pageProofContents.length
+      },
+      anchors: {
+        count: allAnchors.length,
+        by_source_id: sortedAnchorsBySourceId
+      },
+      claims: {
+        count: claimsList.length,
+        by_classification: claimsByClassification
+      },
+      snapshots: {
+        count: snapshotsList.length
+      },
+      packets: {
+        count: packetsList.length
+      },
+      ledger_events: {
+        count: ledgerEvents.length,
+        by_type: ledgerByType
+      }
+    };
+    const auditSummaryJson = JSON.stringify(auditSummary);
+    files.push({ path: "audit_summary.json", sha256_hex: createHash("sha256").update(auditSummaryJson).digest("hex") });
+    
+    const packetProofEntries = packetsList.map(pkt => ({
+      packet_id: pkt.id,
+      claim_id: pkt.claimId,
+      snapshot_id: pkt.snapshotId,
+      snapshot_hash_hex: pkt.snapshotHashHex,
+      packet_hash_hex: pkt.hashHex
+    })).sort((a, b) => a.packet_id.localeCompare(b.packet_id));
+    
+    const packetProofIndex = {
+      corpus_id: corpusId,
+      packets: packetProofEntries
+    };
+    const packetProofIndexJson = JSON.stringify(packetProofIndex);
+    files.push({ path: "packet_proof_index.json", sha256_hex: createHash("sha256").update(packetProofIndexJson).digest("hex") });
+    
+    const snapshotProofEntries = snapshotsList.map(snap => ({
+      snapshot_id: snap.id,
+      created_at: snap.createdAt,
+      hash_alg: snap.hashAlg,
+      hash_hex: snap.hashHex
+    })).sort((a, b) => a.snapshot_id.localeCompare(b.snapshot_id));
+    
+    const snapshotProofIndex = {
+      corpus_id: corpusId,
+      snapshots: snapshotProofEntries
+    };
+    const snapshotProofIndexJson = JSON.stringify(snapshotProofIndex);
+    files.push({ path: "snapshot_proof_index.json", sha256_hex: createHash("sha256").update(snapshotProofIndexJson).digest("hex") });
+    
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    
+    const manifestWithoutHash = {
+      bundle_format: "lantern-corpus-bundle-v1",
+      corpus_id: corpusId,
+      include_raw_sources: false,
+      files: files,
+      manifest_hash_alg: "SHA-256"
+    };
+    const manifestCanonical = JSON.stringify(manifestWithoutHash);
+    const manifestHash = createHash("sha256").update(manifestCanonical).digest("hex");
+    
+    const manifest = {
+      ...manifestWithoutHash,
+      manifest_hash_hex: manifestHash
+    };
+    const manifestJson = JSON.stringify(manifest);
+    
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="lantern-corpus-${corpusId}.zip"`);
+    
+    const archive = archiver("zip", { zlib: { level: 9 } });
+    archive.pipe(res);
+    
+    archive.append(manifestJson, { name: `${bundleDir}/MANIFEST.json` });
+    archive.append(corpusJson, { name: `${bundleDir}/corpus.json` });
+    archive.append(ledgerJson, { name: `${bundleDir}/ledger.json` });
+    archive.append(sourcesJson, { name: `${bundleDir}/sources.json` });
+    
+    for (const snap of snapshotContents) {
+      archive.append(snap.json, { name: `${bundleDir}/snapshots/${snap.id}.json` });
+    }
+    
+    for (const pkt of packetContents) {
+      archive.append(pkt.json, { name: `${bundleDir}/packets/${pkt.id}.json` });
+    }
+    
+    for (const pg of pageProofContents) {
+      archive.append(pg.json, { name: `${bundleDir}/pages/${pg.sourceId}/page-${pg.pageIndex}.json` });
+    }
+    
+    archive.append(anchorsProofIndexJson, { name: `${bundleDir}/anchors_proof_index.json` });
+    archive.append(auditSummaryJson, { name: `${bundleDir}/audit_summary.json` });
+    archive.append(packetProofIndexJson, { name: `${bundleDir}/packet_proof_index.json` });
+    archive.append(snapshotProofIndexJson, { name: `${bundleDir}/snapshot_proof_index.json` });
+    
+    await archive.finalize();
+  }));
+
   app.post("/api/upload", (req, res, next) => {
     textUpload.single("file")(req, res, (err: any) => {
       if (err) {
