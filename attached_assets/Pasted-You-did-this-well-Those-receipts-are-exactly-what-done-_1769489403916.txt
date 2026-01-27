@@ -1,0 +1,50 @@
+You did this well. Those receipts are exactly what “done” looks like: all acceptance tests pass, the failure modes flip the right flags, and the minimal bundle behaves correctly with *_ok: null + counters 0 + empty arrays.
+
+What your receipts prove (and why it’s good)
+	•	v1.26 ledger index verifier logic is correct:
+	•	Valid bundle → bundle_ok:true, ledger_index_ok:true, checked:3, issues []
+	•	Missing ledger.json → bundle_ok:false, ledger_index_ok:false, issues include LEDGER_JSON_MISSING
+	•	Hash mismatch / not sorted → same pattern with correct issue codes
+	•	v1.27 unified schema output is correct:
+	•	Full bundle: optional indices present → each *_ok:true with sane counters and empty issue arrays
+	•	Minimal bundle: optional indices absent → each *_ok:null, counters 0, empty issue arrays
+	•	Required top-level fields are present and consistent (bundle/manifest/files checks all true)
+
+The only “correction” you should keep
+
+The “25 keys in exact order” line should be dropped because:
+	•	JSON object key order isn’t a reliable contract unless you explicitly define it as a serialization requirement and enforce it in tests.
+	•	Your sample payload clearly includes more than 25 keys once optional sections are included.
+
+That’s not a failure—just don’t claim something you didn’t enforce.
+
+⸻
+
+What to say to the Replit guy (paste this verbatim)
+
+Subject/first line: v1.27 CLOSED — receipts attached, no further changes
+
+Message:
+
+v1.27 is complete and matches the spec. All acceptance tests pass.
+Receipts:
+	•	v1.26 ledger index: valid bundle passes; LEDGER_JSON_MISSING / LEDGER_INDEX_HASH_MISMATCH / LEDGER_INDEX_NOT_SORTED correctly flip bundle_ok:false and ledger_index_ok:false with the right issue codes.
+	•	v1.27 unified verifier JSON:
+	•	Full bundle: all optional indices present → all *_ok:true, counters populated, issue arrays empty.
+	•	Minimal bundle: optional indices absent → all *_ok:null, counters 0, arrays empty.
+Commit: 2f2c3c7320ae58ae616e019acd75180525c05a88
+Repro commands:
+./verifier verify-bundle --bundle ./bundle_full --out ./verifier_full.json
+./verifier verify-bundle --bundle ./bundle_min --out ./verifier_min.json
+Note: removing the “25 keys in exact order” claim since JSON key order isn’t a guaranteed contract unless explicitly enforced.
+Request: ship/deploy as-is. No v1.28.
+
+⸻
+
+What you do next (shipping checklist)
+	1.	Tag the commit (even just a Git tag like v1.27)
+	2.	Deploy / publish (whatever your Replit flow is)
+	3.	Run the two verifier commands on the deployed build output (or run them locally against the exact export artifact you’ll ship)
+	4.	Save the receipts (your evidence packet JSON + commit SHA) in your repo under something like docs/receipts/v1.27/
+
+If you tell me what “done online in two days” means concretely (public URL live? demo corpus working? investor click-through?), I’ll give you the shortest path checklist to that finish line without scope creep.
