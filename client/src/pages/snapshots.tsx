@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeft, Camera, ExternalLink, Layers, Loader2 } from "lucide-react";
 import { MOCK_CLAIMS, clampConfidence, type Claim } from "@/lib/schema/claims";
 import { useReadOnlyMode } from "@/lib/config";
+import { apiPost } from "@/lib/auth";
 
 interface SnapshotResult {
   snapshot_id: string;
@@ -30,37 +31,26 @@ export default function Snapshots() {
     setSaving(true);
     setError(null);
 
-    try {
-      const claimsPayload = claims.map(c => ({
-        id: c.id,
-        classification: c.classification,
-        text: c.text,
-        confidence: clampConfidence(c.confidence),
-        refusal_reason: c.refusal_reason,
-        anchor_ids: c.anchor_ids
-      }));
+    const claimsPayload = claims.map(c => ({
+      id: c.id,
+      classification: c.classification,
+      text: c.text,
+      confidence: clampConfidence(c.confidence),
+      refusal_reason: c.refusal_reason,
+      anchor_ids: c.anchor_ids
+    }));
 
-      const response = await fetch("/api/snapshots", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          corpus_id: corpusId,
-          claims: claimsPayload
-        })
-      });
+    const result = await apiPost<SnapshotResult>("/api/snapshots", {
+      corpus_id: corpusId,
+      claims: claimsPayload
+    });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to save snapshot");
-      }
-
-      const result: SnapshotResult = await response.json();
-      setSnapshot(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setSaving(false);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setSnapshot(result.data);
     }
+    setSaving(false);
   };
 
   const handleOpenSnapshot = () => {

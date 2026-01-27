@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText, Calendar, Hash, Layers, AlertCircle } from "lucide-react";
 import type { Anchor } from "@/lib/schema/anchors";
+import { apiGet } from "@/lib/auth";
 
 function AnchorCard({ anchor }: { anchor: Anchor }) {
   return (
@@ -58,19 +59,14 @@ export default function AnchorView() {
     }
 
     const fetchAnchors = async () => {
-      try {
-        const response = await fetch(`/api/anchors?ids=${anchorIds.join(",")}`);
-        if (!response.ok) {
-          throw new Error("Failed to fetch anchors");
-        }
-        const data = await response.json();
-        setAnchors(data.anchors);
-        setMissingIds(data.missing_ids);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
+      const result = await apiGet<{ anchors: Anchor[], missing_ids: string[] }>(`/api/anchors?ids=${anchorIds.join(",")}`);
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setAnchors(result.data.anchors);
+        setMissingIds(result.data.missing_ids);
       }
+      setLoading(false);
     };
 
     fetchAnchors();

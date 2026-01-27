@@ -3,6 +3,7 @@ import { useLocation, useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, CheckCircle, XCircle, Download, FileText, Loader2, Shield, Anchor, Link2 } from "lucide-react";
+import { apiGet } from "@/lib/auth";
 
 interface EvidencePacketData {
   packet_id: string;
@@ -71,20 +72,14 @@ export default function EvidencePacket() {
     if (!packetId) return;
     
     const fetchPacket = async () => {
-      try {
-        setLoading(true);
-        const res = await fetch(`/api/packets/${packetId}`);
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.message || "Failed to load packet");
-        }
-        const data = await res.json();
-        setPacket(data);
-      } catch (err: any) {
-        setError(err.message);
-      } finally {
-        setLoading(false);
+      setLoading(true);
+      const result = await apiGet<EvidencePacketData>(`/api/packets/${packetId}`);
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setPacket(result.data);
       }
+      setLoading(false);
     };
     
     fetchPacket();
@@ -95,19 +90,13 @@ export default function EvidencePacket() {
     setVerifying(true);
     setVerifyResult(null);
     
-    try {
-      const res = await fetch(`/api/packets/${packetId}/verify`);
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Verification failed");
-      }
-      const data = await res.json();
-      setVerifyResult(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setVerifying(false);
+    const result = await apiGet<VerifyResponse>(`/api/packets/${packetId}/verify`);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setVerifyResult(result.data);
     }
+    setVerifying(false);
   };
 
   const handleVerifyChain = async () => {
@@ -115,19 +104,13 @@ export default function EvidencePacket() {
     setVerifyingChain(true);
     setVerifyChainResult(null);
     
-    try {
-      const res = await fetch(`/api/packets/${packetId}/verify_chain`);
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Chain verification failed");
-      }
-      const data = await res.json();
-      setVerifyChainResult(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setVerifyingChain(false);
+    const result = await apiGet<VerifyChainResponse>(`/api/packets/${packetId}/verify_chain`);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setVerifyChainResult(result.data);
     }
+    setVerifyingChain(false);
   };
 
   const handleExportJson = () => {

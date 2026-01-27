@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Eye, Layers, AlertTriangle, HelpCircle, Clock } from "lucide-react";
 import { MOCK_CONSTRAINTS, type ConstraintItem, type ConstraintType } from "@/lib/schema/constraints";
+import { apiGet } from "@/lib/auth";
 
 function ConstraintCard({ item }: { item: ConstraintItem }) {
   const [, navigate] = useLocation();
@@ -146,19 +147,13 @@ export default function Constraints() {
 
   useEffect(() => {
     const fetchConstraints = async () => {
-      try {
-        const response = await fetch(`/api/constraints?corpusId=${corpusId}`);
-        if (response.ok) {
-          const data = await response.json();
-          setConstraints(data.constraints);
-        } else {
-          setConstraints(MOCK_CONSTRAINTS);
-        }
-      } catch {
+      const result = await apiGet<{ constraints: ConstraintItem[] }>(`/api/constraints?corpusId=${corpusId}`);
+      if (result.ok) {
+        setConstraints(result.data.constraints);
+      } else {
         setConstraints(MOCK_CONSTRAINTS);
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
 
     fetchConstraints();

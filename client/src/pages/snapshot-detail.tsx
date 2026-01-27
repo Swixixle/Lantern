@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, CheckCircle, XCircle, Download, FileText, Layers, Loader2 } from "lucide-react";
 import { confidenceToBand, type ClaimClassification } from "@/lib/schema/claims";
 import { type ConstraintItem } from "@/lib/schema/constraints";
+import { apiGet } from "@/lib/auth";
 
 interface SnapshotClaim {
   id: string;
@@ -48,24 +49,19 @@ export default function SnapshotDetail() {
 
   useEffect(() => {
     const fetchSnapshot = async () => {
-      try {
-        const response = await fetch(`/api/snapshots/${snapshotId}`);
-        if (!response.ok) {
-          throw new Error("Snapshot not found");
-        }
-        const data: SnapshotData = await response.json();
-        setSnapshot(data);
-
-        const constraintsResponse = await fetch(`/api/constraints?corpusId=${data.corpus_id}`);
-        if (constraintsResponse.ok) {
-          const constraintsData = await constraintsResponse.json();
-          setConstraints(constraintsData.constraints || []);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
+      const result = await apiGet<SnapshotData>(`/api/snapshots/${snapshotId}`);
+      if (!result.ok) {
+        setError(result.error);
         setLoading(false);
+        return;
       }
+      setSnapshot(result.data);
+
+      const constraintsResult = await apiGet<{ constraints: ConstraintItem[] }>(`/api/constraints?corpusId=${result.data.corpus_id}`);
+      if (constraintsResult.ok) {
+        setConstraints(constraintsResult.data.constraints || []);
+      }
+      setLoading(false);
     };
 
     fetchSnapshot();
@@ -73,34 +69,28 @@ export default function SnapshotDetail() {
 
   const handleVerify = async () => {
     setVerifying(true);
-    try {
-      const response = await fetch(`/api/snapshots/${snapshotId}/verify`);
-      if (!response.ok) {
-        throw new Error("Verification failed");
-      }
-      const result: VerifyResult = await response.json();
-      setVerifyResult(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setVerifying(false);
+    const result = await apiGet<VerifyResult>(`/api/snapshots/${snapshotId}/verify`);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setVerifyResult(result.data);
     }
+    setVerifying(false);
   };
 
   const handleExportJSON = async () => {
-    try {
-      const response = await fetch(`/api/snapshots/${snapshotId}`);
-      const data = await response.json();
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `lantern-snapshot-${snapshotId}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
+    const result = await apiGet<SnapshotData>(`/api/snapshots/${snapshotId}`);
+    if (!result.ok) {
       setError("Failed to export JSON");
+      return;
     }
+    const blob = new Blob([JSON.stringify(result.data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `lantern-snapshot-${snapshotId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleExportPDF = async () => {

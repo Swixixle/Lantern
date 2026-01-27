@@ -12,6 +12,7 @@ import {
   FolderOpen, Plus, FileText, Clock, Shield, Archive, 
   ChevronRight, Loader2, AlertTriangle, RefreshCw
 } from "lucide-react";
+import { apiGet, apiPost } from "@/lib/auth";
 
 interface Case {
   id: string;
@@ -47,33 +48,26 @@ export default function Cases() {
   const [creating, setCreating] = useState(false);
 
   const loadCases = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch("/api/cases");
-      if (!res.ok) throw new Error("Failed to load cases");
-      const data = await res.json();
-      setCases(data);
+    setLoading(true);
+    const result = await apiGet<Case[]>("/api/cases");
+    if (result.ok) {
+      setCases(result.data);
       setError(null);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    } else {
+      setError(result.error);
     }
+    setLoading(false);
   }, []);
 
   const loadUploads = useCallback(async (caseId: string) => {
-    try {
-      setLoadingUploads(true);
-      const res = await fetch(`/api/cases/${caseId}/uploads`);
-      if (!res.ok) throw new Error("Failed to load uploads");
-      const data = await res.json();
-      setUploads(data);
-    } catch (err) {
-      console.error("Failed to load uploads:", err);
+    setLoadingUploads(true);
+    const result = await apiGet<Upload[]>(`/api/cases/${caseId}/uploads`);
+    if (result.ok) {
+      setUploads(result.data);
+    } else {
       setUploads([]);
-    } finally {
-      setLoadingUploads(false);
     }
+    setLoadingUploads(false);
   }, []);
 
   useEffect(() => {
@@ -91,30 +85,22 @@ export default function Cases() {
   const createCase = async () => {
     if (!newCaseName.trim()) return;
     
-    try {
-      setCreating(true);
-      const res = await fetch("/api/cases", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: newCaseName.trim(),
-          decisionTarget: newCaseTarget.trim() || null
-        })
-      });
-      
-      if (!res.ok) throw new Error("Failed to create case");
-      
-      const newCase = await res.json();
-      setCases(prev => [newCase, ...prev]);
-      setSelectedCase(newCase);
+    setCreating(true);
+    const result = await apiPost<Case>("/api/cases", {
+      name: newCaseName.trim(),
+      decisionTarget: newCaseTarget.trim() || null
+    });
+    
+    if (result.ok) {
+      setCases(prev => [result.data, ...prev]);
+      setSelectedCase(result.data);
       setNewCaseOpen(false);
       setNewCaseName("");
       setNewCaseTarget("");
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setCreating(false);
+    } else {
+      setError(result.error);
     }
+    setCreating(false);
   };
 
   const getStatusColor = (status: string) => {
