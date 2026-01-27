@@ -296,6 +296,7 @@ export const anchorRecords = pgTable("anchor_records", {
   pageRef: text("page_ref").notNull(),
   sectionRef: text("section_ref"),
   timelineDate: text("timeline_date").notNull(),
+  provenanceJson: text("provenance_json"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 }, (table) => [
   index("anchor_records_corpus_id_idx").on(table.corpusId),
@@ -407,3 +408,22 @@ export const insertLedgerEventSchema = createInsertSchema(ledgerEvents).omit({
 
 export type InsertLedgerEvent = z.infer<typeof insertLedgerEventSchema>;
 export type LedgerEventRow = typeof ledgerEvents.$inferSelect;
+
+// PDF pages table for extraction proof
+export const pdfPages = pgTable("pdf_pages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceId: varchar("source_id").notNull().references(() => corpusSources.id, { onDelete: "cascade" }),
+  pageIndex: integer("page_index").notNull(),
+  pageText: text("page_text").notNull(),
+  pagePngPath: text("page_png_path").notNull(),
+  pageTextSha256Hex: text("page_text_sha256_hex").notNull(),
+}, (table) => [
+  index("pdf_pages_source_page_idx").on(table.sourceId, table.pageIndex),
+]);
+
+export const insertPdfPageSchema = createInsertSchema(pdfPages).omit({
+  id: true,
+});
+
+export type InsertPdfPage = z.infer<typeof insertPdfPageSchema>;
+export type PdfPage = typeof pdfPages.$inferSelect;

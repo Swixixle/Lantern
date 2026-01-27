@@ -1,0 +1,324 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+# v1.13 — Anchor Extraction Proof Mode (PDF-Grounded, Auditable)
+
+## 0) Goal (scope-locked)
+
+When anchors are extracted from PDFs, every anchor must be **provably grounded** in the source PDF via deterministic provenance fields.
+
+This version provides **page-image proof** (rendered page PNG) plus a deterministic pointer to where the anchor came from on that page.
+
+No summaries. No interpretation. No “best effort” fuzzy matching.
+
+---
+
+## 1) New data model (schema)
+
+Create: `client/src/lib/schema/provenance.ts`
+
+### A) AnchorProvenance (canonical)
+
+```ts
+export interface AnchorProvenance {
+  source_sha256_hex: string;   // 64-hex, from source registry
+  source_id: string;           // UUID
+  page_index: number;          // 0-based
+  page_ref: string;            // e.g., "p. 1" (derived from page_index + 1)
+  quote_start_char: number;    // 0-based char offset in extracted page text
+  quote_end_char: number;      // exclusive
+  extractor: {
+    name: "pdfjs-text-v1";
+    version: "1.0.0";
+  };
+}
+```
+
+Hard rule:
+
+* `quote_start_char` / `quote_end_char` are offsets **into the extracted page text string** produced by the extractor (see §3).
+* No bounding boxes in v1.13. Only page + char-range.
+
+### B) AnchorRecord update
+
+Extend existing `Anchor` schema to include provenance:
+
+```ts
+export interface AnchorRecord {
+  id: string;
+  corpus_id: string;
+  source_id: string;
+  quote: string;
+  source_document: string;
+  page_ref: string;
+  section_ref?: string | null;
+  timeline_date: string;
+  provenance: AnchorProvenance;
+}
+```
+
+---
+
+## 2) Storage additions (server)
+
+Add tables (SQLite):
+
+### A) `pdf_pages`
+
+* `id TEXT PRIMARY KEY` (UUID)
+* `source_id TEXT NOT NULL`
+* `page_index INTEGER NOT NULL`
+* `page_text TEXT NOT NULL`               // extracted full page text
+* `page_png_path TEXT NOT NULL`           // local path to rendered png
+* `page_text_sha256_hex TEXT NOT NULL`    // sha256 of page_text UTF-8
+
+Indexes:
+
+* `(source_id, page_index)` unique
+
+### B) Update anchors table to store provenance JSON
+
+* `provenance_json TEXT NOT NULL`
+
+---
+
+## 3) Extractor (deterministic)
+
+### Extractor name/version
+
+* `pdfjs-text-v1`, version `1.0.0`
+
+### Deterministic extraction pipeline
+
+When building anchors (in any mode that extracts from PDFs):
+
+1. For each uploaded PDF source:
+2. For each page:
+
+   * Extract **page text** using one deterministic method (you choose implementation, but output must be stable for same PDF and same library versions).
+   * Render the page to a PNG image.
+   * Store:
+
+     * page_text
+     * page_text_sha256_hex
+     * page_png_path
+3. Anchor extraction:
+
+   * In v1.13, anchors are created by selecting a **sentence window** from the page_text (2–4 sentences) exactly as your earlier extraction boundary.
+   * Each anchor must record:
+
+     * page_index
+     * quote_start_char / quote_end_char locating the quote within page_text
+     * source_sha256_hex copied from the source registry row
+
+Hard rules:
+
+* The `quote` string must equal `page_text.slice(quote_start_char, quote_end_char)` exactly.
+* If the quote cannot be found exactly, do not create the anchor (fail the build).
+
+---
+
+## 4) API endpoints
+
+### A) Get PDF page proof (image + text hash)
+
+`GET /api/sources/:source_id/pages/:page_index`
+
+Response:
+
+```json
+{
+  "source_id": "uuid",
+  "page_index": 0,
+  "page_text_sha256_hex": "64-hex",
+  "page_png_url": "/uploads/pages/<file>.png"
+}
+```
+
+No page_text returned by default.
+
+Optional query param:
+
+* `include_text=true` (default false)
+
+If include_text=true:
+
+```json
+{
+  "source_id": "...",
+  "page_index": 0,
+  "page_text_sha256_hex": "...",
+  "page_png_url": "...",
+  "page_text": "..."
+}
+```
+
+### B) Get anchor proof packet (single anchor)
+
+`GET /api/anchors/:anchor_id/proof`
+
+Response:
+
+```json
+{
+  "anchor": { /* AnchorRecord */ },
+  "page": {
+    "source_id": "uuid",
+    "page_index": 0,
+    "page_text_sha256_hex": "64-hex",
+    "page_png_url": "/uploads/pages/<file>.png"
+  },
+  "repro": {
+    "page_text_substring": "exact substring from page_text using offsets",
+    "substring_sha256_hex": "64-hex"
+  }
+}
+```
+
+Rules:
+
+* `repro.page_text_substring` must equal anchor.quote exactly.
+* `substring_sha256_hex` is sha256 of that substring UTF-8.
+
+### C) Build endpoint output update
+
+Wherever you return build results (anchors_only mode already exists), add:
+
+* `pages_indexed`: number of pages processed
+* `pages_rendered`: number of PNG pages rendered
+
+Example:
+
+```json
+{
+  "corpus_id": "...",
+  "mode": "anchors_only",
+  "status": "COMPLETED",
+  "pages_indexed": 12,
+  "pages_rendered": 12,
+  "anchors_created": 7,
+  "claims_created": 0,
+  "constraints_created": 0
+}
+```
+
+---
+
+## 5) UI changes (minimal)
+
+### A) Anchor View: add “Proof” action
+
+In the existing Anchor View (`/anchors?ids=...` or the anchor browser), for each anchor add a button:
+
+* **View Proof**
+
+Click opens:
+
+* `/anchors/proof?anchorId=<id>` (new route)
+
+### B) Proof page UI
+
+Route:
+`/anchors/proof?anchorId=<id>`
+
+Displays:
+
+* Anchor ID
+* Source document filename
+* Source sha256_hex (from provenance)
+* Page (page_ref and page_index)
+* Offsets: quote_start_char / quote_end_char
+* Rendered PNG image (from page_png_url)
+* Quote (verbatim)
+* “Repro substring sha256” and “Page text sha256”
+
+No highlighting overlays required in v1.13.
+
+---
+
+## 6) Export changes (required)
+
+### v1.7 bundle update
+
+If the corpus has any `pdf_pages` rows, include:
+
+* `pages/` directory with page proof images
+
+Add to bundle structure:
+
+```
+pages/
+  <source_id>/
+    page-<page_index>.png
+    page-<page_index>.json
+```
+
+Where `page-<page_index>.json` is:
+
+```json
+{
+  "source_id": "uuid",
+  "page_index": 0,
+  "page_text_sha256_hex": "64-hex"
+}
+```
+
+Do not include page_text in bundle.
+
+Update MANIFEST to hash these new files as normal.
+
+Hard rule:
+
+* These files are included regardless of include_raw_sources (they are proof artifacts, not raw sources).
+
+---
+
+## 7) Acceptance tests
+
+1. Build indexes pages and renders PNGs; response includes pages_indexed and pages_rendered.
+2. `GET /api/sources/:source_id/pages/:page_index` returns page_text_sha256_hex and a valid png url.
+3. `GET /api/anchors/:anchor_id/proof` returns anchor + page + repro where:
+
+   * repro.page_text_substring === anchor.quote
+   * substring_sha256_hex matches computed sha256 of anchor.quote
+4. Anchor provenance:
+
+   * provenance.source_sha256_hex matches the source registry sha256_hex
+   * page_ref matches page_index+1 formatting
+5. Bundle export includes `pages/<source_id>/page-<n>.png` and `page-<n>.json`, and their hashes appear in MANIFEST.json.
+6. Deterministic behavior:
+
+   * Re-running build on same PDFs without changes produces the same `page_text_sha256_hex` for each page.
+   * Proof endpoint returns consistent offsets and quote.
+
+---
+
+## 8) What to send me when complete
+
+* One build response showing pages_indexed/pages_rendered
+* One `GET /api/sources/:source_id/pages/:page_index` response
+* One `GET /api/anchors/:anchor_id/proof` response (full)
+* Bundle ZIP entries showing `pages/<source_id>/...` plus MANIFEST entries (paths + hashes)
+
+Proceed exactly to v1.13.
