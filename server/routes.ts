@@ -166,6 +166,25 @@ function asyncHandler(fn: (req: Request, res: Response, next: NextFunction) => P
   };
 }
 
+function requireAuth(req: Request, res: Response, next: NextFunction) {
+  const apiKey = process.env.LANTERN_API_KEY;
+  if (!apiKey) {
+    return res.status(401).json({ type: "AUTH_ERROR", message: "Unauthorized" });
+  }
+  
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ type: "AUTH_ERROR", message: "Unauthorized" });
+  }
+  
+  const token = authHeader.slice(7);
+  if (token !== apiKey) {
+    return res.status(401).json({ type: "AUTH_ERROR", message: "Unauthorized" });
+  }
+  
+  next();
+}
+
 function computeSha256(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
 }
@@ -208,6 +227,11 @@ export async function registerRoutes(
       pid: process.pid,
       env: process.env.NODE_ENV || "development"
     });
+  });
+
+  // v1.9 Auth status endpoint
+  app.get("/api/auth/status", requireAuth, (_req, res) => {
+    res.json({ authenticated: true });
   });
 
   app.post("/api/upload", (req, res, next) => {
@@ -705,7 +729,7 @@ export async function registerRoutes(
   });
   
   // Create corpus
-  app.post("/api/corpus", asyncHandler(async (req, res) => {
+  app.post("/api/corpus", requireAuth, asyncHandler(async (req, res) => {
     const { purpose } = req.body;
     
     const parseResult = corpusPurposeEnum.safeParse(purpose);
@@ -734,7 +758,7 @@ export async function registerRoutes(
   }));
   
   // Upload source into corpus
-  app.post("/api/corpus/:corpusId/sources", corpusUpload.single("file"), asyncHandler(async (req, res) => {
+  app.post("/api/corpus/:corpusId/sources", requireAuth, corpusUpload.single("file"), asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const role = String(req.body.role || "");
     const file = req.file;
@@ -824,7 +848,7 @@ export async function registerRoutes(
   // Build corpus artifacts (extraction pipeline)
   // Extraction Rule: Sentence-window (2-4 sentences)
   // Timeline Date: Upload timestamp (not inferred from content)
-  app.post("/api/corpus/:corpusId/build", asyncHandler(async (req, res) => {
+  app.post("/api/corpus/:corpusId/build", requireAuth, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const { mode } = req.body;
     
@@ -1013,7 +1037,7 @@ export async function registerRoutes(
   // === CLAIM RECORDS API ===
   
   // Create claim (user-authored)
-  app.post("/api/corpus/:corpusId/claims", asyncHandler(async (req, res) => {
+  app.post("/api/corpus/:corpusId/claims", requireAuth, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const { text, anchor_ids } = req.body;
     
@@ -1111,7 +1135,7 @@ export async function registerRoutes(
   }));
   
   // Delete claim
-  app.delete("/api/corpus/:corpusId/claims/:claimId", asyncHandler(async (req, res) => {
+  app.delete("/api/corpus/:corpusId/claims/:claimId", requireAuth, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const claimId = req.params.claimId as string;
     
@@ -1187,7 +1211,7 @@ export async function registerRoutes(
   }
 
   // Create evidence packet (requires snapshot_id)
-  app.post("/api/corpus/:corpusId/claims/:claimId/packet", asyncHandler(async (req, res) => {
+  app.post("/api/corpus/:corpusId/claims/:claimId/packet", requireAuth, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const claimId = req.params.claimId as string;
     const { snapshot_id } = req.body;
@@ -1490,7 +1514,7 @@ export async function registerRoutes(
   // === SNAPSHOT API ===
   
   // Create snapshot (with snapshot_scope)
-  app.post("/api/snapshots", asyncHandler(async (req, res) => {
+  app.post("/api/snapshots", requireAuth, asyncHandler(async (req, res) => {
     const { corpus_id, claims } = req.body;
     
     if (!corpus_id || typeof corpus_id !== "string") {
@@ -1708,7 +1732,7 @@ export async function registerRoutes(
 
   // === EXPORT BUNDLE API ===
   
-  app.get("/api/corpus/:corpusId/export_bundle", asyncHandler(async (req, res) => {
+  app.get("/api/corpus/:corpusId/export_bundle", requireAuth, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const includeRawSources = req.query.include_raw_sources === "true";
     
@@ -1873,7 +1897,7 @@ export async function registerRoutes(
   }));
 
   // v1.8 Bundle Verification endpoint
-  app.post("/api/bundles/verify", bundleUpload.single("bundle"), asyncHandler(async (req: Request, res: Response) => {
+  app.post("/api/bundles/verify", requireAuth, bundleUpload.single("bundle"), asyncHandler(async (req: Request, res: Response) => {
     if (!req.file) {
       return res.status(400).json({ type: "VALIDATION_ERROR", message: "No bundle file provided" });
     }

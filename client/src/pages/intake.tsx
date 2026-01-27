@@ -3,7 +3,8 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2, Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2, Download, Key } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CORPUS_PURPOSES, SYSTEM_LIMITATIONS, type CorpusPurpose, type CorpusSource } from "@/lib/schema/corpus";
 
@@ -19,6 +20,7 @@ interface BuildResult {
 export default function Intake() {
   const [, navigate] = useLocation();
   
+  const [apiKey, setApiKey] = useState<string>("");
   const [purpose, setPurpose] = useState<CorpusPurpose | "">("");
   const [corpusId, setCorpusId] = useState<string | null>(null);
   const [creatingCorpus, setCreatingCorpus] = useState(false);
@@ -37,6 +39,14 @@ export default function Intake() {
   const primaryInputRef = useRef<HTMLInputElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
 
+  const getAuthHeaders = (): Record<string, string> => {
+    const headers: Record<string, string> = {};
+    if (apiKey) {
+      headers["Authorization"] = `Bearer ${apiKey}`;
+    }
+    return headers;
+  };
+
   const handleCreateCorpus = async () => {
     if (!purpose) return;
     
@@ -46,9 +56,14 @@ export default function Intake() {
     try {
       const response = await fetch("/api/corpus", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ purpose })
       });
+      
+      if (response.status === 401) {
+        setError("Unauthorized");
+        return;
+      }
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -80,8 +95,14 @@ export default function Intake() {
       
       const response = await fetch(`/api/corpus/${corpusId}/sources`, {
         method: "POST",
+        headers: getAuthHeaders(),
         body: formData
       });
+      
+      if (response.status === 401) {
+        setError("Unauthorized");
+        return;
+      }
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -126,9 +147,14 @@ export default function Intake() {
     try {
       const response = await fetch(`/api/corpus/${corpusId}/build`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ mode: "anchors_only" })
       });
+      
+      if (response.status === 401) {
+        setError("Unauthorized");
+        return;
+      }
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -154,7 +180,14 @@ export default function Intake() {
     
     try {
       const url = `/api/corpus/${corpusId}/export_bundle${includeRawSources ? "?include_raw_sources=true" : ""}`;
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        headers: getAuthHeaders()
+      });
+      
+      if (response.status === 401) {
+        setError("Unauthorized");
+        return;
+      }
       
       if (!response.ok) {
         const errorData = await response.json();
@@ -209,6 +242,24 @@ export default function Intake() {
                 </li>
               ))}
             </ul>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Key className="w-4 h-4" />
+              API Key
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Input
+              type="password"
+              placeholder="Enter API key"
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              data-testid="input-api-key"
+            />
           </CardContent>
         </Card>
 

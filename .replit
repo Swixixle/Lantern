@@ -46,3 +46,8 @@ waitForPort = 5000
 
 [agent]
 mockupState = "FULLSTACK"
+
+[userenv]
+
+[userenv.shared]
+LANTERN_API_KEY = "lantern-test-key-2026"
