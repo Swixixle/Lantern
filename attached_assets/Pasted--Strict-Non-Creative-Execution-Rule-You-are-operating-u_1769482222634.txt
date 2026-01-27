@@ -1,0 +1,99 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.17 is **accepted as complete and compliant** based on your evidence packet:
+
+* Valid bundle reports `audit_summary_ok: true` with empty issues ✅
+* Failing bundle reports `audit_summary_ok: false` with `AUDIT_SUMMARY_SUM_MISMATCH` and `bundle_ok: false` ✅
+* Output schema extended without removing prior keys ✅
+
+---
+
+# v1.18 — Proof UI Hardening (Deterministic Display, No Writes)
+
+## 0) Goal (scope-locked)
+
+Harden the **Anchor Proof UI** so auditors can verify proof artifacts quickly and deterministically.
+
+No new extraction. No new storage. No new exports. No writes.
+
+---
+
+## 1) UI requirements
+
+### A) Proof page must display these fields (exact labels)
+
+Route: `/anchors/proof?anchorId=<id>`
+
+Display a “Proof Metadata” section containing:
+
+* `Anchor ID`
+* `Corpus ID`
+* `Source ID`
+* `Source SHA256`
+* `Source Document`
+* `Page Index`
+* `Page Ref`
+* `Quote Start`
+* `Quote End`
+* `Page Text SHA256`
+* `Substring SHA256`
+* `Extractor Name`
+* `Extractor Version`
+
+Display a “Quote” section showing verbatim quote string.
+
+Display a “Page Image” section showing the PNG.
+
+### B) Deterministic copy controls
+
+Add 2 buttons:
+
+* `Copy Proof JSON` → copies the exact JSON returned by `GET /api/anchors/:anchor_id/proof` (stringified with 2-space indentation, stable key order as returned)
+* `Copy Audit Line` → copies a single line exactly:
+
+```
+<anchor_id>|<source_id>|<page_index>|<quote_start_char>|<quote_end_char>|<page_text_sha256_hex>|<substring_sha256_hex>
+```
+
+No extra spaces. No newline at end.
+
+### C) Read-only mode compatibility
+
+If `public_readonly=true`, proof page must still function without auth.
+
+---
+
+## 2) Acceptance tests
+
+1. Proof page renders all required labels with values populated from proof endpoint.
+2. `Copy Proof JSON` produces valid JSON identical in content to API response.
+3. `Copy Audit Line` matches exact format and values.
+4. In read-only review mode (no auth header), proof page still loads successfully.
+
+---
+
+## 3) What to send me when complete
+
+* Screenshot of proof page showing Proof Metadata section + Quote + Page Image
+* Copied output of `Copy Audit Line` for one anchor
+* The proof endpoint JSON for the same anchor (so values can be cross-checked)
+
+Proceed exactly to v1.18.

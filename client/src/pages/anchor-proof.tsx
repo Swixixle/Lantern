@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,7 @@ interface AnchorProofPacket {
 export default function AnchorProofPage() {
   const [, navigate] = useLocation();
   const [proof, setProof] = useState<AnchorProofPacket | null>(null);
+  const [rawJson, setRawJson] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,6 +72,7 @@ export default function AnchorProofPage() {
       })
       .then(data => {
         setProof(data);
+        setRawJson(JSON.stringify(data, null, 2));
         setLoading(false);
       })
       .catch(err => {
@@ -78,6 +80,16 @@ export default function AnchorProofPage() {
         setLoading(false);
       });
   }, [anchorId]);
+
+  const copyProofJson = () => {
+    navigator.clipboard.writeText(rawJson);
+  };
+
+  const copyAuditLine = () => {
+    if (!proof) return;
+    const line = `${proof.anchor.id}|${proof.anchor.provenance.source_id}|${proof.anchor.provenance.page_index}|${proof.anchor.provenance.quote_start_char}|${proof.anchor.provenance.quote_end_char}|${proof.page.page_text_sha256_hex}|${proof.repro.substring_sha256_hex}`;
+    navigator.clipboard.writeText(line);
+  };
 
   if (loading) {
     return (
@@ -111,9 +123,15 @@ export default function AnchorProofPage() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <div className="mb-6">
+      <div className="mb-6 flex gap-2">
         <Button variant="outline" onClick={() => window.history.back()}>
           Back
+        </Button>
+        <Button variant="outline" onClick={copyProofJson} data-testid="copy-proof-json">
+          Copy Proof JSON
+        </Button>
+        <Button variant="outline" onClick={copyAuditLine} data-testid="copy-audit-line">
+          Copy Audit Line
         </Button>
       </div>
 
@@ -122,70 +140,76 @@ export default function AnchorProofPage() {
       <div className="grid gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Anchor</CardTitle>
+            <CardTitle>Proof Metadata</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <span className="text-muted-foreground text-sm">Anchor ID:</span>
-              <p className="font-mono text-sm" data-testid="proof-anchor-id">{proof.anchor.id}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground text-sm">Source Document:</span>
-              <p data-testid="proof-source-document">{proof.anchor.source_document}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground text-sm">Source SHA256:</span>
-              <p className="font-mono text-xs break-all" data-testid="proof-source-sha256">{proof.anchor.provenance.source_sha256_hex}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground text-sm">Page:</span>
-              <p data-testid="proof-page-ref">{proof.anchor.page_ref} (page_index: {proof.anchor.provenance.page_index})</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground text-sm">Offsets:</span>
-              <p className="font-mono text-sm" data-testid="proof-offsets">
-                quote_start_char: {proof.anchor.provenance.quote_start_char}, quote_end_char: {proof.anchor.provenance.quote_end_char}
-              </p>
-            </div>
-            <div>
-              <span className="text-muted-foreground text-sm">Extractor:</span>
-              <p className="font-mono text-sm" data-testid="proof-extractor">
-                {proof.anchor.provenance.extractor.name} v{proof.anchor.provenance.extractor.version}
-              </p>
-            </div>
+          <CardContent>
+            <table className="w-full text-sm">
+              <tbody>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground w-40">Anchor ID</td>
+                  <td className="py-2 font-mono" data-testid="proof-anchor-id">{proof.anchor.id}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Corpus ID</td>
+                  <td className="py-2 font-mono" data-testid="proof-corpus-id">{proof.anchor.corpus_id}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Source ID</td>
+                  <td className="py-2 font-mono" data-testid="proof-source-id">{proof.anchor.provenance.source_id}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Source SHA256</td>
+                  <td className="py-2 font-mono text-xs break-all" data-testid="proof-source-sha256">{proof.anchor.provenance.source_sha256_hex}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Source Document</td>
+                  <td className="py-2" data-testid="proof-source-document">{proof.anchor.source_document}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Page Index</td>
+                  <td className="py-2 font-mono" data-testid="proof-page-index">{proof.anchor.provenance.page_index}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Page Ref</td>
+                  <td className="py-2" data-testid="proof-page-ref">{proof.anchor.page_ref}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Quote Start</td>
+                  <td className="py-2 font-mono" data-testid="proof-quote-start">{proof.anchor.provenance.quote_start_char}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Quote End</td>
+                  <td className="py-2 font-mono" data-testid="proof-quote-end">{proof.anchor.provenance.quote_end_char}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Page Text SHA256</td>
+                  <td className="py-2 font-mono text-xs break-all" data-testid="proof-page-text-sha256">{proof.page.page_text_sha256_hex}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Substring SHA256</td>
+                  <td className="py-2 font-mono text-xs break-all" data-testid="proof-substring-sha256">{proof.repro.substring_sha256_hex}</td>
+                </tr>
+                <tr className="border-b">
+                  <td className="py-2 text-muted-foreground">Extractor Name</td>
+                  <td className="py-2 font-mono" data-testid="proof-extractor-name">{proof.anchor.provenance.extractor.name}</td>
+                </tr>
+                <tr>
+                  <td className="py-2 text-muted-foreground">Extractor Version</td>
+                  <td className="py-2 font-mono" data-testid="proof-extractor-version">{proof.anchor.provenance.extractor.version}</td>
+                </tr>
+              </tbody>
+            </table>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Quote (Verbatim)</CardTitle>
+            <CardTitle>Quote</CardTitle>
           </CardHeader>
           <CardContent>
             <blockquote className="border-l-4 border-primary pl-4 italic" data-testid="proof-quote">
               "{proof.anchor.quote}"
             </blockquote>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Reproduction Proof</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div>
-              <span className="text-muted-foreground text-sm">Page Text SHA256:</span>
-              <p className="font-mono text-xs break-all" data-testid="proof-page-text-sha256">{proof.page.page_text_sha256_hex}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground text-sm">Substring SHA256:</span>
-              <p className="font-mono text-xs break-all" data-testid="proof-substring-sha256">{proof.repro.substring_sha256_hex}</p>
-            </div>
-            <div>
-              <span className="text-muted-foreground text-sm">Repro Substring (from page_text[{proof.anchor.provenance.quote_start_char}:{proof.anchor.provenance.quote_end_char}]):</span>
-              <p className="bg-muted p-2 rounded text-sm font-mono" data-testid="proof-repro-substring">
-                {proof.repro.page_text_substring}
-              </p>
-            </div>
           </CardContent>
         </Card>
 
