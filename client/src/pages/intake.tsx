@@ -3,11 +3,11 @@ import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2, Download, Key } from "lucide-react";
+import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2, Download } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CORPUS_PURPOSES, SYSTEM_LIMITATIONS, type CorpusPurpose, type CorpusSource } from "@/lib/schema/corpus";
 import { useReadOnlyMode } from "@/lib/config";
+import { apiPost, apiClient } from "@/lib/auth";
 
 interface BuildResult {
   corpus_id: string;
@@ -22,7 +22,6 @@ export default function Intake() {
   const [, navigate] = useLocation();
   const { isReadOnly } = useReadOnlyMode();
   
-  const [apiKey, setApiKey] = useState<string>("");
   const [purpose, setPurpose] = useState<CorpusPurpose | "">("");
   const [corpusId, setCorpusId] = useState<string | null>(null);
   const [creatingCorpus, setCreatingCorpus] = useState(false);
@@ -43,44 +42,20 @@ export default function Intake() {
   const primaryInputRef = useRef<HTMLInputElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
 
-  const getAuthHeaders = (): Record<string, string> => {
-    const headers: Record<string, string> = {};
-    if (apiKey) {
-      headers["Authorization"] = `Bearer ${apiKey}`;
-    }
-    return headers;
-  };
-
   const handleCreateCorpus = async () => {
     if (!purpose) return;
     
     setCreatingCorpus(true);
     setError(null);
     
-    try {
-      const response = await fetch("/api/corpus", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ purpose })
-      });
-      
-      if (response.status === 401) {
-        setError("Unauthorized");
-        return;
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create corpus");
-      }
-      
-      const result = await response.json();
-      setCorpusId(result.corpus_id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setCreatingCorpus(false);
+    const result = await apiPost<{ corpus_id: string }>("/api/corpus", { purpose });
+    
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setCorpusId(result.data.corpus_id);
     }
+    setCreatingCorpus(false);
   };
 
   const handleUpload = async (file: File, role: "PRIMARY" | "SECONDARY") => {
@@ -92,41 +67,21 @@ export default function Intake() {
     setUploading(true);
     setError(null);
     
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("role", role);
-      
-      const response = await fetch(`/api/corpus/${corpusId}/sources`, {
-        method: "POST",
-        headers: getAuthHeaders(),
-        body: formData
-      });
-      
-      if (response.status === 401) {
-        setError("Unauthorized");
-        return;
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to upload source");
-      }
-      
-      const result = await response.json();
-      setSources(prev => [...prev, {
-        source_id: result.source_id,
-        corpus_id: result.corpus_id,
-        role: result.role,
-        filename: result.filename,
-        uploaded_at: result.uploaded_at,
-        sha256_hex: result.sha256_hex
-      }]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setUploading(false);
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("role", role);
+    
+    const result = await apiClient<CorpusSource>(`/api/corpus/${corpusId}/sources`, {
+      method: "POST",
+      body: formData
+    });
+    
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setSources(prev => [...prev, result.data]);
     }
+    setUploading(false);
   };
 
   const handlePrimaryFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -148,33 +103,22 @@ export default function Intake() {
     setError(null);
     setBuildResult(null);
     
-    try {
-      const response = await fetch(`/api/corpus/${corpusId}/build`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-        body: JSON.stringify({ mode: "anchors_only" })
-      });
-      
-      if (response.status === 401) {
-        setError("Unauthorized");
-        return;
-      }
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to build anchors");
-      }
-      
-      const result: BuildResult = await response.json();
-      setBuildResult(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setBuilding(false);
+    const result = await apiPost<BuildResult>(`/api/corpus/${corpusId}/build`, { mode: "anchors_only" });
+    
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setBuildResult(result.data);
     }
+    setBuilding(false);
   };
 
   const hasAnySources = primarySources.length > 0 || secondarySources.length > 0;
+
+  const getAuthHeaders = (): Record<string, string> => {
+    const apiKey = localStorage.getItem("lantern_api_key");
+    return apiKey ? { "Authorization": `Bearer ${apiKey}` } : {};
+  };
 
   const handleExportBundle = async () => {
     if (!corpusId) return;
@@ -286,24 +230,6 @@ export default function Intake() {
                 </li>
               ))}
             </ul>
-          </CardContent>
-        </Card>
-
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Key className="w-4 h-4" />
-              API Key
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Input
-              type="password"
-              placeholder="Enter API key"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              data-testid="input-api-key"
-            />
           </CardContent>
         </Card>
 

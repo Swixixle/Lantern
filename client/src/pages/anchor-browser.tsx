@@ -104,30 +104,19 @@ export default function AnchorBrowser() {
     setError(null);
     setCreatedClaim(null);
 
-    try {
-      const response = await fetch(`/api/corpus/${corpusId}/claims`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: claimText.trim(),
-          anchor_ids: Array.from(selectedAnchorIds)
-        })
-      });
+    const result = await apiPost<ClaimResult>(`/api/corpus/${corpusId}/claims`, {
+      text: claimText.trim(),
+      anchor_ids: Array.from(selectedAnchorIds)
+    });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to create claim");
-      }
-
-      const result: ClaimResult = await response.json();
-      setCreatedClaim(result);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setCreatedClaim(result.data);
       setClaimText("");
       setSelectedAnchorIds(new Set());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setCreating(false);
     }
+    setCreating(false);
   };
 
   if (!corpusId) {
