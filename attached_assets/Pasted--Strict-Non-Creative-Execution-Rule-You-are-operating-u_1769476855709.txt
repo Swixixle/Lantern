@@ -1,0 +1,125 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.13 is **accepted as complete and compliant** based on your evidence packet:
+
+* Build reports `pages_indexed` / `pages_rendered` ✅
+* Page proof endpoint returns `page_text_sha256_hex` + `page_png_url` ✅
+* Anchor proof endpoint returns provenance with `source_sha256_hex`, page index/ref, offsets, extractor id/version, and repro substring matching quote ✅
+* Bundle includes `pages/<source_id>/page-0.json` and `page-0.png`, with MANIFEST entries ✅
+
+Proceed to v1.14 exactly as you stated.
+
+---
+
+# v1.14 — anchors_proof_index.json in Exports (Deterministic)
+
+## 0) Goal (scope-locked)
+
+Add a single deterministic index file to the v1.7 corpus bundle export that enables third-party audit tooling to verify anchor provenance **without calling APIs**.
+
+No new inference. No new content beyond existing stored fields.
+
+---
+
+## 1) Bundle structure change (v1.7)
+
+Add file at bundle root:
+`anchors_proof_index.json`
+
+Bundle layout now includes:
+
+```
+anchors_proof_index.json
+pages/<source_id>/page-<page_index>.png
+pages/<source_id>/page-<page_index>.json
+...
+```
+
+`anchors_proof_index.json` must be included in MANIFEST.json `files[]` with sha256 like all other files.
+
+---
+
+## 2) File format (exact)
+
+### anchors_proof_index.json
+
+```json
+{
+  "corpus_id": "uuid",
+  "extractor": { "name": "pdfjs-text-v1", "version": "1.0.0" },
+  "anchors": [
+    {
+      "anchor_id": "uuid",
+      "source_id": "uuid",
+      "page_index": 0,
+      "quote_start_char": 0,
+      "quote_end_char": 63,
+      "page_text_sha256_hex": "64-hex"
+    }
+  ]
+}
+```
+
+Hard rules:
+
+* `anchors[]` must include **every anchor** in the corpus that has `provenance.extractor.name === "pdfjs-text-v1"`.
+* Each anchor entry fields must be copied from stored anchor provenance and page table:
+
+  * `page_text_sha256_hex` comes from `pdf_pages.page_text_sha256_hex` for `(source_id, page_index)`
+* No `quote` field. No `source_sha256_hex`. No filenames. Only the exact fields above.
+* `anchors[]` must be sorted lexicographically by `anchor_id` (string compare).
+* Top-level keys must appear in this order:
+
+  1. `corpus_id`
+  2. `extractor`
+  3. `anchors`
+
+---
+
+## 3) Determinism requirements
+
+* Generating the bundle twice with unchanged corpus must produce identical `anchors_proof_index.json` bytes.
+* Ensure stable JSON stringify with:
+
+  * fixed key order (as above)
+  * no pretty-print requirement (you may minify or indent, but must be consistent every time). Choose one and keep it fixed.
+
+---
+
+## 4) Acceptance tests
+
+1. After building anchors, exporting bundle includes `anchors_proof_index.json` at root.
+2. `anchors_proof_index.json` contains correct `corpus_id`, extractor name/version, and one entry per eligible anchor.
+3. Every entry’s `page_text_sha256_hex` matches the corresponding `pages/<source_id>/page-<page_index>.json` content.
+4. `anchors[]` sorted by `anchor_id`.
+5. MANIFEST.json includes `anchors_proof_index.json` with correct sha256.
+
+---
+
+## 5) What to send me when complete
+
+* The contents of `anchors_proof_index.json` (full)
+* The MANIFEST entry for `anchors_proof_index.json` (path + sha256)
+* Two sample cross-checks showing:
+
+  * an anchor entry’s `(source_id,page_index,page_text_sha256_hex)` equals the corresponding `pages/.../page-<n>.json`
+
+Proceed exactly to v1.14.

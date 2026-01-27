@@ -2046,6 +2046,43 @@ export async function registerRoutes(
       }
     }
     
+    const allAnchors = await storage.listAnchorRecordsByCorpus(corpusId);
+    const pdfJsAnchors = allAnchors.filter(a => {
+      if (!a.provenanceJson) return false;
+      try {
+        const prov = JSON.parse(a.provenanceJson);
+        return prov.extractor?.name === "pdfjs-text-v1";
+      } catch { return false; }
+    });
+    
+    const pageTextHashMap = new Map<string, string>();
+    for (const pageProof of pageProofContents) {
+      const key = `${pageProof.sourceId}:${pageProof.pageIndex}`;
+      const parsed = JSON.parse(pageProof.json);
+      pageTextHashMap.set(key, parsed.page_text_sha256_hex);
+    }
+    
+    const anchorsProofEntries = pdfJsAnchors.map(a => {
+      const prov = JSON.parse(a.provenanceJson!);
+      const key = `${prov.source_id}:${prov.page_index}`;
+      return {
+        anchor_id: a.id,
+        source_id: prov.source_id,
+        page_index: prov.page_index,
+        quote_start_char: prov.quote_start_char,
+        quote_end_char: prov.quote_end_char,
+        page_text_sha256_hex: pageTextHashMap.get(key) || ""
+      };
+    }).sort((a, b) => a.anchor_id.localeCompare(b.anchor_id));
+    
+    const anchorsProofIndex = {
+      corpus_id: corpusId,
+      extractor: { name: "pdfjs-text-v1", version: "1.0.0" },
+      anchors: anchorsProofEntries
+    };
+    const anchorsProofIndexJson = JSON.stringify(anchorsProofIndex);
+    files.push({ path: "anchors_proof_index.json", sha256_hex: createHash("sha256").update(anchorsProofIndexJson).digest("hex") });
+    
     if (includeRawSources) {
       for (const src of sources) {
         const rawPath = `raw_sources/${src.id}__${src.filename}`;
@@ -2123,6 +2160,8 @@ export async function registerRoutes(
         // PNG not available
       }
     }
+    
+    archive.append(anchorsProofIndexJson, { name: `${bundleDir}/anchors_proof_index.json` });
     
     await archive.finalize();
   }));
