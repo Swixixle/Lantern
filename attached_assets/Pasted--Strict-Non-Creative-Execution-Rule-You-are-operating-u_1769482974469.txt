@@ -1,0 +1,147 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.19 is **accepted as complete and compliant** based on your evidence packet:
+
+* `packet_proof_index.json` present at bundle root with correct schema ✅
+* MANIFEST includes `packet_proof_index.json` with sha256 ✅
+* Determinism verified (identical sha256 across exports) ✅
+* Empty `packets[]` is valid given no packets exist in that corpus ✅
+
+---
+
+# v1.20 — Verifier Enhancement (packet_proof_index.json validation)
+
+## 0) Goal (scope-locked)
+
+Extend the bundle verifier to validate `packet_proof_index.json` if present.
+
+No new exports. Only verification.
+
+---
+
+## 1) Output schema additions (extend, do not remove)
+
+Add:
+
+```json
+{
+  "packet_index_ok": true,
+  "packet_index_checked": 0,
+  "packet_index_issues": []
+}
+```
+
+If `packet_proof_index.json` missing:
+
+* `packet_index_ok: null`
+* `packet_index_checked: 0`
+* `packet_index_issues: ["packet_proof_index.json not present; skipping"]`
+
+If present and any check fails:
+
+* `packet_index_ok: false`
+* `bundle_ok` must be false
+* `packet_index_issues` contains issue codes from §2 (strings)
+
+---
+
+## 2) Verification rules (exact)
+
+If `packet_proof_index.json` exists:
+
+### A) Required top-level keys present (exact set)
+
+Must contain exactly:
+
+* `corpus_id`
+* `packets`
+
+Issue:
+
+* `PACKET_INDEX_KEYS_INVALID`
+
+### B) packets is array
+
+Issue:
+
+* `PACKET_INDEX_PACKETS_NOT_ARRAY`
+
+### C) Sorting
+
+Verify `packets[]` sorted lexicographically by `packet_id`.
+
+Issue:
+
+* `PACKET_INDEX_NOT_SORTED`
+
+### D) Entry schema
+
+For each packet entry, required keys exactly:
+
+* `packet_id`
+* `claim_id`
+* `snapshot_id`
+* `snapshot_hash_hex`
+* `packet_hash_hex`
+
+No extras.
+
+Validate:
+
+* hash fields are 64-hex lowercase.
+
+Issues:
+
+* `PACKET_INDEX_ENTRY_KEYS_INVALID`
+* `PACKET_INDEX_HASH_INVALID`
+
+### E) Cross-file existence (bundle-only)
+
+For each packet entry:
+
+* Verify snapshot file exists:
+  `snapshots/<snapshot_id>.json`
+
+Issue:
+
+* `PACKET_INDEX_SNAPSHOT_MISSING`
+
+Do not verify packet json existence (packets may not be exported separately). Only snapshot existence.
+
+Set `packet_index_checked` = number of packet entries processed.
+
+---
+
+## 3) Acceptance tests
+
+1. Valid bundle with empty packets[] → `packet_index_ok: true`, checked=0.
+2. Add one packet entry with missing snapshot file → `packet_index_ok:false` with PACKET_INDEX_SNAPSHOT_MISSING and bundle_ok false.
+3. Tamper hash length → PACKET_INDEX_HASH_INVALID.
+4. Shuffle entries order → PACKET_INDEX_NOT_SORTED.
+
+---
+
+## 4) What to send me when complete
+
+* Verifier output JSON for valid bundle (packet_index_ok=true)
+* Verifier output JSON for one failing case (SNAPSHOT_MISSING or HASH_INVALID)
+
+Proceed exactly to v1.20.

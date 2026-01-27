@@ -62,6 +62,9 @@ async function verifyBundle(zipReader, strict = true) {
     anchors_index_mismatches: [],
     audit_summary_ok: null,
     audit_summary_issues: [],
+    packet_index_ok: null,
+    packet_index_checked: 0,
+    packet_index_issues: [],
   };
 
   const entries = await zipReader.getEntries();
@@ -347,6 +350,75 @@ async function verifyBundle(zipReader, strict = true) {
     }
   }
 
+  const packetIndexEntry = entryMap.get("packet_proof_index.json");
+  if (!packetIndexEntry) {
+    result.packet_index_ok = null;
+    result.packet_index_checked = 0;
+    result.packet_index_issues = ["packet_proof_index.json not present; skipping"];
+  } else {
+    try {
+      const packetIndexData = await packetIndexEntry.getData();
+      const packetIndex = JSON.parse(packetIndexData.toString("utf8"));
+      
+      const requiredKeys = ["corpus_id", "packets"];
+      const indexKeys = Object.keys(packetIndex);
+      const hasAllKeys = requiredKeys.every(k => indexKeys.includes(k));
+      const hasNoExtras = indexKeys.every(k => requiredKeys.includes(k));
+      
+      if (!hasAllKeys || !hasNoExtras) {
+        result.packet_index_issues.push("PACKET_INDEX_KEYS_INVALID");
+      }
+      
+      if (!Array.isArray(packetIndex.packets)) {
+        result.packet_index_issues.push("PACKET_INDEX_PACKETS_NOT_ARRAY");
+      } else {
+        let sortedOk = true;
+        for (let i = 1; i < packetIndex.packets.length; i++) {
+          if (packetIndex.packets[i].packet_id.localeCompare(packetIndex.packets[i - 1].packet_id) < 0) {
+            sortedOk = false;
+            result.packet_index_issues.push("PACKET_INDEX_NOT_SORTED");
+            break;
+          }
+        }
+        
+        const entryRequiredKeys = ["packet_id", "claim_id", "snapshot_id", "snapshot_hash_hex", "packet_hash_hex"];
+        const is64Hex = (s) => typeof s === "string" && /^[a-f0-9]{64}$/.test(s);
+        
+        for (const pkt of packetIndex.packets) {
+          const pktKeys = Object.keys(pkt);
+          const hasAllEntryKeys = entryRequiredKeys.every(k => pktKeys.includes(k));
+          const hasNoExtraEntryKeys = pktKeys.every(k => entryRequiredKeys.includes(k));
+          
+          if (!hasAllEntryKeys || !hasNoExtraEntryKeys) {
+            if (!result.packet_index_issues.includes("PACKET_INDEX_ENTRY_KEYS_INVALID")) {
+              result.packet_index_issues.push("PACKET_INDEX_ENTRY_KEYS_INVALID");
+            }
+          }
+          
+          if (!is64Hex(pkt.snapshot_hash_hex) || !is64Hex(pkt.packet_hash_hex)) {
+            if (!result.packet_index_issues.includes("PACKET_INDEX_HASH_INVALID")) {
+              result.packet_index_issues.push("PACKET_INDEX_HASH_INVALID");
+            }
+          }
+          
+          const snapshotPath = `snapshots/${pkt.snapshot_id}.json`;
+          if (!entryMap.has(snapshotPath)) {
+            if (!result.packet_index_issues.includes("PACKET_INDEX_SNAPSHOT_MISSING")) {
+              result.packet_index_issues.push("PACKET_INDEX_SNAPSHOT_MISSING");
+            }
+          }
+          
+          result.packet_index_checked++;
+        }
+      }
+      
+      result.packet_index_ok = result.packet_index_issues.length === 0;
+    } catch (e) {
+      result.packet_index_ok = false;
+      result.packet_index_issues.push(`Failed to parse: ${e}`);
+    }
+  }
+
   result.bundle_ok =
     result.manifest_ok &&
     result.manifest_hash_match &&
@@ -354,7 +426,8 @@ async function verifyBundle(zipReader, strict = true) {
     result.raw_sources_ok &&
     result.extra_files.length === 0 &&
     (result.anchors_index_ok === null || result.anchors_index_ok === true) &&
-    (result.audit_summary_ok === null || result.audit_summary_ok === true);
+    (result.audit_summary_ok === null || result.audit_summary_ok === true) &&
+    (result.packet_index_ok === null || result.packet_index_ok === true);
 
   return result;
 }
