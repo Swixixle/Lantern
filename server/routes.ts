@@ -255,7 +255,7 @@ export async function registerRoutes(
     if (!isPublicReadOnly) {
       return res.status(401).json({
         type: "AUTH_ERROR",
-        message: "Authentication required"
+        message: "Unauthorized"
       });
     }
     
