@@ -256,15 +256,35 @@ async function seedDemoCorpusIfMissing() {
       });
     }
     
+    const sha256Hex_pages = createHash("sha256").update(pdfBuffer).digest("hex");
+    const anchorsWithProvenance = extractAnchorsWithProvenance(
+      pages,
+      sha256Hex_pages,
+      source.id
+    );
+    
+    for (const anchor of anchorsWithProvenance) {
+      await storage.createAnchorRecord({
+        corpusId: DEMO_CORPUS_ID,
+        sourceId: source.id,
+        quote: anchor.quote,
+        sourceDocument: FIXTURE_FILENAME,
+        pageRef: anchor.pageRef,
+        sectionRef: anchor.sectionRef,
+        timelineDate: new Date().toISOString().slice(0, 10),
+        provenanceJson: JSON.stringify(anchor.provenance)
+      });
+    }
+    
     await storage.createLedgerEvent(
       DEMO_CORPUS_ID,
       "BUILD_RUN",
       "SOURCE",
       source.id,
-      { source_id: source.id, pages_extracted: pages.length }
+      { source_id: source.id, pages_extracted: pages.length, anchors_extracted: anchorsWithProvenance.length }
     );
     
-    console.log(`[DemoSeeder] PDF processed successfully with ${pages.length} pages`);
+    console.log(`[DemoSeeder] PDF processed successfully with ${pages.length} pages and ${anchorsWithProvenance.length} anchors`);
     
   } catch (err) {
     console.error("[DemoSeeder] Failed to seed demo corpus:", err);
