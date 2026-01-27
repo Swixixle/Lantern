@@ -1,0 +1,94 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.23 is **accepted as complete and compliant** based on your resubmission:
+
+* Case (2) 401 JSON body matches required unauthorized payload exactly ✅
+* Case (3) 400 JSON body matches required validation payload exactly ✅
+* (Previously provided) case (1) headers include correct Content-Type + Content-Disposition filename ✅
+* (Previously provided) review page URL was supplied ✅
+
+---
+
+# v1.24 — Review Link Landing Page (No Redirect, Deterministic Nav)
+
+## 0) Goal (scope-locked)
+
+Replace the current `/review/:corpusId` redirect behavior with a deterministic landing page that exposes only read-only navigation and download links for auditors.
+
+No writes. No auth required when `public_readonly=true`.
+
+---
+
+## 1) Client route
+
+### Route
+
+`/review/:corpusId`
+
+### Page contents (exact)
+
+Title: `Case Review`
+
+Show:
+
+* `Corpus ID: <corpusId>`
+
+Show 6 buttons (exact labels) linking to these routes:
+
+1. `Claim Space` → `/?corpusId=<corpusId>`
+2. `Sources` → `/sources?corpusId=<corpusId>`
+3. `Anchors` → `/anchors/browse?corpusId=<corpusId>`
+4. `Ledger` → `/ledger?corpusId=<corpusId>`
+5. `Snapshots` → `/snapshots?corpusId=<corpusId>`
+6. `Download Bundle` → `/review/<corpusId>/bundle`
+
+No other UI. No automatic redirects.
+
+---
+
+## 2) Public-readonly gating behavior
+
+If `public_readonly=false`:
+
+* This route may still render, but all 6 buttons must be disabled and show inline text:
+  `Public review disabled`
+
+If `public_readonly=true`:
+
+* Buttons enabled normally.
+
+---
+
+## 3) Acceptance tests
+
+1. Visiting `/review/:corpusId` no longer redirects.
+2. When `public_readonly=true`, all 6 buttons enabled and link URLs match exactly.
+3. When `public_readonly=false`, all 6 buttons disabled and “Public review disabled” text visible.
+
+---
+
+## 4) What to send me when complete
+
+* Screenshot of `/review/:corpusId` with buttons visible (public_readonly=true)
+* Screenshot of `/review/:corpusId` with disabled buttons + text (public_readonly=false)
+* Paste the rendered href values for the 6 buttons (as strings)
+
+Proceed exactly to v1.24.
