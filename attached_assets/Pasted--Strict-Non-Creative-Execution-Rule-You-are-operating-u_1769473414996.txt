@@ -1,0 +1,166 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+v1.7 is accepted as complete and compliant based on your evidence: correct ZIP structure, full MANIFEST, per-file hash match, and manifest determinism across repeated exports with `include_raw_sources=false`.
+
+Next specification is **v1.8 — Bundle Verification Tool (Local verifier + server verify endpoint)**. This makes your exported bundles independently auditable.
+
+# v1.8 — Bundle Verification (Deterministic, No network required)
+
+## 0) Goal (scope-locked)
+
+Provide a way to verify a corpus bundle ZIP by checking:
+
+* MANIFEST.json integrity (manifest hash)
+* Each listed file hash against the bytes in the ZIP
+* Presence/absence of raw_sources based on include_raw_sources flag
+* No extra unlisted files (optional strict mode)
+
+No interpretation. Only pass/fail with explicit mismatches.
+
+---
+
+## 1) Deliverables
+
+You will implement both:
+
+A) **Server endpoint**: verify an uploaded ZIP
+B) **CLI script**: verify a ZIP locally
+
+Same verification logic and output shape.
+
+---
+
+## 2) Verification rules (exact)
+
+Given a ZIP:
+
+1. Locate `MANIFEST.json` at bundle root directory.
+2. Parse manifest.
+3. Recompute `manifest_hash_hex` by:
+
+   * Removing `generated_at`
+   * Removing `manifest_hash_hex`
+   * Canonical JSON stringify with ordered keys:
+     `bundle_format, corpus_id, include_raw_sources, files, manifest_hash_alg`
+   * SHA-256 hex of UTF-8 bytes
+4. Compare recomputed vs stored `manifest_hash_hex`.
+5. For each entry in `files[]`:
+
+   * Read the bytes of the file at `<bundle_root>/<path>`
+   * Compute sha256 hex
+   * Compare to manifest sha256_hex
+6. Verify `files[]` is lexicographically sorted by `path`.
+7. If `include_raw_sources=false`:
+
+   * Assert no `raw_sources/` directory exists in ZIP.
+     If `include_raw_sources=true`:
+   * Assert `raw_sources/` exists.
+8. (Strict mode) Assert no extra files exist in ZIP besides:
+
+   * MANIFEST.json
+   * each manifest file path
+   * (optional) raw_sources files if include_raw_sources=true (and only those that follow `<source_id>__<filename>`)
+
+---
+
+## 3) Output schema (exact)
+
+```json
+{
+  "bundle_ok": true,
+  "manifest_ok": true,
+  "manifest_hash_match": true,
+  "files_ok": true,
+  "include_raw_sources": false,
+  "raw_sources_ok": true,
+  "files_checked": 4,
+  "mismatches": [
+    {
+      "path": "sources.json",
+      "expected_sha256": "...",
+      "actual_sha256": "..."
+    }
+  ],
+  "extra_files": [],
+  "missing_files": [],
+  "notes": []
+}
+```
+
+Rules:
+
+* `bundle_ok` is true iff all *_ok booleans are true and mismatches/extra/missing are empty.
+* Populate mismatch arrays only when needed; otherwise empty arrays.
+
+---
+
+## 4) Server endpoint
+
+### `POST /api/bundles/verify`
+
+* Accept multipart upload field: `bundle` (zip file)
+* Optional query param: `strict=true|false` (default true)
+
+Returns the output schema above.
+
+No persistence required.
+
+---
+
+## 5) CLI tool
+
+Create: `tools/verify_bundle.ts` (or .js)
+
+Usage:
+
+```bash
+node tools/verify_bundle.js /path/to/lantern-corpus-<id>.zip --strict=true
+```
+
+Print:
+
+* JSON output only (exact schema).
+
+No additional formatting.
+
+---
+
+## 6) Acceptance tests
+
+1. Verifying a valid bundle returns bundle_ok=true.
+2. Modifying any included file causes files_ok=false with a mismatch entry.
+3. Modifying MANIFEST.json causes manifest_ok=false and manifest_hash_match=false.
+4. Strict mode flags extra files.
+5. Non-strict mode ignores extra files but still checks listed file hashes.
+
+---
+
+## 7) What to send me when complete
+
+* CLI output JSON for a valid bundle
+* CLI output JSON for a tampered bundle (edit one file inside zip)
+* Server verify output JSON for the same valid bundle (bundle_ok=true)
+
+Proceed exactly to v1.8.

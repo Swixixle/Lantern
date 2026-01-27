@@ -58,6 +58,8 @@ import multer from "multer";
 import PDFParser from "pdf2json";
 import { startJobProcessor } from "./extractionProcessor";
 import archiver from "archiver";
+import AdmZip from "adm-zip";
+import { verifyBundle, ZipReader, ZipEntry } from "@shared/bundleVerify";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -139,6 +141,19 @@ const pdfUpload = multer({
     const ext = extname(file.originalname).toLowerCase();
     if (ext !== ".pdf") {
       cb(new Error("NOT_A_PDF"));
+      return;
+    }
+    cb(null, true);
+  }
+});
+
+const bundleUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = extname(file.originalname).toLowerCase();
+    if (ext !== ".zip") {
+      cb(new Error("NOT_A_ZIP"));
       return;
     }
     cb(null, true);
@@ -1855,6 +1870,35 @@ export async function registerRoutes(
     }
     
     await archive.finalize();
+  }));
+
+  // v1.8 Bundle Verification endpoint
+  app.post("/api/bundles/verify", bundleUpload.single("bundle"), asyncHandler(async (req: Request, res: Response) => {
+    if (!req.file) {
+      return res.status(400).json({ type: "VALIDATION_ERROR", message: "No bundle file provided" });
+    }
+
+    const strict = req.query.strict !== "false";
+
+    function createAdmZipReader(buffer: Buffer): ZipReader {
+      const zip = new AdmZip(buffer);
+      const entries = zip.getEntries();
+
+      return {
+        async getEntries(): Promise<ZipEntry[]> {
+          return entries.map((entry) => ({
+            path: entry.entryName,
+            async getData(): Promise<Buffer> {
+              return entry.getData();
+            },
+          }));
+        },
+      };
+    }
+
+    const reader = createAdmZipReader(req.file.buffer);
+    const result = await verifyBundle(reader, strict);
+    res.json(result);
   }));
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
