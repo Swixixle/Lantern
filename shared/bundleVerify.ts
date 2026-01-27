@@ -225,7 +225,7 @@ export async function verifyBundle(
     result.anchors_index_ok = null;
     result.anchors_index_checked = 0;
     result.anchors_index_mismatches = [];
-    result.notes.push("anchors_proof_index.json not present; skipping");
+    // anchors_proof_index.json not present - null ok value is the signal
   } else {
     try {
       const anchorsIndexData = await anchorsIndexEntry.getData();
@@ -311,7 +311,7 @@ export async function verifyBundle(
   const auditSummaryEntry = entryMap.get("audit_summary.json");
   if (!auditSummaryEntry) {
     result.audit_summary_ok = null;
-    result.audit_summary_issues = ["audit_summary.json not present; skipping"];
+    // audit_summary.json not present - null ok value is the signal
   } else {
     try {
       const auditData = await auditSummaryEntry.getData();
@@ -406,7 +406,7 @@ export async function verifyBundle(
   if (!packetIndexEntry) {
     result.packet_index_ok = null;
     result.packet_index_checked = 0;
-    result.packet_index_issues = ["packet_proof_index.json not present; skipping"];
+    // packet_proof_index.json not present - null ok value is the signal
   } else {
     try {
       const packetIndexData = await packetIndexEntry.getData();
@@ -473,7 +473,7 @@ export async function verifyBundle(
   if (!snapshotIndexEntry) {
     result.snapshot_index_ok = null;
     result.snapshot_index_checked = 0;
-    result.snapshot_index_issues = ["snapshot_proof_index.json not present; skipping"];
+    // snapshot_proof_index.json not present - null ok value is the signal
   } else {
     try {
       const snapshotIndexData = await snapshotIndexEntry.getData();
@@ -540,7 +540,7 @@ export async function verifyBundle(
   const ledgerIndexEntry = entries.find((e) => e.path.endsWith("/ledger_proof_index.json"));
   if (!ledgerIndexEntry) {
     result.ledger_index_ok = null;
-    result.ledger_index_issues = ["ledger_proof_index.json not present; skipping"];
+    // ledger_proof_index.json not present - null ok value is the signal
   } else {
     try {
       const ledgerIndexContent = await zipReader.readText(ledgerIndexEntry);

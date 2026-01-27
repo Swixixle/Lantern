@@ -1,0 +1,120 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+v1.26 is **accepted as complete and compliant** based on your evidence packet:
+
+* Valid bundle shows `ledger_index_ok:true`, `checked:3`, `bundle_ok:true` ✅
+* Missing `ledger.json` produces `LEDGER_JSON_MISSING`, flips `ledger_index_ok:false` and `bundle_ok:false` ✅
+* Additional failure modes reported as implemented (HASH_MISMATCH, NOT_SORTED) ✅
+
+---
+
+# v1.27 — Unified Verifier Output Schema (Single JSON Contract)
+
+## 0) Goal (scope-locked)
+
+Standardize the verifier output so **all index checks appear in one consistent JSON object** with stable key presence and ordering, while preserving existing semantics.
+
+No new verification logic. Output formatting only.
+
+---
+
+## 1) Output JSON: Required top-level keys (exact order)
+
+Verifier must output a single JSON object with these keys **in this exact order**:
+
+1. `bundle_ok`
+2. `manifest_ok`
+3. `manifest_hash_match`
+4. `files_ok`
+5. `include_raw_sources`
+6. `raw_sources_ok`
+7. `files_checked`
+8. `mismatches`
+9. `extra_files`
+10. `missing_files`
+11. `notes`
+12. `anchors_index_ok`
+13. `anchors_index_checked`
+14. `anchors_index_mismatches`
+15. `audit_summary_ok`
+16. `audit_summary_issues`
+17. `packet_index_ok`
+18. `packet_index_checked`
+19. `packet_index_issues`
+20. `snapshot_index_ok`
+21. `snapshot_index_checked`
+22. `snapshot_index_issues`
+23. `ledger_index_ok`
+24. `ledger_index_checked`
+25. `ledger_index_issues`
+
+Hard rules:
+
+* All keys must be present **always** (even if null/empty).
+* `*_ok` fields may be `true | false | null` only.
+* Array fields must be arrays (empty if none).
+* Numeric fields must be numbers (0 if none).
+
+---
+
+## 2) Backward compatibility rules
+
+* Do not remove any existing fields currently emitted.
+* If current verifier emits fewer fields in some modes, populate missing ones with the defaults in §3.
+
+---
+
+## 3) Default values (when not applicable / missing file)
+
+Use these defaults exactly:
+
+* `anchors_index_ok`: `null` if `anchors_proof_index.json` not present; else boolean
+* `audit_summary_ok`: `null` if `audit_summary.json` not present; else boolean
+* `packet_index_ok`: `null` if `packet_proof_index.json` not present; else boolean
+* `snapshot_index_ok`: `null` if `snapshot_proof_index.json` not present; else boolean
+* `ledger_index_ok`: `null` if `ledger_proof_index.json` not present; else boolean
+
+And for each corresponding counters/issues:
+
+* `*_checked`: `0`
+* `*_issues`: `[]`
+* `anchors_index_mismatches`: `[]`
+
+Do not add “skipping” notes into `notes` for missing optional indices. The `null` ok value is the only signal.
+
+---
+
+## 4) Acceptance tests
+
+1. Run verifier on a bundle that includes all current indices → output contains all 25 keys in correct order.
+2. Run verifier on a minimal v1.7 bundle missing all optional indices → those `*_ok` fields are `null`, counters are 0, arrays empty.
+3. Ensure existing error behavior still flips `bundle_ok:false` and populates the correct issue arrays.
+
+---
+
+## 5) What to send me when complete
+
+Return ONLY:
+
+1. Verifier output JSON for a bundle that has **anchors_proof_index.json, audit_summary.json, packet_proof_index.json, snapshot_proof_index.json, ledger_proof_index.json** present (all ok fields should be true).
+2. Verifier output JSON for a bundle that has **none** of those optional index files (all ok fields should be null).
+
+Proceed exactly to v1.27.
