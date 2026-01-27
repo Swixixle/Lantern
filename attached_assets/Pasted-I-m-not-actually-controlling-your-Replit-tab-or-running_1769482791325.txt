@@ -1,0 +1,111 @@
+I’m **not** actually controlling your Replit tab or running commands inside it. What I *can* do is give you an **exact spec message** to paste to the Replit agent so it executes deterministically.
+
+Paste the following to Replit **as-is**:
+
+---
+
+## v1.19 — packet_proof_index.json in Exports (Deterministic)
+
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+---
+
+### 0) Goal (scope-locked)
+
+Add a deterministic index file to the **v1.7 corpus bundle export** that enables third-party auditing of **Evidence Packets** (v1.4+v1.5) without calling APIs.
+
+No inference. Only existing stored fields + hashes.
+
+---
+
+### 1) Bundle structure change (v1.7)
+
+Add file at bundle root:
+`packet_proof_index.json`
+
+It must be included in `MANIFEST.json` `files[]` with sha256 like all other files.
+
+---
+
+### 2) File format (exact)
+
+`packet_proof_index.json`:
+
+```json
+{
+  "corpus_id": "uuid",
+  "packets": [
+    {
+      "packet_id": "uuid",
+      "claim_id": "uuid",
+      "snapshot_id": "uuid",
+      "snapshot_hash_hex": "64-hex",
+      "packet_hash_hex": "64-hex"
+    }
+  ]
+}
+```
+
+Hard rules:
+
+* `packets[]` includes **every evidence packet** that belongs to the corpus.
+* Values must come from stored packet records (existing DB fields / JSON):
+
+  * `packet_id` from packet primary key
+  * `claim_id` from packet.claim.id (or stored claim_id field if present)
+  * `snapshot_id` from packet.snapshot_id
+  * `snapshot_hash_hex` from packet.snapshot_hash_hex
+  * `packet_hash_hex` from packet.hash_hex
+* No extra keys anywhere.
+* `packets[]` must be sorted lexicographically by `packet_id` (string compare).
+* Top-level key order must be exactly:
+
+  1. `corpus_id`
+  2. `packets`
+
+---
+
+### 3) Determinism requirements
+
+* Same corpus state + same exporter code => identical `packet_proof_index.json` bytes.
+* Use stable JSON serialization (choose minified or 2-space indent and keep it consistent forever).
+
+---
+
+### 4) Acceptance tests
+
+1. Export bundle includes `packet_proof_index.json` at root.
+2. `packet_proof_index.json` contains correct corpus_id and one entry per packet in corpus.
+3. `packets[]` sorted by packet_id.
+4. `MANIFEST.json` includes `packet_proof_index.json` with correct sha256.
+5. Determinism: two exports without corpus changes produce identical sha256 for `packet_proof_index.json`.
+
+---
+
+### 5) Evidence packet to return after implementation
+
+Return ONLY:
+
+1. Full `packet_proof_index.json`
+2. MANIFEST entry for it (path + sha256_hex)
+3. Two sha256 sums from two exports (must match)
+
+---
+
+If you paste that into Replit, it should proceed cleanly and we can accept v1.19 with the same evidence process.

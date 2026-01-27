@@ -2165,6 +2165,21 @@ export async function registerRoutes(
     const auditSummaryJson = JSON.stringify(auditSummary);
     files.push({ path: "audit_summary.json", sha256_hex: createHash("sha256").update(auditSummaryJson).digest("hex") });
     
+    const packetProofEntries = packetsList.map(pkt => ({
+      packet_id: pkt.id,
+      claim_id: pkt.claimId,
+      snapshot_id: pkt.snapshotId,
+      snapshot_hash_hex: pkt.snapshotHashHex,
+      packet_hash_hex: pkt.hashHex
+    })).sort((a, b) => a.packet_id.localeCompare(b.packet_id));
+    
+    const packetProofIndex = {
+      corpus_id: corpusId,
+      packets: packetProofEntries
+    };
+    const packetProofIndexJson = JSON.stringify(packetProofIndex);
+    files.push({ path: "packet_proof_index.json", sha256_hex: createHash("sha256").update(packetProofIndexJson).digest("hex") });
+    
     if (includeRawSources) {
       for (const src of sources) {
         const rawPath = `raw_sources/${src.id}__${src.filename}`;
@@ -2245,6 +2260,7 @@ export async function registerRoutes(
     
     archive.append(anchorsProofIndexJson, { name: `${bundleDir}/anchors_proof_index.json` });
     archive.append(auditSummaryJson, { name: `${bundleDir}/audit_summary.json` });
+    archive.append(packetProofIndexJson, { name: `${bundleDir}/packet_proof_index.json` });
     
     await archive.finalize();
   }));
