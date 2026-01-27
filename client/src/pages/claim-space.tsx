@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, Loader2, Anchor, FileText } from "lucide-react";
 import { confidenceToBand, clampConfidence, type Claim } from "@/lib/schema/claims";
+import { useReadOnlyMode } from "@/lib/config";
 
 interface SnapshotResult {
   snapshot_id: string;
@@ -27,7 +28,7 @@ interface SnapshotOption {
   hash_hex: string;
 }
 
-function ClaimCard({ claim, corpusId, onGeneratePacket }: { claim: Claim; corpusId: string; onGeneratePacket: (claimId: string) => void }) {
+function ClaimCard({ claim, corpusId, onGeneratePacket, isReadOnly }: { claim: Claim; corpusId: string; onGeneratePacket: (claimId: string) => void; isReadOnly: boolean }) {
   const [, navigate] = useLocation();
   
   const handleViewEvidence = () => {
@@ -80,7 +81,7 @@ function ClaimCard({ claim, corpusId, onGeneratePacket }: { claim: Claim; corpus
               View Evidence
             </Button>
             
-            {claim.classification === "DEFENSIBLE" && claim.anchor_ids.length > 0 && (
+            {claim.classification === "DEFENSIBLE" && claim.anchor_ids.length > 0 && !isReadOnly && (
               <Button 
                 size="sm" 
                 variant="outline" 
@@ -105,7 +106,8 @@ function ClaimSection({
   claims, 
   emptyMessage,
   corpusId,
-  onGeneratePacket 
+  onGeneratePacket,
+  isReadOnly
 }: { 
   title: string; 
   icon: React.ReactNode; 
@@ -113,6 +115,7 @@ function ClaimSection({
   emptyMessage: string;
   corpusId: string;
   onGeneratePacket: (claimId: string) => void;
+  isReadOnly: boolean;
 }) {
   return (
     <section className="mb-8">
@@ -131,7 +134,7 @@ function ClaimSection({
       ) : (
         <div className="space-y-3">
           {claims.map((claim) => (
-            <ClaimCard key={claim.id} claim={claim} corpusId={corpusId} onGeneratePacket={onGeneratePacket} />
+            <ClaimCard key={claim.id} claim={claim} corpusId={corpusId} onGeneratePacket={onGeneratePacket} isReadOnly={isReadOnly} />
           ))}
         </div>
       )}
@@ -149,6 +152,7 @@ export default function ClaimSpace() {
   const searchString = useSearch();
   const params = new URLSearchParams(searchString);
   const corpusIdFromQuery = params.get("corpusId");
+  const { isReadOnly } = useReadOnlyMode();
   
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(false);
@@ -313,19 +317,21 @@ export default function ClaimSpace() {
               <h1 className="text-2xl font-bold tracking-tight">LANTERN</h1>
             </div>
             
-            <Button 
-              onClick={handleSaveSnapshot}
-              disabled={saving || claims.length === 0}
-              className="bg-cyan-600 hover:bg-cyan-500"
-              data-testid="button-save-snapshot"
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Camera className="w-4 h-4 mr-2" />
-              )}
-              Save Snapshot
-            </Button>
+            {!isReadOnly && (
+              <Button 
+                onClick={handleSaveSnapshot}
+                disabled={saving || claims.length === 0}
+                className="bg-cyan-600 hover:bg-cyan-500"
+                data-testid="button-save-snapshot"
+              >
+                {saving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Camera className="w-4 h-4 mr-2" />
+                )}
+                Save Snapshot
+              </Button>
+            )}
           </div>
           <p className="text-muted-foreground">Claim Space</p>
           {corpusIdFromQuery && (
@@ -343,7 +349,7 @@ export default function ClaimSpace() {
           </Card>
         )}
 
-        {showSnapshotSelect && (
+        {showSnapshotSelect && !isReadOnly && (
           <Card className="mb-6 border-amber-500/30 bg-amber-500/5" data-testid="snapshot-select-dialog">
             <CardContent className="py-4 space-y-4">
               <div className="flex items-center justify-between">
@@ -486,6 +492,7 @@ export default function ClaimSpace() {
               emptyMessage="No defensible claims in this corpus."
               corpusId={corpusId}
               onGeneratePacket={handleGeneratePacket}
+              isReadOnly={isReadOnly}
             />
 
             <ClaimSection
@@ -495,6 +502,7 @@ export default function ClaimSpace() {
               emptyMessage="No restricted claims identified."
               corpusId={corpusId}
               onGeneratePacket={handleGeneratePacket}
+              isReadOnly={isReadOnly}
             />
 
             <ClaimSection
@@ -504,6 +512,7 @@ export default function ClaimSpace() {
               emptyMessage="No ambiguous claims identified."
               corpusId={corpusId}
               onGeneratePacket={handleGeneratePacket}
+              isReadOnly={isReadOnly}
             />
           </>
         )}

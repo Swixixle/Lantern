@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2, Download, Key } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CORPUS_PURPOSES, SYSTEM_LIMITATIONS, type CorpusPurpose, type CorpusSource } from "@/lib/schema/corpus";
+import { useReadOnlyMode } from "@/lib/config";
 
 interface BuildResult {
   corpus_id: string;
@@ -19,6 +20,7 @@ interface BuildResult {
 
 export default function Intake() {
   const [, navigate] = useLocation();
+  const { isReadOnly } = useReadOnlyMode();
   
   const [apiKey, setApiKey] = useState<string>("");
   const [purpose, setPurpose] = useState<CorpusPurpose | "">("");
@@ -325,14 +327,16 @@ export default function Intake() {
                 </Select>
               </div>
               
-              <Button
-                onClick={handleCreateCorpus}
-                disabled={!purpose || creatingCorpus}
-                className="bg-cyan-600 hover:bg-cyan-500"
-                data-testid="button-create-corpus"
-              >
-                Create Corpus
-              </Button>
+              {!isReadOnly && (
+                <Button
+                  onClick={handleCreateCorpus}
+                  disabled={!purpose || creatingCorpus}
+                  className="bg-cyan-600 hover:bg-cyan-500"
+                  data-testid="button-create-corpus"
+                >
+                  Create Corpus
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
@@ -359,16 +363,18 @@ export default function Intake() {
                     onChange={handlePrimaryFileChange}
                     data-testid="input-primary-file"
                   />
-                  <Button
-                    onClick={() => primaryInputRef.current?.click()}
-                    disabled={uploadingPrimary}
-                    variant="outline"
-                    className="w-full"
-                    data-testid="button-upload-primary"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    {uploadingPrimary ? "Uploading..." : "Upload Primary"}
-                  </Button>
+                  {!isReadOnly && (
+                    <Button
+                      onClick={() => primaryInputRef.current?.click()}
+                      disabled={uploadingPrimary}
+                      variant="outline"
+                      className="w-full"
+                      data-testid="button-upload-primary"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploadingPrimary ? "Uploading..." : "Upload Primary"}
+                    </Button>
+                  )}
                   
                   {primarySources.length > 0 && (
                     <div className="space-y-2">
@@ -400,16 +406,18 @@ export default function Intake() {
                     onChange={handleSecondaryFileChange}
                     data-testid="input-secondary-file"
                   />
-                  <Button
-                    onClick={() => secondaryInputRef.current?.click()}
-                    disabled={uploadingSecondary}
-                    variant="outline"
-                    className="w-full"
-                    data-testid="button-upload-secondary"
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    {uploadingSecondary ? "Uploading..." : "Upload Secondary"}
-                  </Button>
+                  {!isReadOnly && (
+                    <Button
+                      onClick={() => secondaryInputRef.current?.click()}
+                      disabled={uploadingSecondary}
+                      variant="outline"
+                      className="w-full"
+                      data-testid="button-upload-secondary"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      {uploadingSecondary ? "Uploading..." : "Upload Secondary"}
+                    </Button>
+                  )}
                   
                   {secondarySources.length > 0 && (
                     <div className="space-y-2">
@@ -430,7 +438,7 @@ export default function Intake() {
               </Card>
             </div>
 
-            {hasAnySources && (
+            {hasAnySources && !isReadOnly && (
               <div className="space-y-4">
                 <Button
                   onClick={handleBuildAnchors}
@@ -494,34 +502,38 @@ export default function Intake() {
                       Strict mode
                     </label>
                   </div>
-                  <Button
-                    onClick={handleExportBundle}
-                    disabled={exporting}
-                    variant="outline"
-                    className="w-full"
-                    data-testid="button-export-bundle"
-                  >
-                    {exporting ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Download className="w-4 h-4 mr-2" />
-                    )}
-                    Export Corpus Bundle (ZIP)
-                  </Button>
-                  <Button
-                    onClick={handleExportReproPack}
-                    disabled={exportingRepro}
-                    variant="outline"
-                    className="w-full"
-                    data-testid="button-export-repro-pack"
-                  >
-                    {exportingRepro ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Download className="w-4 h-4 mr-2" />
-                    )}
-                    Export Repro Pack (ZIP)
-                  </Button>
+                  {!isReadOnly && (
+                    <>
+                      <Button
+                        onClick={handleExportBundle}
+                        disabled={exporting}
+                        variant="outline"
+                        className="w-full"
+                        data-testid="button-export-bundle"
+                      >
+                        {exporting ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4 mr-2" />
+                        )}
+                        Export Corpus Bundle (ZIP)
+                      </Button>
+                      <Button
+                        onClick={handleExportReproPack}
+                        disabled={exportingRepro}
+                        variant="outline"
+                        className="w-full"
+                        data-testid="button-export-repro-pack"
+                      >
+                        {exportingRepro ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <Download className="w-4 h-4 mr-2" />
+                        )}
+                        Export Repro Pack (ZIP)
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             )}

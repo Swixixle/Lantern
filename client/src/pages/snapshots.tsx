@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Camera, ExternalLink, Layers, Loader2 } from "lucide-react";
 import { MOCK_CLAIMS, clampConfidence, type Claim } from "@/lib/schema/claims";
+import { useReadOnlyMode } from "@/lib/config";
 
 interface SnapshotResult {
   snapshot_id: string;
@@ -15,6 +16,7 @@ interface SnapshotResult {
 
 export default function Snapshots() {
   const [, navigate] = useLocation();
+  const { isReadOnly } = useReadOnlyMode();
   const [claims] = useState<Claim[]>(MOCK_CLAIMS);
   const corpusId = "corpus-demo-001";
 
@@ -101,19 +103,21 @@ export default function Snapshots() {
             <CardTitle className="text-base">Create Snapshot</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button
-              onClick={handleSaveSnapshot}
-              disabled={saving || claims.length === 0}
-              className="bg-cyan-600 hover:bg-cyan-500"
-              data-testid="button-save-snapshot"
-            >
-              {saving ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Camera className="w-4 h-4 mr-2" />
-              )}
-              Save Snapshot
-            </Button>
+            {!isReadOnly && (
+              <Button
+                onClick={handleSaveSnapshot}
+                disabled={saving || claims.length === 0}
+                className="bg-cyan-600 hover:bg-cyan-500"
+                data-testid="button-save-snapshot"
+              >
+                {saving ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Camera className="w-4 h-4 mr-2" />
+                )}
+                Save Snapshot
+              </Button>
+            )}
 
             {snapshot && (
               <div className="p-4 bg-muted/30 rounded border space-y-2" data-testid="snapshot-result">
