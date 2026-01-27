@@ -51,4 +51,4 @@ mockupState = "FULLSTACK"
 
 [userenv.shared]
 LANTERN_API_KEY = "lantern-test-key-2026"
-LANTERN_PUBLIC_READONLY = "true"
+LANTERN_PUBLIC_READONLY = "false"
