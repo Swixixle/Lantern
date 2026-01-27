@@ -1,0 +1,179 @@
+Understood. No steering. No “maybe.” We’re executing to **DONE online in 48 hours**.
+
+You’re at **v1.27 Unified Verifier Output Schema** with strict defaults + exact key order + backward compatibility + “formatting only.” The fastest path is:
+
+1. **Freeze spec (v1.27)**
+2. **Make verifier output match exactly**
+3. **Produce the two required JSON evidence packets**
+4. **Ship + verify online**
+
+Below is the tight execution plan.
+
+---
+
+## Ground rules (protection rules)
+
+* **No new logic. Output formatting only.**
+* **No v1.28.** If something fails, we patch *only that failure*.
+* Every change must either:
+
+  * enforce **exact key order**, or
+  * enforce **default/null semantics**, or
+  * preserve **existing error flipping** (`bundle_ok:false`) and issue arrays.
+
+---
+
+## Target deliverables (must exist by end)
+
+You must be able to paste/send:
+
+1. **Verifier output JSON** for a bundle that includes:
+
+   * `anchors_proof_index.json`
+   * `audit_summary.json`
+   * `packet_proof_index.json`
+   * `snapshot_proof_index.json`
+   * `ledger_proof_index.json`
+     → all `*_ok` fields should be `true`
+
+2. **Verifier output JSON** for a bundle with **none** of those optional index files
+   → all `*_ok` fields should be `null`, counters `0`, arrays `[]`
+
+And online: the deployed app/verifier produces the same.
+
+---
+
+## Day 1 (today): Make the output schema bulletproof
+
+### Step A — Implement “single JSON object with 25 keys in exact order”
+
+This is the #1 failure source in these tasks.
+
+**Do not rely on JS object insertion order accidentally.** Make it explicit:
+
+* Create a `buildUnifiedOutput(resultParts)` function that:
+
+  * constructs the output object by assigning keys in the required sequence
+  * never spreads `{...obj}` from sub-results at the top level (spread can scramble order based on construction timing)
+* If you need to merge sub-results, merge into *locals*, then assign to top-level keys in order.
+
+**Guardrail:** Add an assertion that `Object.keys(out)` equals the required list. If mismatch → throw (or fail test). This prevents silent regressions.
+
+### Step B — Enforce default/null semantics for missing optional indices
+
+For each optional index:
+
+* If file missing:
+
+  * `*_index_ok = null`
+  * `*_checked = 0`
+  * `*_issues = []`
+  * any per-index mismatch arrays = `[]`
+  * **no “skipping” note** added (your spec says don’t)
+
+If file present:
+
+* `*_index_ok` is boolean from the check
+* counters and issues reflect actual processing
+
+### Step C — Preserve existing error behavior
+
+You must keep:
+
+* when something is truly wrong (missing required file, hash mismatch, not-sorted, etc):
+
+  * `bundle_ok:false`
+  * issue arrays populated appropriately
+
+No re-interpretation. No “soft fails.”
+
+### Step D — Create 2 fixtures locally (or scripted bundle builds)
+
+You need two bundles you can generate on demand:
+
+1. **Full bundle**: includes all optional index files
+2. **Minimal bundle**: includes none of them
+
+Make this repeatable (script or documented steps). Time matters.
+
+### Step E — Run verifier on both bundles and capture outputs
+
+This is your **evidence packet**.
+
+* Save outputs as:
+
+  * `evidence/v1.27-full.json`
+  * `evidence/v1.27-minimal.json`
+
+Then eyeball only these:
+
+* Are all 25 keys present?
+* Are they in exact order?
+* Do optionals become `true` on full and `null` on minimal?
+* Do counters/arrays match spec?
+
+---
+
+## Day 2: Ship online + prove determinism + final verification
+
+### Step F — Add one deterministic “smoke test” command
+
+A single command that:
+
+* builds bundle
+* runs verifier
+* prints output JSON (or writes file)
+
+You will run this:
+
+* before deploy
+* after deploy
+
+### Step G — Deploy
+
+Whatever your current stack is (Replit / Vite / Node), deploy the exact commit that passes Day 1.
+
+### Step H — Online verification (non-negotiable)
+
+From the deployed environment:
+
+* run verifier on the same two bundles (or uploaded equivalents)
+* confirm the output matches the saved evidence JSON (same structure + semantics)
+
+If online output differs, you fix **only** the delta and redeploy.
+
+---
+
+## The fastest way to avoid last-minute derailment
+
+If anything breaks, it will almost always be one of these:
+
+1. **Key order changed**
+
+   * Fix: explicit builder + key assertion.
+
+2. **Missing-optionals produce notes or non-null values**
+
+   * Fix: hard defaults when file missing; do not add notes.
+
+3. **bundle_ok not flipping correctly**
+
+   * Fix: ensure `bundle_ok` is computed as AND over required checks + any present optional checks that fail, while missing optionals do not affect it (null means “not applicable,” not “pass/fail”).
+
+4. **Arrays/counters not reset when missing**
+
+   * Fix: set them explicitly, don’t leave undefined.
+
+---
+
+## What I need from you to guide you precisely (pick one, no back-and-forth)
+
+Paste **one** of these and I’ll drive the next exact steps:
+
+1. The required key list (all 25 keys) as text, **or**
+2. Your current verifier output JSON (just one run), **or**
+3. The file where verifier output is assembled (the function / route that returns JSON)
+
+If you paste (2), I’ll tell you *exactly* what’s wrong vs v1.27 and what to change first.
+
+We’re not discussing whether you “feel done.” We’re producing the two outputs and shipping.

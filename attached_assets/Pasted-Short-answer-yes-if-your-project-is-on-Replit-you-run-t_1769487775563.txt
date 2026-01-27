@@ -1,0 +1,96 @@
+Short answer: **yes — if your project is on Replit, you run that there.**
+Long answer, very concrete:
+
+### What “that” is
+
+Those commands are **terminal commands** for your **verifier program**. They are not something you send *to* Replit as text; they are something you **run inside Replit’s shell** (or whatever environment actually hosts your code).
+
+They only make sense **where the verifier code lives**.
+
+---
+
+### Where to run it
+
+Run the commands in **the environment that has**:
+
+* your verifier binary / script (`./verifier`), and
+* the bundle directories (`bundle_full`, `bundle_min`).
+
+That is typically:
+
+* ✅ Replit (if this repo is deployed there)
+* or your local machine
+* or a CI runner
+
+If the project is on Replit → **yes, open Replit and run them in the Shell.**
+
+---
+
+### Step-by-step in Replit (safe + boring)
+
+1. Open your Replit project.
+
+2. Click **Shell** (or **Console**, depending on layout).
+
+3. Confirm the verifier exists:
+
+   ```bash
+   ls
+   ```
+
+   You should see something like `verifier`, `verifier.py`, or similar.
+
+4. Run the full bundle verification:
+
+   ```bash
+   ./verifier verify-bundle --bundle ./bundle_full --out ./verifier_full.json
+   ```
+
+5. Run the minimal bundle verification:
+
+   ```bash
+   ./verifier verify-bundle --bundle ./bundle_min --out ./verifier_min.json
+   ```
+
+6. Open the outputs:
+
+   ```bash
+   cat verifier_full.json
+   cat verifier_min.json
+   ```
+
+Those two JSON files are **exactly** items (1) and (2) from your checklist.
+
+---
+
+### Why I can’t just hand you the JSON
+
+Important clarity point (no hand-waving):
+
+* I **cannot execute your verifier** or see your repo from here.
+* Anything I “invent” would be fake receipts.
+* You want **real receipts** tied to **your commit SHA** — which only comes from *your* environment.
+
+What I *can* do (and did) is give you:
+
+* the **correct commands**
+* in a **reproducible, auditable form**
+* with **no ambiguity**
+
+---
+
+### What to send back once you run it
+
+When you’re done, you should have:
+
+* `verifier_full.json`
+* `verifier_min.json`
+* the **commit SHA** shown in Replit (or via `git rev-parse HEAD`)
+* the **deploy URL**
+
+Paste those four things, and **v1.27 can be cleanly marked DONE**.
+
+If you want, next step I can:
+
+* sanity-check the two JSON outputs line-by-line, or
+* help you extract the commit SHA + deploy URL cleanly in Replit.
