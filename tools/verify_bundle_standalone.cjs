@@ -57,6 +57,9 @@ async function verifyBundle(zipReader, strict = true) {
     extra_files: [],
     missing_files: [],
     notes: [],
+    anchors_index_ok: null,
+    anchors_index_checked: 0,
+    anchors_index_mismatches: [],
   };
 
   const entries = await zipReader.getEntries();
@@ -161,12 +164,101 @@ async function verifyBundle(zipReader, strict = true) {
     }
   }
 
+  const anchorsIndexEntry = entryMap.get("anchors_proof_index.json");
+  if (!anchorsIndexEntry) {
+    result.anchors_index_ok = null;
+    result.anchors_index_checked = 0;
+    result.anchors_index_mismatches = [];
+    result.notes.push("anchors_proof_index.json not present; skipping");
+  } else {
+    try {
+      const anchorsIndexData = await anchorsIndexEntry.getData();
+      const anchorsIndex = JSON.parse(anchorsIndexData.toString("utf8"));
+      
+      if (!anchorsIndex.corpus_id || !anchorsIndex.extractor || !anchorsIndex.anchors) {
+        result.anchors_index_ok = false;
+        result.notes.push("anchors_proof_index.json missing required top-level keys");
+      } else if (anchorsIndex.extractor.name !== "pdfjs-text-v1" || anchorsIndex.extractor.version !== "1.0.0") {
+        result.anchors_index_ok = false;
+        result.notes.push(`anchors_proof_index.json extractor mismatch: expected pdfjs-text-v1@1.0.0, got ${anchorsIndex.extractor.name}@${anchorsIndex.extractor.version}`);
+      } else if (!Array.isArray(anchorsIndex.anchors)) {
+        result.anchors_index_ok = false;
+        result.notes.push("anchors_proof_index.json anchors is not an array");
+      } else {
+        let sortedOk = true;
+        for (let i = 1; i < anchorsIndex.anchors.length; i++) {
+          if (anchorsIndex.anchors[i].anchor_id.localeCompare(anchorsIndex.anchors[i - 1].anchor_id) < 0) {
+            sortedOk = false;
+            result.anchors_index_mismatches.push({
+              anchor_id: null,
+              issue: "ANCHORS_NOT_SORTED",
+              expected: null,
+              actual: null,
+              path: null
+            });
+            break;
+          }
+        }
+        
+        for (const anchor of anchorsIndex.anchors) {
+          if (
+            anchor.anchor_id === undefined ||
+            anchor.source_id === undefined ||
+            anchor.page_index === undefined ||
+            anchor.quote_start_char === undefined ||
+            anchor.quote_end_char === undefined ||
+            anchor.page_text_sha256_hex === undefined
+          ) {
+            continue;
+          }
+          
+          if (typeof anchor.page_index !== "number" || anchor.page_index < 0) {
+            continue;
+          }
+          
+          const pagePath = `pages/${anchor.source_id}/page-${anchor.page_index}.json`;
+          const pageEntry = entryMap.get(pagePath);
+          
+          if (!pageEntry) {
+            result.anchors_index_mismatches.push({
+              anchor_id: anchor.anchor_id,
+              issue: "PAGE_JSON_MISSING",
+              expected: anchor.page_text_sha256_hex,
+              actual: null,
+              path: pagePath
+            });
+          } else {
+            const pageData = await pageEntry.getData();
+            const pageJson = JSON.parse(pageData.toString("utf8"));
+            if (pageJson.page_text_sha256_hex !== anchor.page_text_sha256_hex) {
+              result.anchors_index_mismatches.push({
+                anchor_id: anchor.anchor_id,
+                issue: "PAGE_TEXT_HASH_MISMATCH",
+                expected: anchor.page_text_sha256_hex,
+                actual: pageJson.page_text_sha256_hex,
+                path: pagePath
+              });
+            }
+          }
+          
+          result.anchors_index_checked++;
+        }
+        
+        result.anchors_index_ok = sortedOk && result.anchors_index_mismatches.length === 0;
+      }
+    } catch (e) {
+      result.anchors_index_ok = false;
+      result.notes.push(`Failed to parse anchors_proof_index.json: ${e}`);
+    }
+  }
+
   result.bundle_ok =
     result.manifest_ok &&
     result.manifest_hash_match &&
     result.files_ok &&
     result.raw_sources_ok &&
-    result.extra_files.length === 0;
+    result.extra_files.length === 0 &&
+    (result.anchors_index_ok === null || result.anchors_index_ok === true);
 
   return result;
 }
