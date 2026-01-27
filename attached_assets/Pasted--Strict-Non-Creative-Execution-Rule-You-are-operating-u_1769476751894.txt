@@ -1,0 +1,86 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The user asked for v1.13 acceptance confirmation and then asked how to proceed. Do not ask them if they want more tests. Provide the deterministic “required outputs” and the one next verification scenario set that is highest value.
+
+---
+
+Do **not** “call the architect.” Do **not** add optional scenarios. v1.13 requires a fixed evidence packet. Provide exactly what to paste so I can accept v1.13 with certainty and we stop burning cycles.
+
+# v1.13 Closeout — Required Evidence Packet (Paste These 4 Items)
+
+Paste **exactly** the following outputs (copy/paste JSON, no paraphrase):
+
+## 1) Build response (shows pages_indexed/pages_rendered)
+
+* The full JSON from the build run that produced anchors.
+
+## 2) Page proof endpoint response
+
+Run and paste:
+`GET /api/sources/:source_id/pages/:page_index`
+
+## 3) Anchor proof endpoint response (full)
+
+Run and paste:
+`GET /api/anchors/:anchor_id/proof`
+
+This must include:
+
+* `anchor.provenance.source_sha256_hex`
+* `anchor.provenance.page_index`
+* `anchor.provenance.quote_start_char` / `quote_end_char`
+* `page.page_text_sha256_hex`
+* `repro.page_text_substring`
+* `repro.substring_sha256_hex`
+
+## 4) Bundle ZIP entries proving pages/ included + manifest includes them
+
+Paste:
+
+* ZIP entry list lines for:
+
+  * `pages/<source_id>/page-<page_index>.png`
+  * `pages/<source_id>/page-<page_index>.json`
+* The `MANIFEST.json` `files[]` entries for those two paths (path + sha256)
+
+Once you paste those four, I will mark **v1.13 accepted**.
+
+---
+
+# Automatic “Proof Packet” capture (use this every time to save money)
+
+If you want this to be automatic going forward, add a single script (no UI change required) that prints all four items in one run:
+
+### `script/proof_packet_v13.sh` (recommended)
+
+It should:
+
+1. call build (or read last build response you store)
+2. select one source_id + page_index
+3. select one anchor_id
+4. call the two proof endpoints
+5. run `unzip -l` on the latest bundle zip + `jq` filter on MANIFEST.json
+
+If you don’t want to write a script yet, just paste the four items manually now.
+
+---
+
+# What’s next (after v1.13 accepted)
+
+v1.14 should be **Proof Pack in exports**: include a compact, deterministic `anchors_proof_index.json` mapping `anchor_id -> {source_id,page_index,start,end,page_text_sha256}` to make third-party audits faster without hitting APIs.
