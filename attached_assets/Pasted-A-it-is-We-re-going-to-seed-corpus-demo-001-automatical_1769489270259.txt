@@ -1,0 +1,209 @@
+A it is. We’re going to seed corpus-demo-001 automatically on app load (only if it doesn’t already exist), using a bundled fixture PDF so the whole pipeline lights up without any upload UI.
+
+This solves:
+	•	“Corpus not found”
+	•	“Failed to load anchors”
+	•	“No sources”
+…and keeps you shippable online in 48 hours.
+
+⸻
+
+Plan A: Programmatic seed (exact steps)
+
+0) One hard rule
+
+We seed only if missing. If the corpus exists, do nothing. That keeps your local work safe.
+
+⸻
+
+1) Put a fixture PDF somewhere the client can fetch
+
+Pick ONE:
+
+Option 1 (best): public/fixtures/test2.pdf
+	•	In Replit Files, create: public/fixtures/
+	•	Put your known working pdf there (you referenced test2.pdf earlier)
+
+Result path will be:
+	•	https://<your-preview>/fixtures/test2.pdf
+
+Option 2: use an existing file you already have
+
+Search:
+	•	public/
+	•	attached_assets/
+	•	anywhere you’ve already stored a pdf
+
+If you already see test2.pdf anywhere public-facing, use that.
+
+⸻
+
+2) Find where corpora are stored and fetched
+
+Open src/storage.ts (it exists in your tree) and do a quick search inside it for any of these function names:
+	•	getCorpus
+	•	getCorpora
+	•	createCorpus
+	•	upsertCorpus
+	•	putCorpus
+	•	db / openDB
+	•	corpus (object store name)
+
+If you don’t see these in src/storage.ts, also search the whole repo for:
+	•	objectStore(
+	•	openDB(
+	•	corpus_id
+	•	CORPUS_CREATED
+
+(Use Replit search ⌘/Ctrl+Shift+F.)
+
+You’re looking for:
+	•	the DB name
+	•	the corpus store
+	•	the source store
+	•	the ledger/event store
+
+⸻
+
+3) Add a seeder function (client-side) in src/storage.ts
+
+At the bottom of src/storage.ts, add this new exported function. You will need to adapt the store names to match yours (I’m keeping them obvious).
+
+// src/storage.ts
+
+export async function seedDemoCorpusIfMissing() {
+  const DEMO_CORPUS_ID = "corpus-demo-001";
+  const FIXTURE_URL = "/fixtures/test2.pdf"; // ensure this exists in /public/fixtures/
+
+  // 1) Open your IndexedDB (use your existing openDB / getDb helper)
+  const db = await getDb(); // <-- replace with your actual db getter
+
+  // 2) Check if corpus exists
+  const existing = await db.get("corpora", DEMO_CORPUS_ID); // <-- replace store name if different
+  if (existing) return;
+
+  // 3) Create corpus record
+  const now = new Date().toISOString();
+  await db.put("corpora", {
+    corpus_id: DEMO_CORPUS_ID,
+    created_at: now,
+    updated_at: now,
+    title: "Demo Corpus",
+  });
+
+  // 4) Fetch fixture PDF bytes
+  const resp = await fetch(FIXTURE_URL);
+  if (!resp.ok) throw new Error(`Fixture fetch failed: ${FIXTURE_URL} (${resp.status})`);
+  const buf = await resp.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+
+  // 5) Create a source record (adapt fields to your schema)
+  const source_id = crypto.randomUUID();
+  const sha256_hex = await sha256Hex(bytes); // use your existing hash helper if you have one
+
+  await db.put("sources", {
+    source_id,
+    corpus_id: DEMO_CORPUS_ID,
+    filename: "test2.pdf",
+    mime: "application/pdf",
+    bytes,                 // some apps store blob; adapt if you store Blob instead
+    sha256_hex,
+    created_at: now,
+  });
+
+  // 6) Emit ledger/event (optional but recommended if your UI depends on it)
+  // If you have an existing "appendEvent" helper, call it here instead.
+  await db.add("ledger_events", {
+    event_id: crypto.randomUUID(),
+    corpus_id: DEMO_CORPUS_ID,
+    type: "SOURCE_UPLOADED",
+    created_at: now,
+    payload: { source_id, filename: "test2.pdf", sha256_hex },
+  });
+
+  // 7) Trigger build (anchors/extraction) if you have a build pipeline function.
+  // Find your existing "build" / "extract" / "generateAnchors" function and call it here.
+  // Example:
+  // await runBuildForCorpus(DEMO_CORPUS_ID);
+
+  // If no pipeline exists, we’ll seed minimal anchors next — but try to call your real pipeline first.
+}
+
+You must wire these two identifiers correctly:
+	•	getDb() → whatever your project uses to open the IDB
+	•	Store names: "corpora", "sources", "ledger_events" → whatever your objectStore names actually are
+
+If you paste me the top of src/storage.ts where it opens IDB + defines stores, I can tell you the exact store names—but you can also just match what’s already there.
+
+⸻
+
+4) Call the seeder on app boot (exact place)
+
+Open src/main.tsx (you have it; the orange bar says main.tsx executed).
+
+Add this before createRoot(...).render(...):
+
+import { seedDemoCorpusIfMissing } from "./storage";
+
+seedDemoCorpusIfMissing()
+  .catch((e) => console.error("seedDemoCorpusIfMissing failed:", e));
+
+Keep it fire-and-forget. It should run once per new browser DB.
+
+⸻
+
+5) Ensure the app routes default to corpus-demo-001
+
+Right now your URLs show ?corpusId=corpus-demo-001. Good.
+
+But if there’s any “no corpusId → blank” logic, set a default:
+	•	wherever you read the corpusId from URL:
+	•	if missing: set it to "corpus-demo-001"
+
+This prevents you from landing in null-corpus screens.
+
+⸻
+
+6) If you need “Build anchors” automatically
+
+Search for any existing build runner:
+	•	runBuild
+	•	buildCorpus
+	•	generateAnchors
+	•	extract
+	•	pdfProcessor
+	•	extractionProcessors.ts
+
+If you find it, call it in Step 7 of the seed function.
+
+If you do not have a callable build pipeline yet, we still ship by:
+	•	seeding sources + ledger events
+	•	and letting your UI show “no anchors yet” until you implement build
+
+…but since you already had anchors/conflicts before, the build pipeline exists somewhere. We just need the right call.
+
+⸻
+
+2-minute check (prove it worked)
+
+After saving, hard refresh the preview tab (⌘R).
+
+Then open:
+	•	/sources?corpusId=corpus-demo-001
+
+You should see:
+	•	no “corpus not found”
+	•	at least 1 source
+	•	ledger events should appear
+
+⸻
+
+I need one concrete thing from you (no back-and-forth)
+
+Open src/storage.ts and copy/paste here only the part that:
+	•	opens the DB (openDB / indexedDB)
+	•	lists/creates object stores
+
+That’s usually ~30–80 lines near the top.
+
+Once I see that, I will tell you exactly what to replace in the seed function (real store names + correct record shapes) so you don’t guess.
