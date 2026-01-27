@@ -1,13 +1,19 @@
-import { useState, useRef } from "react";
-import { useLocation } from "wouter";
+import { useState, useRef, useEffect } from "react";
+import { useLocation, Link } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2, Download } from "lucide-react";
+import { Layers, Upload, AlertCircle, FileText, CheckCircle, Anchor, Loader2, Download, FolderOpen, ChevronRight } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CORPUS_PURPOSES, SYSTEM_LIMITATIONS, type CorpusPurpose, type CorpusSource } from "@/lib/schema/corpus";
 import { useReadOnlyMode } from "@/lib/config";
-import { apiPost, apiClient } from "@/lib/auth";
+import { apiPost, apiClient, apiGet } from "@/lib/auth";
+
+interface RecentCorpus {
+  corpus_id: string;
+  purpose: string;
+  created_at: string;
+}
 
 interface BuildResult {
   corpus_id: string;
@@ -41,6 +47,20 @@ export default function Intake() {
   
   const primaryInputRef = useRef<HTMLInputElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
+
+  const [recentCorpora, setRecentCorpora] = useState<RecentCorpus[]>([]);
+  const [loadingRecent, setLoadingRecent] = useState(true);
+
+  useEffect(() => {
+    const fetchRecentCorpora = async () => {
+      const result = await apiGet<{ corpora: RecentCorpus[] }>("/api/corpora");
+      if (result.ok) {
+        setRecentCorpora(result.data.corpora);
+      }
+      setLoadingRecent(false);
+    };
+    fetchRecentCorpora();
+  }, []);
 
   const handleCreateCorpus = async () => {
     if (!purpose) return;
@@ -213,6 +233,51 @@ export default function Intake() {
           <Card className="mb-6 border-red-500/30">
             <CardContent className="py-3 text-sm text-red-400">
               {error}
+            </CardContent>
+          </Card>
+        )}
+
+        {recentCorpora.length > 0 && !corpusId && (
+          <Card className="mb-6 border-cyan-500/30">
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <FolderOpen className="w-4 h-4" />
+                Recent Corpora
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {recentCorpora.slice(0, 5).map((corpus) => (
+                  <div
+                    key={corpus.corpus_id}
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors"
+                    data-testid={`corpus-${corpus.corpus_id}`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{corpus.purpose}</p>
+                      <p className="text-xs text-muted-foreground font-mono truncate">
+                        {corpus.corpus_id}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(corpus.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 ml-4">
+                      <Link href={`/?corpusId=${corpus.corpus_id}`}>
+                        <Button variant="outline" size="sm" data-testid={`button-claims-${corpus.corpus_id}`}>
+                          Claims
+                          <ChevronRight className="w-3 h-3 ml-1" />
+                        </Button>
+                      </Link>
+                      <Link href={`/anchors/browse?corpusId=${corpus.corpus_id}`}>
+                        <Button variant="outline" size="sm" data-testid={`button-anchors-${corpus.corpus_id}`}>
+                          Anchors
+                        </Button>
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         )}

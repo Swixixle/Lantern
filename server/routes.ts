@@ -1250,6 +1250,18 @@ export async function registerRoutes(
     limits: { fileSize: 20 * 1024 * 1024 }
   });
   
+  // List all corpora
+  app.get("/api/corpora", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
+    const corporaList = await storage.listCorpora();
+    res.json({
+      corpora: corporaList.map(c => ({
+        corpus_id: c.id,
+        purpose: c.purpose,
+        created_at: c.createdAt
+      }))
+    });
+  }));
+  
   // Create corpus
   app.post("/api/corpus", requireAuth, asyncHandler(async (req, res) => {
     const { purpose } = req.body;

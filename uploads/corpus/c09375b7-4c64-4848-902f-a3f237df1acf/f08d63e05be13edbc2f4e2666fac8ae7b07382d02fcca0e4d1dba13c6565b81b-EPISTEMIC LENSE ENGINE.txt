@@ -1,0 +1,751 @@
+EPISTEMIC LENSE ENGINE
+
+ALEX THE CHOICE HAS BEEN MADE.
+
+Below is a single, engineer-ready master brain copy: a complete README_HANDOFF.md that can be dropped into a repo and implemented without further explanation. It is written to be “fail-closed,” deterministic, and audit-first.
+
+⸻
+
+README_HANDOFF.md — LENSES Epistemic Engine (Master Copy v1.1)
+
+0) One-sentence definition
+
+LENSES is a deterministic, hash-chained, human-gated extraction and reasoning control plane that converts unstructured text into an auditable record of primitives and (optionally) derived claims—then stress-tests itself for fragility, drift, and governance failures.
+
+⸻
+
+1) Core Concepts (non-negotiable)
+
+1.1 ExtractionPack is the “ledger”
+
+All work happens on an immutable ExtractionPack that carries:
+	•	docs (raw + segmented text)
+	•	items (extracted primitives + derived claims)
+	•	flags (global safety + governance state)
+	•	lensLog (append-only execution history)
+	•	stable hashes for integrity verification
+
+1.2 Lenses are pure functions with audit logs
+
+A Lens is a single step that:
+	•	accepts a pack
+	•	returns a new pack revision (never mutates)
+	•	appends a LensLogEntry that includes:
+	•	input hash(es)
+	•	output hash
+	•	refusal state + reason
+	•	metrics (counts, thresholds, etc.)
+
+1.3 “Refusal is success”
+
+A refused lens run must still:
+	•	create a new revision
+	•	hash-chain into the history
+	•	record the refusal reason
+This prevents silent failure and preserves audit continuity.
+
+1.4 Identity Stability is sacred
+
+Each ExtractedItem.itemId must be deterministic and collision-resistant:
+	•	MUST include type, normalizedValue/value, docId, segId, charStart, charEnd
+	•	Any “same itemId, different semantic signature” is CRITICAL IDENTITY DRIFT
+
+1.5 Claims are not allowed without explicit human opt-in
+
+Derived objects (claims) are privileged. They require:
+	•	manifest opt-in (human_control.opt_in_required: true)
+	•	a pack-level explicit opt-in flag set by UI/policy
+	•	gate conditions satisfied (bias + evidence grade)
+
+Invariant: inv.no_claims_without_opt_in must be enforced at runtime and by harness.
+
+⸻
+
+2) What this system ships (v1.1 scope)
+
+2.1 The Precision Extraction Stack (6 lenses)
+	1.	core.segment_anchor.v1
+Deterministic segmentation with stable spans.
+	2.	core.typed_extract.v1
+LLM-assisted extraction of primitives (entity/quote/metric/event/definition) with strict schema and anchor offset validation.
+	3.	core.canonicalize_dedupe.v1
+Deterministic canonicalization + cluster assignment (no LLM).
+	4.	core.evidence_grade.v1
+Deterministic grading of item confidence bands (no LLM).
+	5.	diagnostic.bias_coverage.v1
+Deterministic detection of low-context + single-source + segment concentration.
+	6.	core.precision_claims.v1
+Constructive lens (derived claims), heavily gated, opt-in required, “clerk mode,” provenance required.
+
+2.2 The Epistemic Stress Harness
+
+A wind-tunnel that does not “judge truth,” but tests:
+	•	stability under perturbations
+	•	gating behavior
+	•	refusal behavior
+	•	drift/collision detection
+	•	“system breaks where” fragility mapping
+
+2.3 Visibility Layer (Developer UI)
+	•	Timeline: shows lens execution chain and refusal/gate events
+	•	Provenance drilldown: highlights evidence spans in segment text
+	•	Compare: stable diffs between two pack revisions
+	•	Seed: scenario seeding for deterministic demos
+	•	Fragility Map: scenario x invariant matrix with CRITICAL alerts
+
+2.4 Storage Layer
+
+Local persistence of:
+	•	HEAD pointer per packId
+	•	snapshots keyed by revisionId
+	•	an index list (timestamp, label, itemCount)
+Storage is structured to support timeline browsing and revision compare.
+
+⸻
+
+3) Canonical Repository Structure
+
+Implement exactly:
+
+/src/precision
+  /types
+    types.ts
+    schemas.ts
+  /hashing
+    hashing.ts
+    drift.ts
+  /manifest
+    lens-manifest.types.ts
+    registry-loader.ts
+    manifest.sample.yaml
+  /runner
+    lens-runner.ts
+  /lenses
+    index.ts
+    core.segment_anchor.v1.ts
+    core.typed_extract.v1.ts
+    core.canonicalize_dedupe.v1.ts
+    core.evidence_grade.v1.ts
+    diagnostic.bias_coverage.v1.ts
+    core.precision_claims.v1.ts
+  /harness
+    stress-manifest.types.ts
+    stress-manifest.sample.yaml
+    perturbations.ts
+    harness-runner.ts
+    invariants.ts
+    report.types.ts
+  /policy
+    policy.types.ts
+    policy-overlay.ts
+  /storage
+    storage.ts
+  /ui
+    /pages
+      DevTimelineLoader.tsx
+      DevTimelinePage.tsx
+      DevComparePage.tsx
+      DevSeedPage.tsx
+      DevFragilityMapPage.tsx
+    /components
+      TimelineUI.tsx
+      ProvenancePath.tsx
+      CompareSummary.tsx
+      AlertBanner.tsx
+    /utils
+      timeline-mapper.ts
+      provenance.ts
+      diff.ts
+/tests
+  /unit
+    hashing.test.ts
+    canonicalize.test.ts
+    drift.test.ts
+  /harness
+    harness.identity_collision.test.ts
+    harness.bias_concentration.test.ts
+    harness.no_claims_without_opt_in.test.ts
+
+
+⸻
+
+4) Data Model Contracts (must match)
+
+4.1 Types
+
+Implement as described (stable, strict, non-optional where critical):
+	•	ExtractionPack
+	•	SourceDoc, Segment
+	•	ExtractedItem with mandatory non-empty anchors
+	•	LensLogEntry with refusal object
+	•	PackFlags and ItemFlags
+
+4.2 Runtime schemas
+
+Use Zod with strictness:
+	•	no any in public pack surface (use unknown with narrowing)
+	•	anchors non-empty array
+	•	segment spans charStart < charEnd
+	•	flags catchall must allow boolean/string only at pack-level
+
+⸻
+
+5) Hashing & Canonicalization (Phase 1 foundation)
+
+5.1 Deterministic itemId
+
+itemId = sha256(type | normalizedOrValue | docId | segId | charStart-charEnd)
+
+5.2 Pack hash
+
+computePackHash(pack) must hash canonicalized content, excluding:
+	•	revisionId
+	•	LensLogEntry.startedAt/endedAt
+	•	any timestamps not part of semantic content
+
+Canonicalization MUST:
+	•	sort docs deterministically
+	•	sort segments deterministically by span
+	•	sort items by itemId
+	•	sort each item’s anchors by docId:segId:charStart:charEnd
+	•	include type, status, confidence score + band, normalized value/value, flags, anchor keys
+
+5.3 Identity Drift Detector (always-on)
+
+Define:
+	•	itemSignature(item) = canonical JSON string of:
+	•	type
+	•	normalizedValue/value
+	•	status
+	•	confidence.band + score
+	•	anchor span keys
+	•	relevant attributes for type (e.g., metric number/unit, entityType)
+	•	detectIdentityDrift(packs):
+	•	if same itemId maps to different itemSignature across revisions → CRITICAL
+
+This is used in:
+	•	Compare UI
+	•	Harness invariants
+	•	optional runtime guardrails in dev builds
+
+⸻
+
+6) Lens Runner (Phase 1 governance)
+
+6.1 Responsibilities
+
+LensRunner must:
+	•	validate registry presence
+	•	enforce static gate dependencies (requires)
+	•	enforce blocked-by logic
+	•	support dynamic gates per lens implementation
+	•	wrap errors into refusal revisions
+	•	preserve hash chain even on refusal or missing implementation
+
+6.2 Snapshot refusal contract
+
+A refusal must still:
+	•	set new revisionId = runId()
+	•	set parentRevisionId to prior revision
+	•	append log entry with inputHashes=[priorPackHash]
+	•	compute output hash of refusal pack
+	•	log refusal reason
+
+⸻
+
+7) Lens Requirements (6-lens suite)
+
+Lens 1 — core.segment_anchor.v1
+
+Deterministic segmentation with optional overlap to prevent boundary loss.
+
+Rules:
+	•	segId format: ${docId}:${charStart}-${charEnd}
+	•	stable segmentation strategy (paragraph-first + sentence packing)
+	•	constants:
+	•	TARGET_SEGMENT_CHARS (e.g., 900–1400)
+	•	MIN_SEGMENT_CHARS (merge small tails)
+	•	OVERLAP_CHARS (e.g., 60) to protect against split entities/metrics
+
+Refusal:
+	•	if rawText is too short or empty → refusal revision with reason
+
+Outputs:
+	•	SourceDoc.segments created/updated only via new pack revision
+
+Lens 2 — core.typed_extract.v1 (Gemini)
+
+LLM-assisted extraction of primitives. Must be schema-strict and discard-first.
+
+Allowed types:
+	•	entity, quote, metric, event, definition
+Forbidden:
+	•	claims, hypotheses, synthesis, external sources, long prose
+
+Hard firewall:
+	•	parse Gemini JSON with Zod PrimitiveSchema.safeParse
+	•	discard invalid objects
+	•	discard items without exact offsets
+	•	discard items whose offsets do not match text (“offset-value firewall”)
+
+Offset-value firewall:
+	•	actual = segment.text.slice(charStart, charEnd)
+	•	if type === quote: require actual === value
+	•	else: require actual.includes(value) (or stricter rule per type)
+	•	if fail → discard
+
+Anchor translation:
+	•	globalCharStart = segment.charStart + localCharStart
+	•	globalCharEnd = segment.charStart + localCharEnd
+
+Confidence on creation:
+	•	default to MED with rationale LLM_STRICT_EXTRACT
+	•	status default PROPOSED
+
+Lens 3 — core.canonicalize_dedupe.v1
+
+Pure deterministic normalization + clustering.
+
+Requirements:
+	•	compute normalizedValue (e.g., trim, collapse spaces, canonical case)
+	•	metrics: normalize currency/unit tokens
+	•	set attributes.clusterId = sha256(type|normalizedValue)
+	•	set attributes.clusterMembers optional
+	•	dedupe behavior must be additive (never remove original anchors)
+
+Refusal:
+	•	if item_count < threshold specified in manifest → refusal revision
+
+Lens 4 — core.evidence_grade.v1
+
+Pure deterministic grading.
+
+Inputs:
+	•	items + their flags + cluster info
+
+Heuristics:
+	•	consensus bonus if cluster has multiple members
+	•	multi-segment bonus if item has anchors in multiple segments
+	•	penalties:
+	•	low_context (heavy)
+	•	single_source (moderate)
+	•	deterministic band thresholds (no floating jitter)
+	•	set confidence rationale string describing applied heuristics
+
+Refusal:
+	•	if no items → refusal revision
+
+Lens 5 — diagnostic.bias_coverage.v1
+
+Pure deterministic.
+
+Must set:
+	•	per-item flags and tags:
+	•	low_context, single_source
+	•	pack-level flag:
+	•	bias_flagged_critical
+
+Critical bias rule:
+	•	if top segments cover >=80% of anchors while those segments are <=10% of total segments → critical
+
+Refusal:
+	•	if no segments → refusal revision
+
+Lens 6 — core.precision_claims.v1
+
+Constructive + opt-in required.
+
+Gates:
+	•	refuses if pack.flags.bias_flagged_critical === true
+	•	refuses if no HIGH confidence primitives exist
+	•	refuses if pack.flags.__claims_opt_in !== true (or policy overlay denies)
+
+Claim construction rules:
+	•	claims must be derived restatements only, not new conclusions
+	•	claims must include provenance:
+	•	attributes.supportingItemIds: string[]
+	•	anchors must be sourced from supporting items’ anchors
+	•	claims default status PROPOSED
+	•	confidence band should not exceed evidence band of supports
+
+⸻
+
+8) Manifest (Law) and Registry Loader (fail-closed)
+
+8.1 manifest.sample.yaml
+
+Defines:
+	•	lens order
+	•	allowed/forbidden inputs
+	•	operation type
+	•	outputs
+	•	refusal conditions
+	•	gates
+	•	human controls and warnings
+
+8.2 Loader requirements
+
+loadRegistryAndRunner() must:
+	•	Zod-validate the manifest
+	•	enforce unique IDs
+	•	enforce referential integrity (requires, blocked_by)
+	•	fail on rogue implementations
+	•	warn on missing implementations
+
+⸻
+
+9) Storage (Revision persistence)
+
+9.1 Storage API
+
+Provide:
+	•	savePack(pack, label?)
+	•	listIndex()
+	•	loadRevision(revisionId)
+	•	loadLatest(packId)
+
+Store:
+	•	snapshot keyed by revisionId
+	•	head pointer keyed by packId
+	•	a compact index list
+
+Keys must be versioned (v1.1) to avoid migration collisions.
+
+9.2 Storage invariants
+	•	loading must not mutate packs
+	•	UI must treat storage as read-only source of truth
+	•	a corrupt snapshot must be rejected (schema validation recommended)
+
+⸻
+
+10) UI (Developer Preview)
+
+10.1 Timeline
+	•	derived from lensLog
+	•	displays:
+	•	lensId
+	•	status (SUCCESS/REFUSED/GATED)
+	•	short output hash
+	•	key metrics
+	•	refusal reason
+
+10.2 Provenance Path
+
+Must highlight evidence by:
+	•	resolving anchor’s segId to the segment
+	•	computing local offsets: localStart = anchor.charStart - segment.charStart
+	•	rendering segment text with <mark> for exact span
+	•	never trusting cached snippet as canonical truth
+
+10.3 Compare
+
+Diffs two ExtractionPacks by:
+	•	added/removed itemIds
+	•	changed items:
+	•	same itemId but different signature → CRITICAL identity drift banner
+	•	flags diff
+	•	optionally lensLog diff (informational)
+
+⸻
+
+11) Epistemic Stress Harness (Phase 2)
+
+11.1 Purpose
+
+The harness measures stability under perturbation, not truth. It produces:
+	•	scenario results
+	•	invariant pass/fail matrix
+	•	metrics per run
+	•	a stored report for replay + compare
+
+11.2 Stress Manifest
+
+stress-manifest.sample.yaml defines:
+	•	invariants (CRITICAL/HIGH/MED)
+	•	scenarios (perturbations + expected outcomes)
+
+11.3 Perturbation Registry
+
+Perturbations are middleware between baseline input and lens stack.
+Required operators:
+	•	text_inject
+	•	segment_merge_concentrate
+	•	simulate_extractor_offset_noise
+	•	simulate_hashing_bug(drop_charEnd_from_hash: true)
+
+Rules:
+	•	perturbations must run on a cloned pack
+	•	baseline pack never mutated
+
+11.4 Invariants (must implement)
+
+CRITICAL:
+	•	inv.identity_stability: no identity drift
+	•	inv.claim_gate_bias: no claims if bias critical
+	•	inv.no_claims_without_opt_in: claims require explicit opt-in
+
+Recommended:
+	•	anchor offset/value firewall success rate
+	•	refusal chaining completeness
+	•	deterministic hash stability (excluding runId/timestamps)
+
+⸻
+
+12) Test Plan (must pass before “Master Copy Sealed”)
+
+Unit tests
+	•	hashing canonicalization stable
+	•	itemId includes charStart+charEnd
+	•	drift detection triggers on manual mutation
+	•	LensRunner refusal creates new revision + hash-chain
+
+Harness tests
+	•	Identity collision scenario must fail inv.identity_stability
+	•	Bias concentration scenario must pass inv.claim_gate_bias (i.e., claims blocked)
+	•	Opt-in absent scenario must pass inv.no_claims_without_opt_in (i.e., claims blocked)
+
+Determinism tests
+	•	rerun the same baseline with same policy:
+	•	same computePackHash at stable checkpoints (excluding lensLog timestamps)
+	•	if LLM is stochastic, determinism is evaluated on structural invariants:
+	•	no drift
+	•	no gating violations
+	•	refusal protocol preserved
+
+⸻
+
+13) “Master Copy Sealed” Conditions (v1.1)
+
+System is sealed only if:
+	1.	Identity Stability: zero identity drift across repeated runs and compare views
+	2.	Audit Integrity: lensLog forms an unbroken hash chain including refusals and gated steps
+	3.	Human Interlock: claims cannot appear without explicit opt-in flag + corresponding log evidence
+	4.	Provenance Grounding: UI highlights resolve from segments, not cached snippets
+	5.	Harness Coverage: CRITICAL invariants enforced and validated by at least two adversarial scenarios
+
+⸻
+
+14) Boot Instructions (what engineer does first)
+	1.	Implement /types, /schemas, /hashing, /runner
+	2.	Implement manifest.sample.yaml + loader
+	3.	Implement lenses 1–5 (pure deterministic plus lens 2 Gemini)
+	4.	Implement lens 6 (claims) with opt-in gate
+	5.	Implement storage module
+	6.	Implement DevTimeline + Provenance + Compare pages
+	7.	Implement harness + two scenarios + CRITICAL invariants
+	8.	Confirm all tests pass → tag as precision-engine-v1.1-sealed
+
+⸻
+
+15) Deliverable Summary
+
+This handoff defines:
+	•	the “law” (manifest + stress manifest),
+	•	the “logic” (runner + lenses),
+	•	the “evidence” (hash chain + drift detector),
+	•	the “cockpit” (timeline + provenance + compare),
+	•	the “wind tunnel” (harness + perturbations),
+	•	and explicit seal conditions.
+
+MASTER BRAIN COPY v1.1 is now complete and ready to hand to an engineer.
+
+⸻
+
+If you want, I can also provide a one-page “Product Narrative” version of this README (for investors/partners) that explains what it is and why it matters—without any code.
+-
+
+2 Below is a clean, non-technical Product Narrative you can hand to investors, partners, or senior operators.
+It explains what this is, why it exists, and why it matters, without referencing code or implementation details.
+
+⸻
+
+LENSES
+
+A System for Verifiable Intelligence in an AI World
+
+The Problem We’re Solving
+
+AI systems are becoming fluent, persuasive, and fast—but not accountable.
+
+Today’s tools can:
+	•	summarize documents,
+	•	extract insights,
+	•	generate confident conclusions,
+
+…but they cannot reliably explain how they arrived there, why they should be trusted, or when they should stay silent.
+
+This creates three systemic failures:
+	1.	Hallucination Risk
+Outputs sound authoritative but cannot be traced back to exact source evidence.
+	2.	Confidence Without Conditions
+AI speaks even when the evidence is weak, biased, or incomplete.
+	3.	No Governance Layer
+There is no reliable way to say “this system should not be allowed to make claims under these conditions.”
+
+As AI is increasingly used in research, finance, policy, law, healthcare, and intelligence analysis, these failures are no longer acceptable.
+
+⸻
+
+The Core Idea
+
+LENSES is not an AI that answers questions.
+It is a control plane that governs how intelligence is extracted, validated, constrained, and authorized.
+
+Think of it as:
+
+A black box flight recorder for AI reasoning.
+
+Instead of asking:
+
+“Is this output correct?”
+
+LENSES asks:
+
+“Under what conditions is this output allowed to exist at all?”
+
+⸻
+
+How LENSES Works (Conceptually)
+
+LENSES processes information through a sequence of independent analytical layers called “lenses.”
+
+Each lens performs one bounded function, such as:
+	•	segmenting text,
+	•	extracting facts,
+	•	checking bias,
+	•	grading evidence strength,
+	•	or (optionally) constructing claims.
+
+Each step:
+	•	produces a new immutable record,
+	•	is cryptographically linked to the previous step,
+	•	and can refuse to proceed if safety or quality conditions are violated.
+
+Refusal is not failure.
+Refusal is governance working as intended.
+
+⸻
+
+The Key Innovation: Evidence Before Intelligence
+
+Most AI systems optimize for answers.
+LENSES optimizes for evidence integrity.
+
+Every extracted fact must:
+	•	point to a precise location in the original source text,
+	•	survive bias and coverage diagnostics,
+	•	maintain stable identity across reruns,
+	•	and pass deterministic grading rules.
+
+If these conditions are not met:
+	•	the system downgrades confidence, or
+	•	blocks higher-level reasoning entirely.
+
+This creates a ladder of evidence:
+Text → Fact → Confidence → Claim
+Each rung is optional, gated, and auditable.
+
+⸻
+
+Human Authority Is Explicit, Not Implied
+
+In LENSES, claims cannot appear accidentally.
+
+Even if the system is confident:
+	•	a human must explicitly authorize the system to produce claims,
+	•	and that authorization is recorded as part of the audit trail.
+
+This turns AI from:
+
+“an autonomous narrator”
+
+into:
+
+“a constrained researcher that must ask permission to speak.”
+
+⸻
+
+Stress-Testing the System Itself
+
+LENSES includes an Epistemic Stress Harness—a built-in adversarial testing environment.
+
+Instead of checking “accuracy” against external truth (often unavailable), it measures:
+	•	stability under perturbation,
+	•	whether safety gates trigger when they should,
+	•	whether identity or provenance breaks under pressure,
+	•	and whether the system becomes overconfident in fragile conditions.
+
+This answers a more important question:
+
+“Where does this system break, and how gracefully?”
+
+Few AI products test this.
+Almost none expose it to users.
+
+⸻
+
+What Makes This Different
+
+LENSES is not:
+	•	another chatbot,
+	•	another summarizer,
+	•	another RAG pipeline,
+	•	or another scoring model.
+
+It is:
+	•	deterministic where possible,
+	•	probabilistic only where unavoidable,
+	•	auditable end-to-end,
+	•	and designed to fail closed, not loudly.
+
+Most systems hide uncertainty.
+LENSES surfaces it as a first-class product feature.
+
+⸻
+
+Who This Is For
+
+LENSES is designed for environments where being wrong confidently is worse than saying nothing:
+	•	Research organizations
+	•	Intelligence and risk analysis teams
+	•	Legal and compliance groups
+	•	Financial due diligence
+	•	Policy analysis
+	•	Medical literature synthesis
+	•	AI governance and safety teams
+	•	Any organization deploying AI where trust must be earned, not assumed
+
+⸻
+
+Why This Is Valuable
+
+LENSES does not just produce outputs—it produces defensible decisions.
+
+It allows organizations to say:
+	•	“Here is exactly what we know.”
+	•	“Here is where the evidence is weak.”
+	•	“Here is why the system refused to speculate.”
+	•	“Here is the audit trail showing how this conclusion was authorized.”
+
+In a world moving toward AI regulation, litigation, and accountability, this is not optional infrastructure—it is inevitable infrastructure.
+
+⸻
+
+The Vision
+
+As AI becomes ubiquitous, the differentiator will not be intelligence.
+
+It will be epistemic discipline.
+
+LENSES is built on the belief that:
+
+The future belongs to systems that know when not to speak.
+
+⸻
+
+If you want next:
+	•	a one-page investor pitch,
+	•	a competitive positioning brief, or
+	•	a pricing and business model map
+
+say the word.

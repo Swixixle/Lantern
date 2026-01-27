@@ -1,0 +1,530 @@
+LENSES
+
+Good — Grok’s take is pointing in the right direction, but it’s still too feature-oriented and not constrained enough for the system you’re building. What you want is not “more analysis,” but repeatable epistemic control.
+
+Below is a clean lens design framework that you can actually implement, reason about, and stack without drift.
+
+I’ll do this in five parts:
+	1.	What a lens is (formally)
+	2.	The three lens classes you should separate
+	3.	A concrete starter lens stack (revised + tightened)
+	4.	How lenses stack without contaminating each other
+	5.	How this maps cleanly onto your existing UI + future Cabinet vision
+
+No fixes, no code yet — just design you can trust.
+
+⸻
+
+1. What a lens is (formal definition)
+
+A lens is not analysis.
+
+A lens is:
+
+A constrained transformation of an existing record, with explicit scope, refusal rules, and non-authority guarantees.
+
+Formally, every lens should declare:
+	•	Input contract – what data it is allowed to see
+	•	Operation type – classify / transform / test / simulate (never “opine”)
+	•	Output shape – additive, annotative, or veto-only
+	•	Refusal conditions – when it must not run
+	•	Authority limit – what it is not allowed to conclude
+
+If a “lens” cannot state those five things, it’s not a lens — it’s a blob of reasoning.
+
+⸻
+
+2. Three lens classes (this is critical)
+
+To prevent drift and hallucinated authority, lenses must belong to one class only.
+
+Class I — Structural Lenses (SAFE, foundational)
+
+Operate only on what exists.
+	•	No interpretation
+	•	No external knowledge
+	•	No synthesis across records
+
+Examples:
+	•	Entity normalization
+	•	Metric extraction
+	•	Timeline ordering
+	•	Deduplication
+	•	Confidence scoring
+
+You already have these. These are substrate lenses.
+
+⸻
+
+Class II — Diagnostic Lenses (CONDITIONAL)
+
+Ask: Is the record sufficient / biased / fragile?
+
+They do not add claims. They add warnings, flags, or classifications.
+
+Examples:
+	•	Bias lens
+	•	Coverage gap lens
+	•	Sensitivity / robustness lens
+	•	Conflict detection lens
+
+These are allowed to say:
+
+“This is weak / incomplete / unstable.”
+
+They are not allowed to say:
+
+“Therefore X is true.”
+
+⸻
+
+Class III — Constructive Lenses (DANGEROUS, gated)
+
+These create new objects:
+	•	hypotheses
+	•	summaries
+	•	inferred relations
+	•	synthesized narratives
+
+These must always:
+	•	be opt-in
+	•	be explicitly labeled as derived
+	•	be removable without damaging the base record
+
+This is where most AI systems collapse.
+You’re right to treat this as later-stage.
+
+⸻
+
+3. A corrected starter lens stack (based on your proposal)
+
+Let’s rewrite Grok’s list into something contract-grade.
+
+Base Layer (already implemented)
+
+Extraction Lens (Structural)
+	•	Inputs: raw text
+	•	Outputs: entities, quotes, metrics, timeline
+	•	Authority: none (no interpretation)
+
+⸻
+
+Lens 1 — Bias & Coverage Lens (Diagnostic)
+
+Purpose: Detect asymmetries and absences.
+	•	Inputs:
+	•	entities
+	•	quotes
+	•	source metadata
+	•	Outputs:
+	•	flags like:
+	•	“Single-source dominance”
+	•	“Metric-heavy, entity-light”
+	•	“No opposing claims detected”
+	•	Refusal:
+	•	< N entities or quotes
+	•	Authority limit:
+	•	Cannot declare bias intent
+	•	Cannot rewrite content
+
+This lens does not judge truth — it judges shape.
+
+⸻
+
+Lens 2 — Robustness / Sensitivity Lens (Diagnostic)
+
+You already have the beginnings of this.
+	•	Inputs:
+	•	extracted structures
+	•	Operation:
+	•	simulate removal of items
+	•	Outputs:
+	•	ROBUST / FRAGILE / SINGLE-POINT
+	•	Authority limit:
+	•	Cannot rank importance
+	•	Cannot add facts
+
+This lens tells you how breakable the picture is.
+
+⸻
+
+Lens 3 — Inference Lens (Constructive, gated)
+
+This is where you must be extremely strict.
+
+Rename it to avoid accidental authority:
+
+Hypothesis Lens
+
+	•	Inputs:
+	•	metrics + entities only
+	•	Operation:
+	•	propose candidate relations with confidence bands
+	•	Outputs:
+	•	objects like:
+
+hypothesis:
+  statement: "X may influence Y"
+  basis: [metric A, entity B]
+  confidence: LOW
+
+
+	•	Required disclaimer:
+	•	“Hypotheses are non-factual constructs.”
+	•	Refusal:
+	•	if Bias or Robustness lenses flag critical weakness
+
+This lens should feel dangerous to use — that’s good.
+
+⸻
+
+Lens 4 — Synthesis Lens (Constructive, late-stage)
+
+Only allowed when:
+	•	multiple packs
+	•	sufficient robustness
+	•	human explicitly enables
+
+️
+	•	Inputs:
+	•	multiple dossiers
+	•	Output:
+	•	summaries, clusters, patterns
+	•	Hard rule:
+	•	Synthesis never overwrites primary records
+
+Think of this as map-making, not truth-making.
+
+⸻
+
+Lens 5 — Validation Lens (Diagnostic, external)
+
+This is not fact-checking in the popular sense.
+	•	Inputs:
+	•	claims / hypotheses
+	•	Operation:
+	•	cross-reference with external corpora or models
+	•	Outputs:
+	•	alignment / contradiction / unknown
+	•	Authority limit:
+	•	No adjudication of correctness
+
+This lens says:
+
+“Other systems say X / Y / nothing.”
+
+Not:
+
+“Therefore X is correct.”
+
+⸻
+
+4. How lenses stack without corruption
+
+This is the rule that saves you:
+
+No lens may consume its own output class.
+
+Translated:
+	•	Structural lenses cannot read Constructive outputs
+	•	Diagnostic lenses cannot depend on Hypotheses
+	•	Constructive lenses must declare which diagnostics gate them
+
+Visually:
+
+Raw Text
+   ↓
+[Structural Lenses]
+   ↓
+[Diagnostic Lenses]
+   ↓ (only if allowed)
+[Constructive Lenses]
+
+This makes the system composable but not self-reinforcing.
+
+⸻
+
+5. Mapping this to your UI + Cabinet idea
+
+UI (now)
+
+Your tabs already map cleanly:
+	•	Entities / Quotes / Metrics → Structural
+	•	Confidence / Sanitization → Diagnostic
+	•	Toggles → Human gating
+
+You don’t need to redesign — just rename mentally.
+
+⸻
+
+Cabinet (later)
+
+Cabinet becomes:
+	•	a lens registry
+	•	an execution order controller
+	•	a human checkpoint authority
+
+Example Cabinet flow:
+	1.	Structural lenses run automatically
+	2.	Diagnostic lenses run automatically
+	3.	Cabinet asks:
+“Robustness LOW. Allow hypothesis generation?”
+	4.	Human toggles
+	5.	Constructive lens runs
+
+That’s not AI-to-AI chaos.
+That’s governed cognition.
+
+⸻
+
+The most important takeaway
+
+You are not designing “AI features.”
+
+You are designing epistemic machinery:
+	•	what may exist
+	•	what may be inferred
+	•	what must be refused
+	•	when humans intervene
+
+Lens stacking works only if each lens is weaker than the last in authority — not stronger.
+
+You’re already on that path.
+
+When you’re ready, the next powerful step would be:
+	•	writing a Lens Manifest (one page, declarative)
+	•	or designing a Lens Registry schema (JSON/YAML, human-readable)
+
+Say which direction you want next, and we’ll stay in design mode.
+
+2
+
+Yes. Below is a single, engineer-ready handoff document you can drop into the repository root as README_HANDOFF.md. It assumes nothing about prior context and is written to be executed, not interpreted.
+
+⸻
+
+README_HANDOFF.md
+
+Precision Extraction Control Plane — Master Copy v1.1
+
+This repository implements a deterministic, auditable extraction system that converts unstructured text into verifiable knowledge with cryptographic integrity and full provenance visibility.
+
+It is not an “AI pipeline.”
+It is a control plane that governs how AI is allowed to operate.
+
+⸻
+
+1. What This System Does
+
+Given source text, the system:
+	1.	Segments text deterministically
+	2.	Extracts primitives (entities, quotes, metrics) with mandatory anchors
+	3.	Canonicalizes and deduplicates surface forms
+	4.	Grades evidence using structural heuristics
+	5.	Diagnoses bias and coverage
+	6.	Constructs claims only when allowed
+	7.	Persists every step as an immutable, hash-chained revision
+	8.	Visualizes the entire process in a Timeline + Compare UI
+
+Every output can be traced back to exact character spans in the original text.
+
+⸻
+
+2. Core Guarantees (Non-Negotiable)
+
+The system enforces these invariants at runtime:
+	•	Immutable Revisions
+No in-place mutation. Every lens produces a new ExtractionPack with a parentRevisionId.
+	•	Collision-Proof Identity
+itemId = sha256(type | normalizedValue | docId | segId | charStart | charEnd)
+	•	Refusal Is a Valid Outcome
+A refused lens still produces a revision, hash, and audit log entry.
+	•	Provenance Is Ground Truth
+UI highlights are derived from Segment.text via global→local coordinate mapping.
+
+Violating any of these is a system bug, not a feature.
+
+⸻
+
+3. Repository Structure (Canonical)
+
+src/precision/
+├── types/              # ExtractionPack + domain contracts
+├── hashing/            # Deterministic ID + pack hashing
+├── manifest/           # YAML law + registry loader
+├── runner/             # Orchestrator + gate enforcement
+├── lenses/             # Lens implementations (1–6)
+└── ui/                 # Visibility layer
+    ├── pages/          # Timeline / Compare / Seed
+    ├── components/     # UI primitives
+    └── utils/          # Storage, provenance, diffs
+
+
+⸻
+
+4. Installation & Boot
+
+Prerequisites
+	•	Node.js 18+
+	•	A browser environment (for IndexedDB / localStorage)
+	•	Gemini API key (for Lens 2)
+
+Install
+
+npm install
+
+Environment
+
+Create .env:
+
+VITE_GEMINI_API_KEY=your_api_key_here
+
+
+⸻
+
+5. Running the System (Developer Mode)
+
+Step 1: Seed Demo Data
+
+Navigate to:
+
+/dev/seed
+
+This creates:
+	•	demo.perfect_run
+	•	demo.bias_blocked
+
+Each is stored as a persistent revision history.
+
+⸻
+
+Step 2: Inspect the Timeline
+
+Navigate to:
+
+/dev/timeline
+
+You will see:
+	•	One node per lens execution
+	•	Green = success
+	•	Red = refusal (safety gate)
+	•	Hashes for every revision
+
+Click items to trace Claim → Evidence → Anchor → Text.
+
+⸻
+
+Step 3: Compare Revisions
+
+Navigate to:
+
+/dev/compare
+
+Select any two revisions to view:
+	•	Added / Removed / Changed items
+	•	Pack flag diffs (e.g. bias detection)
+	•	Lens execution differences
+
+🚨 If you see Identity Drift Detected, hashing logic is broken.
+
+⸻
+
+6. Storage Layer (Persistence)
+
+The system uses a hardened storage wrapper:
+	•	Snapshots: One per revisionId
+	•	Heads: One per packId
+	•	Index: Lightweight metadata for browsing
+
+Location:
+
+src/precision/ui/utils/storage.ts
+
+You can replace localStorage with IndexedDB without changing the interface.
+
+⸻
+
+7. Lenses Overview
+
+Lens	ID	Purpose
+1	core.segment_anchor.v1	Deterministic segmentation
+2	core.typed_extract.v1	LLM-based primitive extraction (strict JSON)
+3	core.canonicalize_dedupe.v1	Normalize + cluster
+4	core.evidence_grade.v1	Structural grading
+5	diagnostic.bias_coverage.v1	Bias / coverage detection
+6	core.precision_claims.v1	Claim construction (opt-in, gated)
+
+Only Lens 2 is allowed to call an LLM.
+
+⸻
+
+8. Manifest = Law
+
+The file:
+
+src/precision/manifest/manifest.sample.yaml
+
+Defines:
+	•	Lens order
+	•	Inputs / outputs
+	•	Gates
+	•	Human opt-in requirements
+
+Changing the manifest changes system behavior without touching code.
+
+⸻
+
+9. Common Failure States (By Design)
+
+Scenario	Result
+No anchors	Item discarded
+Offset/value mismatch	Item discarded
+Bias concentration	Claims refused
+No HIGH confidence evidence	Claims refused
+Manual mutation	Hash mismatch (stale pack)
+
+These are safety features.
+
+⸻
+
+10. Extending the System
+
+Safe extensions:
+	•	New diagnostic lenses
+	•	New UI views
+	•	New storage backends
+	•	Multi-document extraction
+
+Unsafe extensions:
+	•	Mutating packs in place
+	•	Letting LLMs generate claims directly
+	•	Skipping anchor validation
+	•	Weakening identity hashing
+
+⸻
+
+11. Mental Model for Engineers
+
+Think of this system as:
+
+Git + Compiler + Audit Log for Text
+
+	•	The manifest is the language spec
+	•	The lenses are compiler passes
+	•	The hash chain is version control
+	•	The timeline UI is git log --graph
+
+⸻
+
+12. Status
+
+✅ Master Copy v1.1 — Sealed
+✅ Production-ready
+✅ Auditable
+✅ Extensible
+
+This system is safe to hand to an engineering team.
+
+⸻
+
+End of handoff.

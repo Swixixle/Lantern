@@ -69,6 +69,7 @@ export interface IStorage {
   createCorpus(data: InsertCorpus): Promise<Corpus>;
   createCorpusWithId(data: InsertCorpus & { id: string }): Promise<Corpus>;
   getCorpus(id: string): Promise<Corpus | undefined>;
+  listCorpora(): Promise<Corpus[]>;
   createCorpusSource(data: InsertCorpusSource): Promise<CorpusSource>;
   getCorpusSource(id: string): Promise<CorpusSource | undefined>;
   listCorpusSources(corpusId: string): Promise<CorpusSource[]>;
@@ -316,6 +317,11 @@ export class DatabaseStorage implements IStorage {
       .where(eq(corpora.id, id))
       .limit(1);
     return result[0];
+  }
+
+  async listCorpora(): Promise<Corpus[]> {
+    return db.select().from(corpora)
+      .orderBy(desc(corpora.createdAt));
   }
 
   async createCorpusSource(data: InsertCorpusSource): Promise<CorpusSource> {

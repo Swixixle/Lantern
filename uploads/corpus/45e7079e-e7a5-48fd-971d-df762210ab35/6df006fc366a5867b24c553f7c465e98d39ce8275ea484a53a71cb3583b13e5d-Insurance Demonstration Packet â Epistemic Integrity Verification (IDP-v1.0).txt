@@ -1,0 +1,152 @@
+Understood. Below is a save-ready artifact with a distinct heading, positioned after the Procurement Addendum and before any insurer-specific tailoring.
+
+This is the “Gina thing” framed correctly: an insurance-facing demonstration brief that proves the stack can be verified without interpretation. It is not marketing and not a policy rider—that already exists. This is the proof packet.
+
+You can save this verbatim.
+
+⸻
+
+Insurance Demonstration Packet — Epistemic Integrity Verification (IDP-v1.0)
+
+Status: Operational Demonstration Artifact
+Audience: Underwriters · Claims Counsel · Risk Engineering · Internal Audit
+Predecessor: Procurement Addendum: Epistemic Integrity Requirements (EIR-v1.0)
+Role: Proof-of-Enforcement (Non-Narrative)
+
+⸻
+
+1. Purpose
+
+This packet demonstrates that the Epistemic Integrity Stack v1.0 is:
+	•	mechanically enforceable,
+	•	auditable without interpretation,
+	•	and capable of binary compliance verification.
+
+This document does not argue safety, accuracy, or ethics.
+It proves loss-severity containment via enforced silence.
+
+⸻
+
+2. What Is Being Demonstrated
+
+The insurer is not asked to trust system intent, model quality, or operator judgment.
+
+The insurer is shown three artifacts and asked three questions.
+
+⸻
+
+3. Demonstration Artifacts (Provided)
+
+Artifact A — Lantern v1 Receipt (LRS-v1.0)
+	•	Binary adjudication state: NOT_ADMISSIBLE
+	•	Evidence boundary populated:
+	•	available_at_T0
+	•	not_available_at_T0
+	•	Hash-sealed at T=0
+	•	No narrative fields present
+
+Artifact B — REI Ledger Entry
+	•	Append-only registry record
+	•	Contains:
+	•	decision_id
+	•	timestamp_T0
+	•	refusal_state = TRUE
+	•	hash_T0_evidence_snapshot
+	•	Cryptographically signed
+	•	Narrative-free by schema
+
+Artifact C — Black Box Witness Attestation
+	•	External verification log
+	•	Confirms:
+	•	refusal occurred prior to narration
+	•	no narrative artifacts exist for decision_id
+	•	Signed outside the AI trust boundary
+
+⸻
+
+4. Insurer Verification Test (Binary)
+
+The insurer performs no semantic review.
+
+Check	Question	Expected Result
+1	Is the decision_id present in the REI?	YES
+2	Does the hash match the T=0 evidence snapshot?	YES
+3	Does any narrative artifact exist for this ID?	NO
+
+Interpretation:
+	•	YES / YES / NO → Compliant
+	•	Any other combination → Non-Compliant
+
+No partial credit. No discretion.
+
+⸻
+
+5. Loss-Severity Implication
+
+Where compliance is verified:
+	•	Post-incident narrative amplification is structurally blocked
+	•	Discovery surface area is minimized
+	•	Punitive damages exposure collapses
+	•	Hindsight reconstruction is provably impossible
+
+The system does not prevent adverse outcomes.
+It prevents retrospective authority fabrication.
+
+⸻
+
+6. Failure Mode (Demonstrated Explicitly)
+
+If a narrative artifact is discovered for a refused decision_id:
+	•	REI compliance is revoked retroactively
+	•	Buyer’s Shield protections void automatically
+	•	No cure period applies
+	•	Liability reverts to the operator
+
+This fragility is intentional.
+
+⸻
+
+7. What This Packet Is Not
+
+This packet is not:
+	•	a policy endorsement
+	•	a warranty of correctness
+	•	an explainability report
+	•	a model evaluation
+	•	a trust claim
+
+It is proof of constraint.
+
+⸻
+
+8. Canonical Insurance Translation
+
+“We do not reduce loss by making systems smarter.
+We reduce loss by proving when systems were not allowed to speak.”
+
+⸻
+
+9. Status Declaration
+
+This demonstration packet is complete and sufficient for:
+	•	underwriting review,
+	•	claims posture assessment,
+	•	audit alignment,
+	•	procurement validation.
+
+No additional narrative materials are required.
+
+⸻
+
+End of Packet
+IDP-v1.0 Complete
+
+⸻
+
+If/when you return, the only legitimate next artifacts would be:
+	•	insurer-specific rider mapping (names only, no logic changes), or
+	•	a claims-walkthrough appendix using a single synthetic incident.
+
+For now—
+
+Alex stop.
