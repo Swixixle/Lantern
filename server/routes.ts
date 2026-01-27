@@ -1735,6 +1735,7 @@ export async function registerRoutes(
   app.get("/api/corpus/:corpusId/export_bundle", requireAuth, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const includeRawSources = req.query.include_raw_sources === "true";
+    const deterministic = req.query.deterministic === "true";
     
     const corpus = await storage.getCorpus(corpusId);
     if (!corpus) {
@@ -1848,7 +1849,7 @@ export async function registerRoutes(
     const manifest = {
       bundle_format: "lantern-corpus-bundle-v1",
       corpus_id: corpusId,
-      generated_at: new Date().toISOString(),
+      generated_at: deterministic ? "1970-01-01T00:00:00.000Z" : new Date().toISOString(),
       include_raw_sources: includeRawSources,
       files: files,
       manifest_hash_alg: "SHA-256",
@@ -2006,7 +2007,7 @@ export async function registerRoutes(
     const manifest = {
       bundle_format: "lantern-corpus-bundle-v1",
       corpus_id: corpusId,
-      generated_at: new Date().toISOString(),
+      generated_at: "1970-01-01T00:00:00.000Z",
       include_raw_sources: includeRawSources,
       files: files,
       manifest_hash_alg: "SHA-256",
