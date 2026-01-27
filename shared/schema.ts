@@ -273,6 +273,7 @@ export const corpusSources = pgTable("corpus_sources", {
   role: text("role").notNull(),
   filename: text("filename").notNull(),
   sha256Hex: text("sha256_hex").notNull(),
+  storagePath: text("storage_path"),
   uploadedAt: timestamp("uploaded_at").notNull().defaultNow(),
 }, (table) => [
   index("corpus_sources_corpus_id_idx").on(table.corpusId),

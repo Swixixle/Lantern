@@ -52,7 +52,7 @@ function computeSnapshotHash(corpusId: string, claims: z.infer<typeof claimSchem
   const canonical = canonicalizeForHash(corpusId, claims);
   return createHash("sha256").update(canonical, "utf8").digest("hex");
 }
-import { mkdir, writeFile, readFile } from "fs/promises";
+import { mkdir, writeFile, readFile, access } from "fs/promises";
 import { join, extname } from "path";
 import multer from "multer";
 import PDFParser from "pdf2json";
@@ -60,6 +60,7 @@ import { startJobProcessor } from "./extractionProcessor";
 import archiver from "archiver";
 import AdmZip from "adm-zip";
 import { verifyBundle, ZipReader, ZipEntry } from "@shared/bundleVerify";
+import { extractPdfPages, extractAnchorsWithProvenance, readPdfFromPath } from "./pdfProcessor";
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -892,22 +893,83 @@ export async function registerRoutes(
     let anchorsCreated = 0;
     const claimsCreated = 0;
     const constraintsCreated = 0;
+    let pagesIndexed = 0;
+    let pagesRendered = 0;
     
     if (modeResult.data === "anchors_only") {
       for (const source of sources) {
-        const anchors = extractAnchorsFromSource(source);
+        const isPdf = source.filename.toLowerCase().endsWith(".pdf");
         
-        for (const anchor of anchors) {
-          await storage.createAnchorRecord({
-            corpusId,
-            sourceId: source.id,
-            quote: anchor.quote,
-            sourceDocument: source.filename,
-            pageRef: anchor.pageRef,
-            sectionRef: anchor.sectionRef || null,
-            timelineDate: source.uploadedAt.toISOString().split("T")[0]
-          });
-          anchorsCreated++;
+        if (isPdf && source.storagePath) {
+          try {
+            const pdfPath = join(UPLOADS_DIR, source.storagePath);
+            const pdfBuffer = await readPdfFromPath(pdfPath);
+            
+            const extractedPages = await extractPdfPages(pdfBuffer, source.id);
+            pagesIndexed += extractedPages.length;
+            pagesRendered += extractedPages.length;
+            
+            for (const page of extractedPages) {
+              await storage.createPdfPage({
+                sourceId: source.id,
+                pageIndex: page.pageIndex,
+                pageText: page.pageText,
+                pagePngPath: page.pagePngPath,
+                pageTextSha256Hex: page.pageTextSha256Hex
+              });
+            }
+            
+            const anchorsWithProvenance = extractAnchorsWithProvenance(
+              extractedPages,
+              source.id,
+              source.sha256Hex
+            );
+            
+            for (const anchor of anchorsWithProvenance) {
+              await storage.createAnchorRecord({
+                corpusId,
+                sourceId: source.id,
+                quote: anchor.quote,
+                sourceDocument: source.filename,
+                pageRef: anchor.pageRef,
+                sectionRef: anchor.sectionRef || null,
+                timelineDate: source.uploadedAt.toISOString().split("T")[0],
+                provenanceJson: JSON.stringify(anchor.provenance)
+              });
+              anchorsCreated++;
+            }
+          } catch (err) {
+            console.error(`Error processing PDF ${source.filename}:`, err);
+            const fallbackAnchors = extractAnchorsFromSource(source);
+            for (const anchor of fallbackAnchors) {
+              await storage.createAnchorRecord({
+                corpusId,
+                sourceId: source.id,
+                quote: anchor.quote,
+                sourceDocument: source.filename,
+                pageRef: anchor.pageRef,
+                sectionRef: anchor.sectionRef || null,
+                timelineDate: source.uploadedAt.toISOString().split("T")[0],
+                provenanceJson: null
+              });
+              anchorsCreated++;
+            }
+          }
+        } else {
+          const fallbackAnchors = extractAnchorsFromSource(source);
+          for (const anchor of fallbackAnchors) {
+            await storage.createAnchorRecord({
+              corpusId,
+              sourceId: source.id,
+              quote: anchor.quote,
+              sourceDocument: source.filename,
+              pageRef: anchor.pageRef,
+              sectionRef: anchor.sectionRef || null,
+              timelineDate: source.uploadedAt.toISOString().split("T")[0],
+              provenanceJson: null
+            });
+            anchorsCreated++;
+          }
         }
       }
     }
@@ -921,6 +983,8 @@ export async function registerRoutes(
       {
         mode: modeResult.data,
         status: "COMPLETED",
+        pages_indexed: pagesIndexed,
+        pages_rendered: pagesRendered,
         anchors_created: anchorsCreated,
         claims_created: claimsCreated,
         constraints_created: constraintsCreated
@@ -931,6 +995,8 @@ export async function registerRoutes(
       corpus_id: corpusId,
       mode: modeResult.data,
       status: "COMPLETED",
+      pages_indexed: pagesIndexed,
+      pages_rendered: pagesRendered,
       anchors_created: anchorsCreated,
       claims_created: claimsCreated,
       constraints_created: constraintsCreated
@@ -1042,8 +1108,113 @@ export async function registerRoutes(
         source_document: a.sourceDocument,
         page_ref: a.pageRef,
         section_ref: a.sectionRef,
-        timeline_date: a.timelineDate
+        timeline_date: a.timelineDate,
+        provenance: a.provenanceJson ? JSON.parse(a.provenanceJson) : null
       }))
+    });
+  }));
+
+  // === PDF PAGE PROOF API ===
+  
+  // Get PDF page proof (image + text hash)
+  app.get("/api/sources/:sourceId/pages/:pageIndex", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
+    const sourceId = req.params.sourceId as string;
+    const pageIndex = parseInt(req.params.pageIndex as string, 10);
+    const includeText = req.query.include_text === "true";
+    
+    if (isNaN(pageIndex) || pageIndex < 0) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "Invalid page_index. Must be a non-negative integer."
+      });
+    }
+    
+    const source = await storage.getCorpusSource(sourceId);
+    if (!source) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Source not found"
+      });
+    }
+    
+    const page = await storage.getPdfPage(sourceId, pageIndex);
+    if (!page) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Page not found"
+      });
+    }
+    
+    const response: Record<string, any> = {
+      source_id: sourceId,
+      page_index: pageIndex,
+      page_text_sha256_hex: page.pageTextSha256Hex,
+      page_png_url: page.pagePngPath
+    };
+    
+    if (includeText) {
+      response.page_text = page.pageText;
+    }
+    
+    res.json(response);
+  }));
+
+  // === ANCHOR PROOF API ===
+  
+  // Get anchor proof packet (single anchor)
+  app.get("/api/anchors/:anchorId/proof", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
+    const anchorId = req.params.anchorId as string;
+    
+    const anchor = await storage.getAnchorRecord(anchorId);
+    if (!anchor) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Anchor not found"
+      });
+    }
+    
+    if (!anchor.provenanceJson) {
+      return res.status(400).json({
+        type: "PROOF_UNAVAILABLE",
+        message: "This anchor does not have provenance data. It may have been created before v1.13 or from a non-PDF source."
+      });
+    }
+    
+    const provenance = JSON.parse(anchor.provenanceJson);
+    
+    const page = await storage.getPdfPage(anchor.sourceId, provenance.page_index);
+    if (!page) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Page data not found for this anchor"
+      });
+    }
+    
+    const substringFromPage = page.pageText.slice(provenance.quote_start_char, provenance.quote_end_char);
+    const substringHash = createHash("sha256").update(substringFromPage, "utf8").digest("hex");
+    
+    res.json({
+      anchor: {
+        id: anchor.id,
+        corpus_id: anchor.corpusId,
+        source_id: anchor.sourceId,
+        quote: anchor.quote,
+        source_document: anchor.sourceDocument,
+        page_ref: anchor.pageRef,
+        section_ref: anchor.sectionRef,
+        timeline_date: anchor.timelineDate,
+        provenance
+      },
+      page: {
+        source_id: anchor.sourceId,
+        page_index: provenance.page_index,
+        page_text_sha256_hex: page.pageTextSha256Hex,
+        page_png_url: page.pagePngPath
+      },
+      repro: {
+        page_text_substring: substringFromPage,
+        substring_sha256_hex: substringHash
+      }
     });
   }));
 
