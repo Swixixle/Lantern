@@ -1,0 +1,180 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+v1.4 is accepted as compliant: deterministic packet payload, verbatim anchors, hash verification, restricted-claim failure, and PDF constraints are correct.
+
+Next specification is **v1.5 — Corpus State Seal (Snapshot ↔ Packet linkage + chain-of-custody)**. This creates a verifiable chain: **Corpus → Snapshot → Claim → Packet**, without adding any new interpretation.
+
+# v1.5 — Corpus State Seal (Chain-of-Custody, Deterministic)
+
+## 0) Goal (scope-locked)
+
+Add:
+
+1. The ability to **seal** a corpus state as a snapshot with a stable ID (already exists), and
+2. The ability to generate an evidence packet **that references the snapshot it was derived from**, and
+3. A verifiable linkage record.
+
+No changes to hashing logic already implemented. Only add linkage fields and verification.
+
+---
+
+## 1) Data model changes
+
+## A) Snapshot: add `snapshot_scope`
+
+Add:
+
+```ts
+snapshot_scope: {
+  includes_claim_ids: string[];     // sorted
+  includes_source_ids: string[];    // sorted
+}
+```
+
+Populate at snapshot creation:
+
+* includes_claim_ids = all claim IDs returned by `GET /api/corpus/:id/claims` at save-time
+* includes_source_ids = all source IDs returned by `GET /api/corpus/:id/sources` at save-time
+
+No inference. Just IDs.
+
+## B) EvidencePacket: add snapshot linkage (required)
+
+Add to packet payload:
+
+```ts
+snapshot_id: string;    // required
+snapshot_hash_hex: string; // required (copied from snapshot)
+```
+
+Hard rule:
+
+* Packets must be generated **against a specific snapshot**.
+
+---
+
+## 2) API changes (minimal)
+
+### A) Create packet now requires snapshot_id
+
+Update endpoint:
+`POST /api/corpus/:corpus_id/claims/:claim_id/packet`
+
+Request:
+
+```json
+{ "snapshot_id": "uuid" }
+```
+
+Server validation:
+
+* snapshot.corpus_id must match
+* claim.corpus_id must match
+* claim.id must be included in snapshot_scope.includes_claim_ids
+* all claim.anchor_ids must exist in the corpus at time of packet generation (existence check only)
+
+Response: EvidencePacket including snapshot_id and snapshot_hash_hex.
+
+### B) New endpoint: verify packet against snapshot
+
+`GET /api/packets/:packet_id/verify_chain`
+
+Response:
+
+```json
+{
+  "packet_id": "uuid",
+  "verified_packet_hash": true,
+  "verified_snapshot_hash": true,
+  "snapshot_id": "uuid",
+  "snapshot_hash_match": true,
+  "claim_in_snapshot_scope": true,
+  "sources_in_snapshot_scope": true
+}
+```
+
+Definitions:
+
+* verified_packet_hash: existing packet verify logic
+* verified_snapshot_hash: call snapshot verify logic
+* snapshot_hash_match: packet.snapshot_hash_hex equals snapshot.hash_hex
+* claim_in_snapshot_scope: packet.claim.id is in snapshot_scope.includes_claim_ids
+* sources_in_snapshot_scope: for each anchor.source_id in packet, that source_id is in snapshot_scope.includes_source_ids
+
+No other checks.
+
+---
+
+## 3) UI changes
+
+### A) Claim Space: packet generation flow update
+
+For DEFENSIBLE claim:
+
+* Button: **Generate Evidence Packet**
+* On click:
+
+  1. Prompt user to select a snapshot ID (dropdown of existing snapshots for this corpus)
+
+     * If none exist: show message “Create a snapshot before generating a packet.”
+  2. Create packet with selected snapshot_id
+
+No auto-snapshot creation.
+
+### B) Packet view
+
+Add display fields:
+
+* snapshot_id
+* snapshot_hash_hex
+
+Add button:
+
+* **Verify Chain**
+
+  * calls `/api/packets/:packet_id/verify_chain`
+  * displays all booleans
+
+---
+
+## 4) Acceptance tests
+
+1. Packet creation without snapshot_id fails with validation error.
+2. Packet creation with snapshot_id succeeds only if claim is in snapshot scope.
+3. verify_chain returns all fields; packet+snapshot hashes verify true.
+4. snapshot_hash_match true.
+5. claim_in_snapshot_scope true for valid case; false if snapshot excludes claim.
+6. sources_in_snapshot_scope true when anchors’ source_ids are included; false otherwise.
+
+---
+
+## 5) What to send me when complete
+
+* Example snapshot JSON showing snapshot_scope
+* Packet JSON showing snapshot_id + snapshot_hash_hex
+* verify_chain response for a valid case (all true)
+* verify_chain response for an invalid case (one or more false)
+
+Proceed to v1.5 exactly as written.

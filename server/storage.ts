@@ -59,6 +59,7 @@ export interface IStorage {
   // Snapshots
   createSnapshot(data: InsertSnapshot): Promise<Snapshot>;
   getSnapshot(id: string): Promise<Snapshot | undefined>;
+  listSnapshotsByCorpus(corpusId: string): Promise<Snapshot[]>;
   
   // Corpus
   createCorpus(data: InsertCorpus): Promise<Corpus>;
@@ -265,6 +266,13 @@ export class DatabaseStorage implements IStorage {
       .where(eq(snapshots.id, id))
       .limit(1);
     return result[0];
+  }
+
+  async listSnapshotsByCorpus(corpusId: string): Promise<Snapshot[]> {
+    const result = await db.select().from(snapshots)
+      .where(eq(snapshots.corpusId, corpusId))
+      .orderBy(desc(snapshots.createdAt));
+    return result;
   }
 
   async createCorpus(data: InsertCorpus): Promise<Corpus> {

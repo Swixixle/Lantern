@@ -1075,6 +1075,8 @@ export async function registerRoutes(
   
   function canonicalizePacketForHash(payload: {
     corpus_id: string;
+    snapshot_id?: string;
+    snapshot_hash_hex?: string;
     claim: {
       id: string;
       classification: string;
@@ -1097,7 +1099,13 @@ export async function registerRoutes(
       anchor_ids: [...payload.claim.anchor_ids].sort()
     };
     const sortedAnchors = [...payload.anchors].sort((a, b) => a.id.localeCompare(b.id));
-    return JSON.stringify({ corpus_id: payload.corpus_id, claim: sortedClaim, anchors: sortedAnchors });
+    return JSON.stringify({ 
+      corpus_id: payload.corpus_id, 
+      snapshot_id: payload.snapshot_id,
+      snapshot_hash_hex: payload.snapshot_hash_hex,
+      claim: sortedClaim, 
+      anchors: sortedAnchors 
+    });
   }
 
   function computePacketHash(payload: Parameters<typeof canonicalizePacketForHash>[0]) {
@@ -1105,16 +1113,39 @@ export async function registerRoutes(
     return createHash("sha256").update(canonical, "utf8").digest("hex");
   }
 
-  // Create evidence packet
+  // Create evidence packet (requires snapshot_id)
   app.post("/api/corpus/:corpusId/claims/:claimId/packet", asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const claimId = req.params.claimId as string;
+    const { snapshot_id } = req.body;
+    
+    if (!snapshot_id || typeof snapshot_id !== "string") {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "snapshot_id is required"
+      });
+    }
     
     const corpus = await storage.getCorpus(corpusId);
     if (!corpus) {
       return res.status(404).json({
         type: "NOT_FOUND",
         message: "Corpus not found"
+      });
+    }
+    
+    const snapshot = await storage.getSnapshot(snapshot_id);
+    if (!snapshot) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Snapshot not found"
+      });
+    }
+    
+    if (snapshot.corpusId !== corpusId) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "Snapshot does not belong to this corpus"
       });
     }
     
@@ -1133,10 +1164,23 @@ export async function registerRoutes(
       });
     }
     
+    const snapshotScope = snapshot.snapshotScopeJson ? JSON.parse(snapshot.snapshotScopeJson) : null;
+    if (snapshotScope) {
+      const includesClaimIds: string[] = snapshotScope.includes_claim_ids || [];
+      if (!includesClaimIds.includes(claimId)) {
+        return res.status(400).json({
+          type: "VALIDATION_ERROR",
+          message: "Claim is not included in snapshot scope"
+        });
+      }
+    }
+    
     const anchors = await storage.getAnchorRecordsByIds(claim.anchorIds);
     
     const hashablePayload = {
       corpus_id: corpusId,
+      snapshot_id: snapshot_id,
+      snapshot_hash_hex: snapshot.hashHex,
       claim: {
         id: claim.id,
         classification: claim.classification as "DEFENSIBLE",
@@ -1159,6 +1203,8 @@ export async function registerRoutes(
     
     const packetJson = JSON.stringify({
       corpus_id: corpusId,
+      snapshot_id: snapshot_id,
+      snapshot_hash_hex: snapshot.hashHex,
       claim: hashablePayload.claim,
       anchors: hashablePayload.anchors,
       hash_alg: "SHA-256",
@@ -1168,6 +1214,8 @@ export async function registerRoutes(
     const packet = await storage.createEvidencePacket({
       corpusId,
       claimId,
+      snapshotId: snapshot_id,
+      snapshotHashHex: snapshot.hashHex,
       packetJson,
       hashAlg: "SHA-256",
       hashHex
@@ -1219,6 +1267,8 @@ export async function registerRoutes(
     
     const hashablePayload = {
       corpus_id: storedData.corpus_id,
+      snapshot_id: storedData.snapshot_id,
+      snapshot_hash_hex: storedData.snapshot_hash_hex,
       claim: storedData.claim,
       anchors: storedData.anchors
     };
@@ -1232,6 +1282,69 @@ export async function registerRoutes(
       hash_alg: packet.hashAlg,
       stored_hash_hex: packet.hashHex,
       recomputed_hash_hex: recomputedHashHex
+    });
+  }));
+  
+  // Verify evidence packet chain (packet + snapshot linkage)
+  app.get("/api/packets/:packetId/verify_chain", asyncHandler(async (req, res) => {
+    const packetId = req.params.packetId as string;
+    
+    const packet = await storage.getEvidencePacket(packetId);
+    if (!packet) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Packet not found"
+      });
+    }
+    
+    const storedData = JSON.parse(packet.packetJson);
+    
+    const hashablePayload = {
+      corpus_id: storedData.corpus_id,
+      snapshot_id: storedData.snapshot_id,
+      snapshot_hash_hex: storedData.snapshot_hash_hex,
+      claim: storedData.claim,
+      anchors: storedData.anchors
+    };
+    
+    const recomputedPacketHash = computePacketHash(hashablePayload);
+    const verifiedPacketHash = recomputedPacketHash === packet.hashHex;
+    
+    const snapshot = await storage.getSnapshot(packet.snapshotId);
+    let verifiedSnapshotHash = false;
+    let snapshotHashMatch = false;
+    let claimInSnapshotScope = false;
+    let sourcesInSnapshotScope = false;
+    
+    if (snapshot) {
+      const snapshotData = JSON.parse(snapshot.snapshotJson);
+      const recomputedSnapshotHash = computeSnapshotHash(snapshot.corpusId, snapshotData.claims || []);
+      verifiedSnapshotHash = recomputedSnapshotHash === snapshot.hashHex;
+      snapshotHashMatch = packet.snapshotHashHex === snapshot.hashHex;
+      
+      const snapshotScope = snapshot.snapshotScopeJson ? JSON.parse(snapshot.snapshotScopeJson) : null;
+      if (snapshotScope) {
+        const includesClaimIds: string[] = snapshotScope.includes_claim_ids || [];
+        const includesSourceIds: string[] = snapshotScope.includes_source_ids || [];
+        
+        claimInSnapshotScope = includesClaimIds.includes(storedData.claim.id);
+        
+        const anchorSourceIds = storedData.anchors.map((a: { source_id: string }) => a.source_id);
+        sourcesInSnapshotScope = anchorSourceIds.every((sid: string) => includesSourceIds.includes(sid));
+      } else {
+        claimInSnapshotScope = true;
+        sourcesInSnapshotScope = true;
+      }
+    }
+    
+    res.json({
+      packet_id: packet.id,
+      verified_packet_hash: verifiedPacketHash,
+      verified_snapshot_hash: verifiedSnapshotHash,
+      snapshot_id: packet.snapshotId,
+      snapshot_hash_match: snapshotHashMatch,
+      claim_in_snapshot_scope: claimInSnapshotScope,
+      sources_in_snapshot_scope: sourcesInSnapshotScope
     });
   }));
 
@@ -1290,7 +1403,7 @@ export async function registerRoutes(
 
   // === SNAPSHOT API ===
   
-  // Create snapshot
+  // Create snapshot (with snapshot_scope)
   app.post("/api/snapshots", asyncHandler(async (req, res) => {
     const { corpus_id, claims } = req.body;
     
@@ -1320,9 +1433,18 @@ export async function registerRoutes(
       claims: validClaims
     };
     
+    const claimRecords = await storage.listClaimRecordsByCorpus(corpus_id);
+    const sources = await storage.listCorpusSources(corpus_id);
+    
+    const snapshotScope = {
+      includes_claim_ids: claimRecords.map(c => c.id).sort(),
+      includes_source_ids: sources.map(s => s.id).sort()
+    };
+    
     const snapshot = await storage.createSnapshot({
       corpusId: corpus_id,
       snapshotJson: JSON.stringify(snapshotData),
+      snapshotScopeJson: JSON.stringify(snapshotScope),
       hashAlg: "SHA-256",
       hashHex
     });
@@ -1333,7 +1455,34 @@ export async function registerRoutes(
       snapshot_id: snapshot.id,
       created_at: snapshot.createdAt,
       hash_alg: snapshot.hashAlg,
-      hash_hex: snapshot.hashHex
+      hash_hex: snapshot.hashHex,
+      snapshot_scope: snapshotScope
+    });
+  }));
+  
+  // List snapshots for corpus
+  app.get("/api/corpus/:corpusId/snapshots", asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    const snapshotsList = await storage.listSnapshotsByCorpus(corpusId);
+    
+    res.json({
+      corpus_id: corpusId,
+      snapshots: snapshotsList.map(s => ({
+        snapshot_id: s.id,
+        created_at: s.createdAt,
+        hash_alg: s.hashAlg,
+        hash_hex: s.hashHex,
+        snapshot_scope: s.snapshotScopeJson ? JSON.parse(s.snapshotScopeJson) : null
+      }))
     });
   }));
   

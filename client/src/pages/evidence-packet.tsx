@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CheckCircle, XCircle, Download, FileText, Loader2, Shield, Anchor } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Download, FileText, Loader2, Shield, Anchor, Link2 } from "lucide-react";
 
 interface EvidencePacketData {
   packet_id: string;
   created_at: string;
   corpus_id: string;
+  snapshot_id: string;
+  snapshot_hash_hex: string;
   claim: {
     id: string;
     classification: "DEFENSIBLE";
@@ -36,6 +38,16 @@ interface VerifyResponse {
   recomputed_hash_hex: string;
 }
 
+interface VerifyChainResponse {
+  packet_id: string;
+  verified_packet_hash: boolean;
+  verified_snapshot_hash: boolean;
+  snapshot_id: string;
+  snapshot_hash_match: boolean;
+  claim_in_snapshot_scope: boolean;
+  sources_in_snapshot_scope: boolean;
+}
+
 function formatHash(hash: string): string {
   if (hash.length <= 16) return hash;
   return `${hash.slice(0, 8)}...${hash.slice(-8)}`;
@@ -51,6 +63,8 @@ export default function EvidencePacket() {
   const [error, setError] = useState<string | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [verifyResult, setVerifyResult] = useState<VerifyResponse | null>(null);
+  const [verifyingChain, setVerifyingChain] = useState(false);
+  const [verifyChainResult, setVerifyChainResult] = useState<VerifyChainResponse | null>(null);
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
@@ -96,6 +110,26 @@ export default function EvidencePacket() {
     }
   };
 
+  const handleVerifyChain = async () => {
+    if (!packetId) return;
+    setVerifyingChain(true);
+    setVerifyChainResult(null);
+    
+    try {
+      const res = await fetch(`/api/packets/${packetId}/verify_chain`);
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || "Chain verification failed");
+      }
+      const data = await res.json();
+      setVerifyChainResult(data);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setVerifyingChain(false);
+    }
+  };
+
   const handleExportJson = () => {
     if (!packet) return;
     const blob = new Blob([JSON.stringify(packet, null, 2)], { type: "application/json" });
@@ -133,6 +167,8 @@ export default function EvidencePacket() {
     lines.push(`Packet ID: ${p.packet_id}`);
     lines.push(`Created: ${p.created_at}`);
     lines.push(`Corpus ID: ${p.corpus_id}`);
+    lines.push(`Snapshot ID: ${p.snapshot_id}`);
+    lines.push(`Snapshot Hash: ${p.snapshot_hash_hex}`);
     lines.push(`Hash (${p.hash_alg}): ${p.hash_hex}`);
     lines.push("");
     lines.push("CLAIM");
@@ -230,7 +266,7 @@ export default function EvidencePacket() {
             </p>
           </div>
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button
               variant="outline"
               size="sm"
@@ -244,6 +280,20 @@ export default function EvidencePacket() {
                 <Shield className="w-4 h-4 mr-2" />
               )}
               Verify Packet
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleVerifyChain}
+              disabled={verifyingChain}
+              data-testid="button-verify-chain"
+            >
+              {verifyingChain ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Link2 className="w-4 h-4 mr-2" />
+              )}
+              Verify Chain
             </Button>
             <Button
               variant="outline"
@@ -296,6 +346,59 @@ export default function EvidencePacket() {
           </Card>
         )}
 
+        {verifyChainResult && (
+          <Card className="border-cyan-500/30 bg-cyan-500/5" data-testid="verify-chain-result">
+            <CardContent className="py-4 space-y-3">
+              <p className="text-sm font-semibold text-cyan-400">Chain Verification Results</p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  {verifyChainResult.verified_packet_hash ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  )}
+                  <span>verified_packet_hash</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {verifyChainResult.verified_snapshot_hash ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  )}
+                  <span>verified_snapshot_hash</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {verifyChainResult.snapshot_hash_match ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  )}
+                  <span>snapshot_hash_match</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {verifyChainResult.claim_in_snapshot_scope ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  )}
+                  <span>claim_in_snapshot_scope</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {verifyChainResult.sources_in_snapshot_scope ? (
+                    <CheckCircle className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-500" />
+                  )}
+                  <span>sources_in_snapshot_scope</span>
+                </div>
+              </div>
+              <p className="text-xs font-mono text-muted-foreground">
+                snapshot_id: {verifyChainResult.snapshot_id}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         <Card data-testid="packet-header">
           <CardHeader>
             <CardTitle className="text-lg">Packet Metadata</CardTitle>
@@ -312,6 +415,14 @@ export default function EvidencePacket() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Corpus ID</span>
               <span className="font-mono">{formatHash(packet.corpus_id)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Snapshot ID</span>
+              <span className="font-mono">{formatHash(packet.snapshot_id)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Snapshot Hash</span>
+              <span className="font-mono">{formatHash(packet.snapshot_hash_hex)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Hash Algorithm</span>

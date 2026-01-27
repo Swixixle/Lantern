@@ -208,6 +208,7 @@ export const snapshots = pgTable("snapshots", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   corpusId: text("corpus_id").notNull(),
   snapshotJson: text("snapshot_json").notNull(),
+  snapshotScopeJson: text("snapshot_scope_json"),
   hashAlg: text("hash_alg").notNull().default("SHA-256"),
   hashHex: text("hash_hex").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -340,6 +341,8 @@ export const evidencePackets = pgTable("evidence_packets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   corpusId: varchar("corpus_id").notNull().references(() => corpora.id, { onDelete: "cascade" }),
   claimId: varchar("claim_id").notNull().references(() => claimRecords.id, { onDelete: "cascade" }),
+  snapshotId: varchar("snapshot_id").notNull(),
+  snapshotHashHex: text("snapshot_hash_hex").notNull(),
   packetJson: text("packet_json").notNull(),
   hashAlg: text("hash_alg").notNull().default("SHA-256"),
   hashHex: text("hash_hex").notNull(),
@@ -347,6 +350,7 @@ export const evidencePackets = pgTable("evidence_packets", {
 }, (table) => [
   index("evidence_packets_corpus_id_idx").on(table.corpusId),
   index("evidence_packets_claim_id_idx").on(table.claimId),
+  index("evidence_packets_snapshot_id_idx").on(table.snapshotId),
 ]);
 
 export const insertEvidencePacketSchema = createInsertSchema(evidencePackets).omit({

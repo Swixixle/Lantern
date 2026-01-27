@@ -21,38 +21,20 @@ interface VerifyResult {
   recomputed_hash_hex: string;
 }
 
-function ClaimCard({ claim, corpusId }: { claim: Claim; corpusId: string }) {
+interface SnapshotOption {
+  snapshot_id: string;
+  created_at: string;
+  hash_hex: string;
+}
+
+function ClaimCard({ claim, corpusId, onGeneratePacket }: { claim: Claim; corpusId: string; onGeneratePacket: (claimId: string) => void }) {
   const [, navigate] = useLocation();
-  const [generating, setGenerating] = useState(false);
   
   const handleViewEvidence = () => {
     if (claim.anchor_ids.length > 0) {
       navigate(`/anchors?ids=${claim.anchor_ids.join(",")}&claimId=${claim.id}`);
     } else {
       navigate(`/anchors?claimId=${claim.id}&empty=true`);
-    }
-  };
-
-  const handleGeneratePacket = async () => {
-    if (claim.classification !== "DEFENSIBLE" || claim.anchor_ids.length === 0) return;
-    
-    setGenerating(true);
-    try {
-      const res = await fetch(`/api/corpus/${corpusId}/claims/${claim.id}/packet`, {
-        method: "POST",
-      });
-      
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Failed to generate packet");
-      }
-      
-      const packet = await res.json();
-      navigate(`/packets/${packet.packet_id}`);
-    } catch (err) {
-      console.error("Failed to generate packet:", err);
-    } finally {
-      setGenerating(false);
     }
   };
 
@@ -102,16 +84,11 @@ function ClaimCard({ claim, corpusId }: { claim: Claim; corpusId: string }) {
               <Button 
                 size="sm" 
                 variant="outline" 
-                onClick={handleGeneratePacket}
-                disabled={generating}
+                onClick={() => onGeneratePacket(claim.id)}
                 className="text-xs"
                 data-testid={`generate-packet-${claim.id}`}
               >
-                {generating ? (
-                  <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                ) : (
-                  <FileText className="w-3 h-3 mr-1" />
-                )}
+                <FileText className="w-3 h-3 mr-1" />
                 Generate Evidence Packet
               </Button>
             )}
@@ -127,13 +104,15 @@ function ClaimSection({
   icon, 
   claims, 
   emptyMessage,
-  corpusId 
+  corpusId,
+  onGeneratePacket 
 }: { 
   title: string; 
   icon: React.ReactNode; 
   claims: Claim[]; 
   emptyMessage: string;
   corpusId: string;
+  onGeneratePacket: (claimId: string) => void;
 }) {
   return (
     <section className="mb-8">
@@ -152,7 +131,7 @@ function ClaimSection({
       ) : (
         <div className="space-y-3">
           {claims.map((claim) => (
-            <ClaimCard key={claim.id} claim={claim} corpusId={corpusId} />
+            <ClaimCard key={claim.id} claim={claim} corpusId={corpusId} onGeneratePacket={onGeneratePacket} />
           ))}
         </div>
       )}
@@ -178,6 +157,12 @@ export default function ClaimSpace() {
   const [verifyResult, setVerifyResult] = useState<VerifyResult | null>(null);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  
+  const [snapshots, setSnapshots] = useState<SnapshotOption[]>([]);
+  const [showSnapshotSelect, setShowSnapshotSelect] = useState(false);
+  const [pendingClaimId, setPendingClaimId] = useState<string | null>(null);
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string>("");
+  const [generatingPacket, setGeneratingPacket] = useState(false);
   
   const corpusId = corpusIdFromQuery || "corpus-demo-001";
   
@@ -214,6 +199,47 @@ export default function ClaimSpace() {
   const defensible = claims.filter(c => c.classification === "DEFENSIBLE");
   const restricted = claims.filter(c => c.classification === "RESTRICTED");
   const ambiguous = claims.filter(c => c.classification === "AMBIGUOUS");
+
+  const handleGeneratePacket = async (claimId: string) => {
+    try {
+      const res = await fetch(`/api/corpus/${corpusId}/snapshots`);
+      if (!res.ok) throw new Error("Failed to load snapshots");
+      const data = await res.json();
+      setSnapshots(data.snapshots);
+      setPendingClaimId(claimId);
+      setSelectedSnapshotId(data.snapshots.length > 0 ? data.snapshots[0].snapshot_id : "");
+      setShowSnapshotSelect(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load snapshots");
+    }
+  };
+
+  const handleConfirmPacketGeneration = async () => {
+    if (!pendingClaimId || !selectedSnapshotId) return;
+    
+    setGeneratingPacket(true);
+    try {
+      const res = await fetch(`/api/corpus/${corpusId}/claims/${pendingClaimId}/packet`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ snapshot_id: selectedSnapshotId })
+      });
+      
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || "Failed to generate packet");
+      }
+      
+      const packet = await res.json();
+      setShowSnapshotSelect(false);
+      setPendingClaimId(null);
+      navigate(`/packets/${packet.packet_id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate packet");
+    } finally {
+      setGeneratingPacket(false);
+    }
+  };
 
   const handleSaveSnapshot = async () => {
     setSaving(true);
@@ -317,6 +343,59 @@ export default function ClaimSpace() {
           </Card>
         )}
 
+        {showSnapshotSelect && (
+          <Card className="mb-6 border-amber-500/30 bg-amber-500/5" data-testid="snapshot-select-dialog">
+            <CardContent className="py-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-amber-400">Select Snapshot for Evidence Packet</p>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { setShowSnapshotSelect(false); setPendingClaimId(null); }}
+                >
+                  Cancel
+                </Button>
+              </div>
+              
+              {snapshots.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  <p>Create a snapshot before generating a packet.</p>
+                  <p className="text-xs mt-1">Use the "Save Snapshot" button above to create one.</p>
+                </div>
+              ) : (
+                <>
+                  <select
+                    value={selectedSnapshotId}
+                    onChange={(e) => setSelectedSnapshotId(e.target.value)}
+                    className="w-full p-2 rounded border bg-background text-sm"
+                    data-testid="snapshot-select-dropdown"
+                  >
+                    {snapshots.map((s) => (
+                      <option key={s.snapshot_id} value={s.snapshot_id}>
+                        {new Date(s.created_at).toLocaleString()} - {formatHash(s.hash_hex)}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  <Button
+                    onClick={handleConfirmPacketGeneration}
+                    disabled={generatingPacket || !selectedSnapshotId}
+                    className="w-full"
+                    data-testid="button-confirm-packet"
+                  >
+                    {generatingPacket ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <FileText className="w-4 h-4 mr-2" />
+                    )}
+                    Generate Packet with Selected Snapshot
+                  </Button>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {snapshot && (
           <Card className="mb-6 border-cyan-500/30 bg-cyan-500/5" data-testid="snapshot-result">
             <CardContent className="py-4">
@@ -406,6 +485,7 @@ export default function ClaimSpace() {
               claims={defensible}
               emptyMessage="No defensible claims in this corpus."
               corpusId={corpusId}
+              onGeneratePacket={handleGeneratePacket}
             />
 
             <ClaimSection
@@ -414,6 +494,7 @@ export default function ClaimSpace() {
               claims={restricted}
               emptyMessage="No restricted claims identified."
               corpusId={corpusId}
+              onGeneratePacket={handleGeneratePacket}
             />
 
             <ClaimSection
@@ -422,6 +503,7 @@ export default function ClaimSpace() {
               claims={ambiguous}
               emptyMessage="No ambiguous claims identified."
               corpusId={corpusId}
+              onGeneratePacket={handleGeneratePacket}
             />
           </>
         )}
