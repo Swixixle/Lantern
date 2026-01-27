@@ -34,7 +34,9 @@ export default function Intake() {
   const [building, setBuilding] = useState(false);
   const [buildResult, setBuildResult] = useState<BuildResult | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportingRepro, setExportingRepro] = useState(false);
   const [includeRawSources, setIncludeRawSources] = useState(false);
+  const [strictMode, setStrictMode] = useState(true);
   
   const primaryInputRef = useRef<HTMLInputElement>(null);
   const secondaryInputRef = useRef<HTMLInputElement>(null);
@@ -205,6 +207,46 @@ export default function Intake() {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleExportReproPack = async () => {
+    if (!corpusId) return;
+    
+    setExportingRepro(true);
+    setError(null);
+    
+    try {
+      const params = new URLSearchParams();
+      if (includeRawSources) params.set("include_raw_sources", "true");
+      if (!strictMode) params.set("strict", "false");
+      const queryStr = params.toString();
+      const url = `/api/corpus/${corpusId}/export_repro_pack${queryStr ? "?" + queryStr : ""}`;
+      const response = await fetch(url, {
+        headers: getAuthHeaders()
+      });
+      
+      if (response.status === 401) {
+        setError("Unauthorized");
+        return;
+      }
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "Failed to export repro pack");
+      }
+      
+      const blob = await response.blob();
+      const downloadUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = downloadUrl;
+      a.download = `lantern-repro-pack-${corpusId}.zip`;
+      a.click();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unknown error");
+    } finally {
+      setExportingRepro(false);
     }
   };
 
@@ -441,6 +483,17 @@ export default function Intake() {
                       Include raw sources (PDFs)
                     </label>
                   </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="strict-mode"
+                      checked={strictMode}
+                      onCheckedChange={(checked) => setStrictMode(checked === true)}
+                      data-testid="checkbox-strict-mode"
+                    />
+                    <label htmlFor="strict-mode" className="text-sm text-muted-foreground">
+                      Strict mode
+                    </label>
+                  </div>
                   <Button
                     onClick={handleExportBundle}
                     disabled={exporting}
@@ -454,6 +507,20 @@ export default function Intake() {
                       <Download className="w-4 h-4 mr-2" />
                     )}
                     Export Corpus Bundle (ZIP)
+                  </Button>
+                  <Button
+                    onClick={handleExportReproPack}
+                    disabled={exportingRepro}
+                    variant="outline"
+                    className="w-full"
+                    data-testid="button-export-repro-pack"
+                  >
+                    {exportingRepro ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4 mr-2" />
+                    )}
+                    Export Repro Pack (ZIP)
                   </Button>
                 </div>
               </div>

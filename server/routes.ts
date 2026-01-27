@@ -1896,6 +1896,217 @@ export async function registerRoutes(
     await archive.finalize();
   }));
 
+  // v1.10 Repro Pack endpoint
+  app.get("/api/corpus/:corpusId/export_repro_pack", requireAuth, asyncHandler(async (req, res) => {
+    const corpusId = req.params.corpusId as string;
+    const includeRawSources = req.query.include_raw_sources === "true";
+    const strict = req.query.strict !== "false";
+    
+    const corpus = await storage.getCorpus(corpusId);
+    if (!corpus) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Corpus not found"
+      });
+    }
+    
+    // Generate the bundle ZIP in memory first
+    const bundleArchive = archiver("zip", { zlib: { level: 9 } });
+    const bundleChunks: Buffer[] = [];
+    bundleArchive.on("data", (chunk) => bundleChunks.push(chunk));
+    
+    const sources = await storage.listCorpusSources(corpusId);
+    const snapshots = await storage.listSnapshotsByCorpus(corpusId);
+    const packets = await storage.listEvidencePacketsByCorpus(corpusId);
+    const ledgerEvents = await storage.listLedgerEvents(corpusId, { limit: 10000 });
+    
+    const bundleDir = `lantern-corpus-${corpusId}`;
+    
+    const corpusJson = JSON.stringify({
+      corpus_id: corpus.id,
+      purpose: corpus.purpose,
+      created_at: corpus.createdAt
+    }, null, 2);
+    
+    const sourcesJson = JSON.stringify({
+      corpus_id: corpusId,
+      sources: sources.map(s => ({
+        source_id: s.id,
+        corpus_id: s.corpusId,
+        role: s.role,
+        filename: s.filename,
+        uploaded_at: s.uploadedAt,
+        sha256_hex: s.sha256Hex
+      }))
+    }, null, 2);
+    
+    const ledgerJson = JSON.stringify({
+      corpus_id: corpusId,
+      events: ledgerEvents.map(e => ({
+        event_id: e.id,
+        corpus_id: e.corpusId,
+        event_type: e.eventType,
+        entity_type: e.entityType,
+        entity_id: e.entityId,
+        payload: e.payloadJson ? JSON.parse(e.payloadJson) : null,
+        created_at: e.occurredAt,
+        hash_hex: e.hashHex
+      }))
+    }, null, 2);
+    
+    const files: Array<{ path: string; sha256_hex: string }> = [];
+    files.push({ path: "corpus.json", sha256_hex: createHash("sha256").update(corpusJson).digest("hex") });
+    files.push({ path: "ledger.json", sha256_hex: createHash("sha256").update(ledgerJson).digest("hex") });
+    
+    const snapshotContents: Array<{ id: string; json: string }> = [];
+    for (const snap of snapshots) {
+      const snapJson = JSON.stringify({
+        snapshot_id: snap.id,
+        corpus_id: snap.corpusId,
+        created_at: snap.createdAt,
+        hash_hex: snap.hashHex,
+        snapshot_scope: snap.snapshotScopeJson ? JSON.parse(snap.snapshotScopeJson) : null
+      }, null, 2);
+      snapshotContents.push({ id: snap.id, json: snapJson });
+      files.push({ path: `snapshots/${snap.id}.json`, sha256_hex: createHash("sha256").update(snapJson).digest("hex") });
+    }
+    
+    const packetContents: Array<{ id: string; json: string }> = [];
+    for (const pkt of packets) {
+      const pktJson = JSON.stringify({
+        packet_id: pkt.id,
+        created_at: pkt.createdAt,
+        ...JSON.parse(pkt.packetJson)
+      }, null, 2);
+      packetContents.push({ id: pkt.id, json: pktJson });
+      files.push({ path: `packets/${pkt.id}.json`, sha256_hex: createHash("sha256").update(pktJson).digest("hex") });
+    }
+    
+    files.push({ path: "sources.json", sha256_hex: createHash("sha256").update(sourcesJson).digest("hex") });
+    
+    if (includeRawSources) {
+      for (const src of sources) {
+        const rawPath = `raw_sources/${src.id}__${src.filename}`;
+        files.push({ path: rawPath, sha256_hex: src.sha256Hex });
+      }
+    }
+    
+    files.sort((a, b) => a.path.localeCompare(b.path));
+    
+    const manifestWithoutHash = {
+      bundle_format: "lantern-corpus-bundle-v1",
+      corpus_id: corpusId,
+      include_raw_sources: includeRawSources,
+      files: files,
+      manifest_hash_alg: "SHA-256"
+    };
+    const manifestCanonical = JSON.stringify(manifestWithoutHash);
+    const manifestHashHex = createHash("sha256").update(manifestCanonical).digest("hex");
+    
+    const manifest = {
+      bundle_format: "lantern-corpus-bundle-v1",
+      corpus_id: corpusId,
+      generated_at: new Date().toISOString(),
+      include_raw_sources: includeRawSources,
+      files: files,
+      manifest_hash_alg: "SHA-256",
+      manifest_hash_hex: manifestHashHex
+    };
+    
+    bundleArchive.append(JSON.stringify(manifest, null, 2), { name: `${bundleDir}/MANIFEST.json` });
+    bundleArchive.append(corpusJson, { name: `${bundleDir}/corpus.json` });
+    bundleArchive.append(ledgerJson, { name: `${bundleDir}/ledger.json` });
+    bundleArchive.append(sourcesJson, { name: `${bundleDir}/sources.json` });
+    
+    for (const snap of snapshotContents) {
+      bundleArchive.append(snap.json, { name: `${bundleDir}/snapshots/${snap.id}.json` });
+    }
+    
+    for (const pkt of packetContents) {
+      bundleArchive.append(pkt.json, { name: `${bundleDir}/packets/${pkt.id}.json` });
+    }
+    
+    await bundleArchive.finalize();
+    const bundleBuffer = Buffer.concat(bundleChunks);
+    
+    // Read verifier files
+    const verifierJs = await readFile(join(process.cwd(), "tools", "verify_bundle_standalone.js"), "utf8");
+    const verifierPackageJson = await readFile(join(process.cwd(), "tools", "verifier_package.json"), "utf8");
+    const verifierPackageLock = await readFile(join(process.cwd(), "tools", "verifier_package_lock.json"), "utf8");
+    
+    // Create INSTRUCTIONS.txt
+    const instructions = `LANTERN REPRO PACK (v1)
+
+Contents:
+- bundle/lantern-corpus-${corpusId}.zip
+- verifier/verify_bundle.js
+- verifier/package.json
+- verifier/package-lock.json
+
+How to verify (requires Node.js 18+):
+1) cd verifier
+2) npm ci
+3) node verify_bundle.js ../bundle/lantern-corpus-${corpusId}.zip --strict=${strict}
+
+Expected result:
+- "bundle_ok": true
+
+Notes:
+- This verifier checks MANIFEST.json integrity and file SHA-256 hashes.
+- No network access is required.
+`;
+    
+    // Build REPRO_MANIFEST
+    const reproFiles: Array<{ path: string; sha256_hex: string }> = [
+      { path: "INSTRUCTIONS.txt", sha256_hex: createHash("sha256").update(instructions).digest("hex") },
+      { path: `bundle/lantern-corpus-${corpusId}.zip`, sha256_hex: createHash("sha256").update(bundleBuffer).digest("hex") },
+      { path: "verifier/package-lock.json", sha256_hex: createHash("sha256").update(verifierPackageLock).digest("hex") },
+      { path: "verifier/package.json", sha256_hex: createHash("sha256").update(verifierPackageJson).digest("hex") },
+      { path: "verifier/verify_bundle.js", sha256_hex: createHash("sha256").update(verifierJs).digest("hex") },
+    ];
+    reproFiles.sort((a, b) => a.path.localeCompare(b.path));
+    
+    const reproManifestWithoutHash = {
+      repro_format: "lantern-repro-pack-v1",
+      corpus_id: corpusId,
+      include_raw_sources: includeRawSources,
+      strict: strict,
+      files: reproFiles,
+      hash_alg: "SHA-256"
+    };
+    const reproManifestCanonical = JSON.stringify(reproManifestWithoutHash);
+    const reproHashHex = createHash("sha256").update(reproManifestCanonical).digest("hex");
+    
+    const reproManifest = {
+      repro_format: "lantern-repro-pack-v1",
+      corpus_id: corpusId,
+      include_raw_sources: includeRawSources,
+      strict: strict,
+      files: reproFiles,
+      hash_alg: "SHA-256",
+      hash_hex: reproHashHex
+    };
+    
+    // Create the repro pack ZIP
+    const reproDir = `lantern-repro-pack-${corpusId}`;
+    
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="lantern-repro-pack-${corpusId}.zip"`);
+    
+    const reproArchive = archiver("zip", { zlib: { level: 9 } });
+    reproArchive.on("error", (err) => { throw err; });
+    reproArchive.pipe(res);
+    
+    reproArchive.append(JSON.stringify(reproManifest, null, 2), { name: `${reproDir}/REPRO_MANIFEST.json` });
+    reproArchive.append(instructions, { name: `${reproDir}/INSTRUCTIONS.txt` });
+    reproArchive.append(bundleBuffer, { name: `${reproDir}/bundle/lantern-corpus-${corpusId}.zip` });
+    reproArchive.append(verifierJs, { name: `${reproDir}/verifier/verify_bundle.js` });
+    reproArchive.append(verifierPackageJson, { name: `${reproDir}/verifier/package.json` });
+    reproArchive.append(verifierPackageLock, { name: `${reproDir}/verifier/package-lock.json` });
+    
+    await reproArchive.finalize();
+  }));
+
   // v1.8 Bundle Verification endpoint
   app.post("/api/bundles/verify", requireAuth, bundleUpload.single("bundle"), asyncHandler(async (req: Request, res: Response) => {
     if (!req.file) {
