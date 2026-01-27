@@ -802,11 +802,18 @@ export async function registerRoutes(
     
     const sha256Hex = createHash("sha256").update(file.buffer).digest("hex");
     
+    const corpusDir = join(UPLOADS_DIR, "corpus", corpusId);
+    await mkdir(corpusDir, { recursive: true });
+    const storagePath = join("corpus", corpusId, `${sha256Hex}-${file.originalname}`);
+    const fullPath = join(UPLOADS_DIR, storagePath);
+    await writeFile(fullPath, file.buffer);
+    
     const source = await storage.createCorpusSource({
       corpusId,
       role: roleResult.data,
       filename: file.originalname,
-      sha256Hex
+      sha256Hex,
+      storagePath
     });
     
     await storage.createLedgerEvent(
@@ -2011,6 +2018,34 @@ export async function registerRoutes(
       files.push({ path: `packets/${pkt.id}.json`, sha256_hex: createHash("sha256").update(pktJson).digest("hex") });
     }
     
+    const pageProofContents: { sourceId: string; pageIndex: number; json: string; pngPath: string }[] = [];
+    for (const src of sources) {
+      const pdfPages = await storage.listPdfPagesBySource(src.id);
+      for (const page of pdfPages) {
+        const pageJsonData = {
+          source_id: src.id,
+          page_index: page.pageIndex,
+          page_text_sha256_hex: page.pageTextSha256Hex
+        };
+        const pageJson = JSON.stringify(pageJsonData);
+        pageProofContents.push({
+          sourceId: src.id,
+          pageIndex: page.pageIndex,
+          json: pageJson,
+          pngPath: page.pagePngPath
+        });
+        files.push({ path: `pages/${src.id}/page-${page.pageIndex}.json`, sha256_hex: createHash("sha256").update(pageJson).digest("hex") });
+        const pngFullPath = join(UPLOADS_DIR, page.pagePngPath.replace(/^\/uploads\//, ""));
+        try {
+          const pngBuffer = await readFile(pngFullPath);
+          const pngHash = createHash("sha256").update(pngBuffer).digest("hex");
+          files.push({ path: `pages/${src.id}/page-${page.pageIndex}.png`, sha256_hex: pngHash });
+        } catch (err) {
+          console.warn(`Could not read PNG at ${pngFullPath}`);
+        }
+      }
+    }
+    
     if (includeRawSources) {
       for (const src of sources) {
         const rawPath = `raw_sources/${src.id}__${src.filename}`;
@@ -2076,6 +2111,17 @@ export async function registerRoutes(
     
     for (const pkt of packetContents) {
       archive.append(pkt.json, { name: `${bundleDir}/packets/${pkt.id}.json` });
+    }
+    
+    for (const pageProof of pageProofContents) {
+      archive.append(pageProof.json, { name: `${bundleDir}/pages/${pageProof.sourceId}/page-${pageProof.pageIndex}.json` });
+      const pngFullPath = join(UPLOADS_DIR, pageProof.pngPath.replace(/^\/uploads\//, ""));
+      try {
+        const pngBuffer = await readFile(pngFullPath);
+        archive.append(pngBuffer, { name: `${bundleDir}/pages/${pageProof.sourceId}/page-${pageProof.pageIndex}.png` });
+      } catch (err) {
+        // PNG not available
+      }
     }
     
     await archive.finalize();

@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, Anchor, FileText, CheckCircle, Loader2 } from "lucide-react";
+import { Layers, Anchor, FileText, CheckCircle, Loader2, Eye } from "lucide-react";
+import { Link } from "wouter";
 
 interface AnchorRecord {
   id: string;
@@ -248,6 +249,17 @@ export default function AnchorBrowser() {
                               </span>
                               <span>{anchor.page_ref}</span>
                               <span className="font-mono text-[10px]">{anchor.id.slice(0, 8)}</span>
+                              <Link href={`/anchors/proof?anchorId=${anchor.id}`} onClick={(e) => e.stopPropagation()}>
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="h-5 px-1.5 text-[10px]"
+                                  data-testid={`anchor-proof-${anchor.id}`}
+                                >
+                                  <Eye className="w-3 h-3 mr-0.5" />
+                                  View Proof
+                                </Button>
+                              </Link>
                             </div>
                           </div>
                         </div>

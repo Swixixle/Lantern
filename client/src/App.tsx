@@ -24,6 +24,7 @@ import EvidencePacket from "@/pages/evidence-packet";
 import Ledger from "@/pages/ledger";
 import Sources from "@/pages/sources";
 import Review from "@/pages/review";
+import AnchorProof from "@/pages/anchor-proof";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
 import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp, ScrollText, Eye, FileText, Anchor } from "lucide-react";
@@ -186,6 +187,7 @@ function Router() {
         <Route path="/packets/:packetId" component={EvidencePacket} />
         <Route path="/ledger" component={Ledger} />
         <Route path="/anchors" component={AnchorView} />
+        <Route path="/anchors/proof" component={AnchorProof} />
         <Route path="/constraints" component={Constraints} />
         <Route path="/snapshots" component={Snapshots} />
         <Route path="/snapshots/:snapshot_id" component={SnapshotDetail} />
