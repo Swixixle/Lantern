@@ -185,6 +185,14 @@ function requireAuth(req: Request, res: Response, next: NextFunction) {
   next();
 }
 
+function optionalAuthForPublicReadonly(req: Request, res: Response, next: NextFunction) {
+  const publicReadonly = process.env.LANTERN_PUBLIC_READONLY === "true";
+  if (publicReadonly) {
+    return next();
+  }
+  return requireAuth(req, res, next);
+}
+
 function computeSha256(buffer: Buffer): string {
   return createHash("sha256").update(buffer).digest("hex");
 }
@@ -232,6 +240,11 @@ export async function registerRoutes(
   // v1.9 Auth status endpoint
   app.get("/api/auth/status", requireAuth, (_req, res) => {
     res.json({ authenticated: true });
+  });
+
+  // v1.11 Config endpoint (public, no auth)
+  app.get("/api/config", (_req, res) => {
+    res.json({ public_readonly: process.env.LANTERN_PUBLIC_READONLY === "true" });
   });
 
   app.post("/api/upload", (req, res, next) => {
@@ -819,7 +832,7 @@ export async function registerRoutes(
   }));
   
   // List corpus sources
-  app.get("/api/corpus/:corpusId/sources", asyncHandler(async (req, res) => {
+  app.get("/api/corpus/:corpusId/sources", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     
     const corpus = await storage.getCorpus(corpusId);
@@ -1004,7 +1017,7 @@ export async function registerRoutes(
   }));
 
   // List anchor records by corpus (with optional filters)
-  app.get("/api/corpus/:corpusId/anchors", asyncHandler(async (req, res) => {
+  app.get("/api/corpus/:corpusId/anchors", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const role = req.query.role as string | undefined;
     const sourceId = req.query.source_id as string | undefined;
@@ -1106,7 +1119,7 @@ export async function registerRoutes(
   }));
   
   // List claims (corpus-scoped)
-  app.get("/api/corpus/:corpusId/claims", asyncHandler(async (req, res) => {
+  app.get("/api/corpus/:corpusId/claims", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     
     const corpus = await storage.getCorpus(corpusId);
@@ -1341,7 +1354,7 @@ export async function registerRoutes(
   }));
   
   // Get evidence packet
-  app.get("/api/packets/:packetId", asyncHandler(async (req, res) => {
+  app.get("/api/packets/:packetId", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const packetId = req.params.packetId as string;
     
     const packet = await storage.getEvidencePacket(packetId);
@@ -1362,7 +1375,7 @@ export async function registerRoutes(
   }));
   
   // Verify evidence packet
-  app.get("/api/packets/:packetId/verify", asyncHandler(async (req, res) => {
+  app.get("/api/packets/:packetId/verify", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const packetId = req.params.packetId as string;
     
     const packet = await storage.getEvidencePacket(packetId);
@@ -1396,7 +1409,7 @@ export async function registerRoutes(
   }));
   
   // Verify evidence packet chain (packet + snapshot linkage)
-  app.get("/api/packets/:packetId/verify_chain", asyncHandler(async (req, res) => {
+  app.get("/api/packets/:packetId/verify_chain", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const packetId = req.params.packetId as string;
     
     const packet = await storage.getEvidencePacket(packetId);
@@ -1608,7 +1621,7 @@ export async function registerRoutes(
   }));
   
   // Get snapshot
-  app.get("/api/snapshots/:snapshotId", asyncHandler(async (req, res) => {
+  app.get("/api/snapshots/:snapshotId", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const snapshotId = req.params.snapshotId as string;
     const snapshot = await storage.getSnapshot(snapshotId);
     
@@ -1632,7 +1645,7 @@ export async function registerRoutes(
   }));
   
   // Verify snapshot
-  app.get("/api/snapshots/:snapshotId/verify", asyncHandler(async (req, res) => {
+  app.get("/api/snapshots/:snapshotId/verify", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const snapshotId = req.params.snapshotId as string;
     const snapshot = await storage.getSnapshot(snapshotId);
     
@@ -1659,7 +1672,7 @@ export async function registerRoutes(
   // === LEDGER API ===
   
   // List ledger events for a corpus
-  app.get("/api/corpus/:corpusId/ledger", asyncHandler(async (req, res) => {
+  app.get("/api/corpus/:corpusId/ledger", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const corpusId = req.params.corpusId as string;
     const limitParam = req.query.limit ? parseInt(String(req.query.limit), 10) : 100;
     const afterParam = req.query.after ? String(req.query.after) : undefined;

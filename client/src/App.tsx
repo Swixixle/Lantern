@@ -3,6 +3,7 @@ import { Switch, Route, Link } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
+import { ConfigProvider, useReadOnlyMode } from "./lib/config";
 import ClaimSpace from "@/pages/claim-space";
 import AnchorView from "@/pages/anchor-view";
 import Constraints from "@/pages/constraints";
@@ -23,17 +24,29 @@ import EvidencePacket from "@/pages/evidence-packet";
 import Ledger from "@/pages/ledger";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
-import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp, ScrollText } from "lucide-react";
+import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp, ScrollText, Eye } from "lucide-react";
 
 function Router() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { isReadOnly } = useReadOnlyMode();
 
   return (
     <div className="relative">
+      {/* v1.11 Review Mode Banner */}
+      {isReadOnly && (
+        <div 
+          className="fixed top-0 left-0 right-0 z-40 bg-amber-600 text-white text-center py-2 px-4 font-medium print:hidden"
+          data-testid="banner-review-mode"
+        >
+          <Eye className="w-4 h-4 inline-block mr-2" />
+          Review Mode (Read-Only)
+        </div>
+      )}
+      
       {/* Hamburger Menu Button */}
       <button 
         onClick={() => setMenuOpen(!menuOpen)}
-        className="fixed top-4 right-4 z-50 p-2 bg-background/80 backdrop-blur border border-border/50 rounded-lg print:hidden"
+        className={`fixed ${isReadOnly ? 'top-14' : 'top-4'} right-4 z-50 p-2 bg-background/80 backdrop-blur border border-border/50 rounded-lg print:hidden`}
         aria-label="Menu"
         data-testid="button-menu"
       >
@@ -42,7 +55,7 @@ function Router() {
 
       {/* Menu Panel */}
       {menuOpen && (
-        <div className="fixed top-16 right-4 z-50 bg-background border border-border rounded-lg shadow-lg p-2 min-w-[200px] print:hidden">
+        <div className={`fixed ${isReadOnly ? 'top-24' : 'top-16'} right-4 z-50 bg-background border border-border rounded-lg shadow-lg p-2 min-w-[200px] print:hidden`}>
           <nav className="flex flex-col gap-1">
             <Link href="/intake" onClick={() => setMenuOpen(false)}>
               <Button variant="ghost" size="sm" className="w-full justify-start text-sm">

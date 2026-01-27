@@ -1,0 +1,134 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+v1.10.1 is accepted as complete and compliant. The determinism issue is resolved:
+
+* Repro pack ZIP sha256 stable across exports ✅
+* Embedded bundle ZIP sha256 stable across exports ✅
+* `generated_at` constant in deterministic mode ✅
+* Non-deterministic mode unchanged ✅
+
+Next specification is **v1.11 — “Read-Only Review Mode” (Safe sharing UI)**. This lets you share a corpus with someone who can *view* everything and verify integrity, but cannot create/modify anything.
+
+# v1.11 — Read-Only Review Mode (Deterministic, No Writes)
+
+## 0) Goal (scope-locked)
+
+Add a “read-only review” mode that:
+
+* Disables all write actions in the UI
+* Blocks all write endpoints server-side unless authenticated
+* Allows read endpoints to be accessible without auth **only when** a server flag is enabled
+
+This is for demos and external review.
+
+---
+
+## 1) Server configuration flags
+
+Add env var:
+
+* `LANTERN_PUBLIC_READONLY=true|false` (default false)
+
+Behavior:
+
+* If false: current behavior unchanged (reads may still require auth if you choose later; not part of v1.11).
+* If true: allow unauthenticated access to a limited set of **read** endpoints listed below.
+
+---
+
+## 2) Public read endpoints (only when flag true)
+
+Allow GET without Authorization for:
+
+* `GET /api/corpus/:corpus_id/sources`
+* `GET /api/corpus/:corpus_id/anchors`
+* `GET /api/corpus/:corpus_id/claims`
+* `GET /api/corpus/:corpus_id/constraints`
+* `GET /api/corpus/:corpus_id/ledger`
+* `GET /api/snapshots/:id`
+* `GET /api/snapshots/:id/verify`
+* `GET /api/packets/:packet_id`
+* `GET /api/packets/:packet_id/verify`
+* `GET /api/packets/:packet_id/verify_chain`
+
+All POST/DELETE remain protected always.
+
+---
+
+## 3) UI Read-Only Mode toggle (deterministic)
+
+UI determines read-only mode by calling:
+
+### `GET /api/config`
+
+Response:
+
+```json
+{ "public_readonly": true }
+```
+
+* If `public_readonly=true`, UI enters Review Mode:
+
+  * Hide or disable buttons for:
+
+    * Create corpus
+    * Upload sources
+    * Build anchors
+    * Create/delete claims
+    * Save snapshot
+    * Generate packet
+    * Export bundle/repro pack
+    * Bundle verify upload
+  * Show a banner at top:
+    **“Review Mode (Read-Only)”**
+
+If `public_readonly=false`, UI behavior unchanged.
+
+---
+
+## 4) Acceptance tests
+
+### A) Flag OFF (default)
+
+* All existing behavior unchanged.
+
+### B) Flag ON
+
+1. Unauthenticated GET to allowed endpoints returns 200.
+2. Unauthenticated POST/DELETE returns 401 AUTH_ERROR.
+3. UI displays “Review Mode (Read-Only)” banner.
+4. All write buttons are hidden/disabled.
+5. Verify endpoints still work without auth.
+
+---
+
+## 5) What to send me when complete
+
+* `/api/config` response with flag on
+* One unauthenticated GET success (e.g., claims)
+* One unauthenticated POST failure (401)
+* Screenshot showing Review Mode banner and disabled/hid write actions
+
+Proceed exactly to v1.11.

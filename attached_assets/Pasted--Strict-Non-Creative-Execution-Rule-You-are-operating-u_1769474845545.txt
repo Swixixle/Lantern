@@ -1,0 +1,161 @@
+**Strict Non-Creative Execution Rule**
+
+You are operating under a **non-creative, non-interpretive mandate**.
+
+**Do not take creative liberties.**
+**Do not make assumptions.**
+**Do not infer intent, meaning, hierarchy, or policy.**
+**Do not rewire logic or UX for convenience, elegance, or user friendliness.**
+**Do not “improve” phrasing, structure, or flow unless explicitly instructed.**
+
+Implement **only** what is specified.
+
+If a requirement is underspecified or ambiguous:
+
+* Stop.
+* Ask for clarification.
+* Do not fill gaps yourself.
+
+The system’s purpose is **epistemic restraint and claim governance**, not helpfulness or synthesis.
+
+Any deviation from this rule is a defect.
+
+---
+
+You’re mid-implementation of v1.11. Here is the **exact checklist** to finish v1.11 without drift, plus the **acceptance tests** you must run and paste back.
+
+# v1.11 Finish Checklist (Exact)
+
+## A) Server: `LANTERN_PUBLIC_READONLY` flag
+
+1. Add env var `LANTERN_PUBLIC_READONLY` (default false).
+2. Implement `GET /api/config`:
+
+```json
+{ "public_readonly": true|false }
+```
+
+## B) Server: conditional auth bypass for *only* the listed GET routes
+
+When `LANTERN_PUBLIC_READONLY=true`, allow unauthenticated **GET** for exactly:
+
+* `/api/corpus/:corpus_id/sources`
+* `/api/corpus/:corpus_id/anchors`
+* `/api/corpus/:corpus_id/claims`
+* `/api/corpus/:corpus_id/constraints`
+* `/api/corpus/:corpus_id/ledger`
+* `/api/snapshots/:id`
+* `/api/snapshots/:id/verify`
+* `/api/packets/:packet_id`
+* `/api/packets/:packet_id/verify`
+* `/api/packets/:packet_id/verify_chain`
+
+Hard rules:
+
+* All **POST/DELETE** remain protected always.
+* Any other GET not listed stays protected (or unchanged) — do not widen scope.
+
+Implementation constraint:
+
+* Do not create “clever” wildcard patterns that accidentally include more routes than specified.
+
+## C) Client: Review Mode UI gating
+
+1. On app load, call `/api/config`.
+2. If `public_readonly=true`:
+
+   * show banner text exactly: **Review Mode (Read-Only)**
+   * hide/disable these write actions:
+
+     * Create corpus
+     * Upload sources
+     * Build anchors
+     * Create/delete claims
+     * Save snapshot
+     * Generate packet
+     * Export bundle/repro pack
+     * Bundle verify upload
+3. If false: no changes.
+
+---
+
+# Acceptance Tests (Run Exactly)
+
+## 1) Flag OFF (default)
+
+* Confirm app behaves exactly as before.
+
+## 2) Flag ON
+
+Set env:
+
+```bash
+export LANTERN_PUBLIC_READONLY=true
+npm run dev
+```
+
+### A) Unauthenticated GET succeeds (200)
+
+Example:
+
+```bash
+BASE_URL="http://localhost:3000"
+CORPUS_ID="PASTE"
+
+curl -i -s "$BASE_URL/api/corpus/$CORPUS_ID/claims" | head -n 20
+```
+
+Pass condition:
+
+* HTTP/200
+
+### B) Unauthenticated POST fails (401 AUTH_ERROR)
+
+Example:
+
+```bash
+curl -i -s -X POST "$BASE_URL/api/corpus" \
+  -H "Content-Type: application/json" \
+  -d '{"purpose":"Litigation support"}' | head -n 20
+```
+
+Pass condition:
+
+* HTTP/401
+* Body exactly:
+
+```json
+{ "type":"AUTH_ERROR", "message":"Unauthorized" }
+```
+
+### C) Verify endpoint works unauthenticated (200)
+
+Example:
+
+```bash
+SNAPSHOT_ID="PASTE"
+curl -i -s "$BASE_URL/api/snapshots/$SNAPSHOT_ID/verify" | head -n 30
+```
+
+Pass condition:
+
+* HTTP/200 with verify payload.
+
+### D) UI proof
+
+Open the UI with no API key set:
+
+* Banner visible: **Review Mode (Read-Only)**
+* Upload controls not available
+* Build / Create Claim / Delete Claim / Save Snapshot / Generate Packet buttons not available
+
+---
+
+# What to paste back (exact required outputs)
+
+1. `/api/config` response (with flag ON)
+2. One unauthenticated GET success (headers + first lines)
+3. One unauthenticated POST failure (headers + JSON body)
+4. Screenshot showing banner + absence/disabled state of write actions
+
+Once you paste those four items, I will confirm v1.11 complete and provide the next contract.
