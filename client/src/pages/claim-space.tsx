@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, Loader2, Anchor, FileText } from "lucide-react";
 import { confidenceToBand, clampConfidence, type Claim } from "@/lib/schema/claims";
 import { useReadOnlyMode } from "@/lib/config";
+import { apiGet, apiPost } from "@/lib/auth";
 
 interface SnapshotResult {
   snapshot_id: string;
@@ -177,12 +178,11 @@ export default function ClaimSpace() {
       setLoading(true);
       setError(null);
       
-      try {
-        const response = await fetch(`/api/corpus/${corpusIdFromQuery}/claims`);
-        if (!response.ok) throw new Error("Failed to load claims");
-        
-        const data = await response.json();
-        setClaims(data.claims.map((c: any) => ({
+      const result = await apiGet<{ claims: any[] }>(`/api/corpus/${corpusIdFromQuery}/claims`);
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setClaims(result.data.claims.map((c: any) => ({
           id: c.id,
           classification: c.classification,
           text: c.text,
@@ -190,11 +190,8 @@ export default function ClaimSpace() {
           refusal_reason: c.refusal_reason,
           anchor_ids: c.anchor_ids
         })));
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     };
     
     fetchClaims();
@@ -205,16 +202,14 @@ export default function ClaimSpace() {
   const ambiguous = claims.filter(c => c.classification === "AMBIGUOUS");
 
   const handleGeneratePacket = async (claimId: string) => {
-    try {
-      const res = await fetch(`/api/corpus/${corpusId}/snapshots`);
-      if (!res.ok) throw new Error("Failed to load snapshots");
-      const data = await res.json();
-      setSnapshots(data.snapshots);
+    const result = await apiGet<{ snapshots: SnapshotOption[] }>(`/api/corpus/${corpusId}/snapshots`);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setSnapshots(result.data.snapshots);
       setPendingClaimId(claimId);
-      setSelectedSnapshotId(data.snapshots.length > 0 ? data.snapshots[0].snapshot_id : "");
+      setSelectedSnapshotId(result.data.snapshots.length > 0 ? result.data.snapshots[0].snapshot_id : "");
       setShowSnapshotSelect(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load snapshots");
     }
   };
 
@@ -222,27 +217,16 @@ export default function ClaimSpace() {
     if (!pendingClaimId || !selectedSnapshotId) return;
     
     setGeneratingPacket(true);
-    try {
-      const res = await fetch(`/api/corpus/${corpusId}/claims/${pendingClaimId}/packet`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ snapshot_id: selectedSnapshotId })
-      });
-      
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Failed to generate packet");
-      }
-      
-      const packet = await res.json();
+    const result = await apiPost<{ packet_id: string }>(`/api/corpus/${corpusId}/claims/${pendingClaimId}/packet`, { snapshot_id: selectedSnapshotId });
+    
+    if (!result.ok) {
+      setError(result.error);
+    } else {
       setShowSnapshotSelect(false);
       setPendingClaimId(null);
-      navigate(`/packets/${packet.packet_id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate packet");
-    } finally {
-      setGeneratingPacket(false);
+      navigate(`/packets/${result.data.packet_id}`);
     }
+    setGeneratingPacket(false);
   };
 
   const handleSaveSnapshot = async () => {
@@ -250,37 +234,26 @@ export default function ClaimSpace() {
     setError(null);
     setVerifyResult(null);
     
-    try {
-      const claimsPayload = claims.map(c => ({
-        id: c.id,
-        classification: c.classification,
-        text: c.text,
-        confidence: clampConfidence(c.confidence),
-        refusal_reason: c.refusal_reason,
-        anchor_ids: c.anchor_ids
-      }));
-      
-      const response = await fetch("/api/snapshots", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          corpus_id: corpusId,
-          claims: claimsPayload
-        })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Failed to save snapshot");
-      }
-      
-      const result: SnapshotResult = await response.json();
-      setSnapshot(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setSaving(false);
+    const claimsPayload = claims.map(c => ({
+      id: c.id,
+      classification: c.classification,
+      text: c.text,
+      confidence: clampConfidence(c.confidence),
+      refusal_reason: c.refusal_reason,
+      anchor_ids: c.anchor_ids
+    }));
+    
+    const result = await apiPost<SnapshotResult>("/api/snapshots", {
+      corpus_id: corpusId,
+      claims: claimsPayload
+    });
+    
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setSnapshot(result.data);
     }
+    setSaving(false);
   };
 
   const handleVerifySnapshot = async () => {
@@ -289,20 +262,14 @@ export default function ClaimSpace() {
     setVerifying(true);
     setError(null);
     
-    try {
-      const response = await fetch(`/api/snapshots/${snapshot.snapshot_id}/verify`);
-      
-      if (!response.ok) {
-        throw new Error("Failed to verify snapshot");
-      }
-      
-      const result: VerifyResult = await response.json();
-      setVerifyResult(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
-    } finally {
-      setVerifying(false);
+    const result = await apiGet<VerifyResult>(`/api/snapshots/${snapshot.snapshot_id}/verify`);
+    
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setVerifyResult(result.data);
     }
+    setVerifying(false);
   };
 
   return (

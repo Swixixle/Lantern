@@ -4,6 +4,10 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { ConfigProvider, useReadOnlyMode } from "./lib/config";
+import { AuthProvider, useAuth, apiGet } from "./lib/auth";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Lock, Loader2, LogOut } from "lucide-react";
 import ClaimSpace from "@/pages/claim-space";
 import AnchorView from "@/pages/anchor-view";
 import Constraints from "@/pages/constraints";
@@ -31,6 +35,119 @@ import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
 import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp, ScrollText, Eye, FileText, Anchor } from "lucide-react";
 import { useSearch } from "wouter";
+
+function AuthGate({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, setApiKey, logout } = useAuth();
+  const { isReadOnly, loading: configLoading } = useReadOnlyMode();
+  const [keyInput, setKeyInput] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (configLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (isReadOnly) {
+    return <>{children}</>;
+  }
+
+  if (!isAuthenticated) {
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!keyInput.trim()) return;
+
+      setChecking(true);
+      setError(null);
+      
+      setApiKey(keyInput.trim());
+      
+      const result = await apiGet("/api/auth/status");
+      
+      if (!result.ok) {
+        setApiKey(null);
+        setError("Invalid API key");
+        setChecking(false);
+        return;
+      }
+      
+      setChecking(false);
+    };
+
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 bg-primary/10 rounded-full mb-4">
+              <Lock className="w-8 h-8 text-primary" />
+            </div>
+            <h1 className="text-2xl font-bold">Lantern</h1>
+            <p className="text-muted-foreground mt-2">Enter your API key to access the platform</p>
+          </div>
+          
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="apiKey">API Key</Label>
+              <Input
+                id="apiKey"
+                type="password"
+                value={keyInput}
+                onChange={(e) => setKeyInput(e.target.value)}
+                placeholder="lantern-..."
+                className="mt-1"
+                data-testid="input-api-key"
+                autoFocus
+              />
+            </div>
+            
+            {error && (
+              <p className="text-sm text-red-500" data-testid="auth-error">{error}</p>
+            )}
+            
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={checking || !keyInput.trim()}
+              data-testid="button-login"
+            >
+              {checking ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Access Platform"
+              )}
+            </Button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
+function LogoutButton() {
+  const { isAuthenticated, logout } = useAuth();
+  const { isReadOnly } = useReadOnlyMode();
+  
+  if (isReadOnly || !isAuthenticated) return null;
+  
+  return (
+    <button
+      onClick={logout}
+      className="fixed top-4 left-4 z-50 p-2 bg-background/80 backdrop-blur border border-border/50 rounded-lg print:hidden flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      title="Logout"
+      data-testid="button-logout"
+    >
+      <LogOut className="w-4 h-4" />
+    </button>
+  );
+}
 
 function ReadOnlyNav({ corpusId }: { corpusId: string | null }) {
   if (!corpusId) return null;
@@ -214,8 +331,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ConfigProvider>
-        <Toaster />
-        <Router />
+        <AuthProvider>
+          <Toaster />
+          <AuthGate>
+            <LogoutButton />
+            <Router />
+          </AuthGate>
+        </AuthProvider>
       </ConfigProvider>
     </QueryClientProvider>
   );

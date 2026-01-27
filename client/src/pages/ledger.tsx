@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Shield, Loader2, CheckCircle, XCircle } from "lucide-react";
+import { apiGet } from "@/lib/auth";
 
 interface LedgerEvent {
   event_id: string;
@@ -66,42 +67,30 @@ export default function Ledger() {
     setLoading(true);
     setError(null);
     
-    try {
-      let url = `/api/corpus/${corpusId}/ledger?limit=${limit}`;
-      if (eventTypeFilter !== "ALL") {
-        url += `&event_type=${eventTypeFilter}`;
-      }
-      
-      const res = await fetch(url);
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Failed to fetch ledger events");
-      }
-      const data = await res.json();
-      setEvents(data.events);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    let url = `/api/corpus/${corpusId}/ledger?limit=${limit}`;
+    if (eventTypeFilter !== "ALL") {
+      url += `&event_type=${eventTypeFilter}`;
     }
+    
+    const result = await apiGet<{ events: LedgerEvent[] }>(url);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setEvents(result.data.events);
+    }
+    setLoading(false);
   };
 
   const handleVerify = async (eventId: string) => {
     setVerifyingId(eventId);
     
-    try {
-      const res = await fetch(`/api/ledger/${eventId}/verify`);
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Verification failed");
-      }
-      const data = await res.json();
-      setVerifyResults(prev => ({ ...prev, [eventId]: data }));
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setVerifyingId(null);
+    const result = await apiGet<VerifyResponse>(`/api/ledger/${eventId}/verify`);
+    if (!result.ok) {
+      setError(result.error);
+    } else {
+      setVerifyResults(prev => ({ ...prev, [eventId]: result.data }));
     }
+    setVerifyingId(null);
   };
 
   if (!corpusId) {

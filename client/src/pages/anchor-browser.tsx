@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Layers, Anchor, FileText, CheckCircle, Loader2, Eye } from "lucide-react";
 import { Link } from "wouter";
+import { apiGet, apiPost } from "@/lib/auth";
 
 interface AnchorRecord {
   id: string;
@@ -61,28 +62,24 @@ export default function AnchorBrowser() {
       setLoading(true);
       setError(null);
 
-      try {
-        const sourcesRes = await fetch(`/api/corpus/${corpusId}/sources`);
-        if (sourcesRes.ok) {
-          const data = await sourcesRes.json();
-          setSources(data.sources);
-        }
-
-        let url = `/api/corpus/${corpusId}/anchors`;
-        const queryParams: string[] = [];
-        if (roleFilter !== "ALL") queryParams.push(`role=${roleFilter}`);
-        if (sourceFilter !== "ALL") queryParams.push(`source_id=${sourceFilter}`);
-        if (queryParams.length > 0) url += `?${queryParams.join("&")}`;
-
-        const anchorsRes = await fetch(url);
-        if (!anchorsRes.ok) throw new Error("Failed to load anchors");
-        const anchorsData = await anchorsRes.json();
-        setAnchors(anchorsData.anchors);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
+      const sourcesResult = await apiGet<{ sources: SourceRecord[] }>(`/api/corpus/${corpusId}/sources`);
+      if (sourcesResult.ok) {
+        setSources(sourcesResult.data.sources);
       }
+
+      let url = `/api/corpus/${corpusId}/anchors`;
+      const queryParams: string[] = [];
+      if (roleFilter !== "ALL") queryParams.push(`role=${roleFilter}`);
+      if (sourceFilter !== "ALL") queryParams.push(`source_id=${sourceFilter}`);
+      if (queryParams.length > 0) url += `?${queryParams.join("&")}`;
+
+      const anchorsResult = await apiGet<{ anchors: AnchorRecord[] }>(url);
+      if (!anchorsResult.ok) {
+        setError(anchorsResult.error);
+      } else {
+        setAnchors(anchorsResult.data.anchors);
+      }
+      setLoading(false);
     };
 
     fetchData();

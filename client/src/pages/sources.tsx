@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Layers, FileText } from "lucide-react";
+import { apiGet } from "@/lib/auth";
 
 interface Source {
   source_id: string;
@@ -28,19 +29,13 @@ export default function Sources() {
     }
 
     const fetchSources = async () => {
-      try {
-        const response = await fetch(`/api/corpus/${corpusId}/sources`);
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to fetch sources");
-        }
-        const data = await response.json();
-        setSources(data.sources || []);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Unknown error");
-      } finally {
-        setLoading(false);
+      const result = await apiGet<{ sources: Source[] }>(`/api/corpus/${corpusId}/sources`);
+      if (!result.ok) {
+        setError(result.error);
+      } else {
+        setSources(result.data.sources || []);
       }
+      setLoading(false);
     };
 
     fetchSources();
