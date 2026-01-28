@@ -44,6 +44,26 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [keyInput, setKeyInput] = useState("");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autoLoggingIn, setAutoLoggingIn] = useState(false);
+
+  const handleDemoLogin = async () => {
+    setAutoLoggingIn(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/auth/demo-key");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.key) {
+          setApiKey(data.key);
+        }
+      } else {
+        setError("Demo login not available");
+      }
+    } catch {
+      setError("Failed to connect");
+    }
+    setAutoLoggingIn(false);
+  };
 
   if (configLoading) {
     return (
@@ -122,6 +142,33 @@ function AuthGate({ children }: { children: React.ReactNode }) {
                 </>
               ) : (
                 "Access Platform"
+              )}
+            </Button>
+            
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-background px-2 text-muted-foreground">Or</span>
+              </div>
+            </div>
+            
+            <Button 
+              type="button"
+              variant="outline"
+              className="w-full" 
+              onClick={handleDemoLogin}
+              disabled={autoLoggingIn}
+              data-testid="button-demo-login"
+            >
+              {autoLoggingIn ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Loading Demo...
+                </>
+              ) : (
+                "Demo Login (Investor Preview)"
               )}
             </Button>
           </form>

@@ -337,6 +337,15 @@ export async function registerRoutes(
     res.json({ authenticated: true });
   });
 
+  app.get("/api/auth/demo-key", (_req, res) => {
+    const demoKey = process.env.LANTERN_API_KEY;
+    if (demoKey) {
+      res.json({ key: demoKey });
+    } else {
+      res.status(404).json({ message: "Demo key not available" });
+    }
+  });
+
   // v1.11 Config endpoint (public, no auth)
   app.get("/api/config", (_req, res) => {
     res.json({ public_readonly: process.env.LANTERN_PUBLIC_READONLY === "true" });
