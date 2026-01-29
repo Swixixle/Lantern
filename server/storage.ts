@@ -15,7 +15,8 @@ import {
   type LedgerEventRow, type InsertLedgerEvent,
   type LedgerEventType, type LedgerEntityType,
   type PdfPage, type InsertPdfPage,
-  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords, evidencePackets, ledgerEvents, pdfPages
+  type Constraint, type InsertConstraint,
+  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords, evidencePackets, ledgerEvents, pdfPages, constraints
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, isNull, desc, gt } from "drizzle-orm";
@@ -111,6 +112,11 @@ export interface IStorage {
   getPdfPage(sourceId: string, pageIndex: number): Promise<PdfPage | undefined>;
   listPdfPagesBySource(sourceId: string): Promise<PdfPage[]>;
   getAnchorRecord(id: string): Promise<AnchorRecord | undefined>;
+  
+  // Constraints
+  createConstraint(data: InsertConstraint): Promise<Constraint>;
+  listConstraintsByCorpus(corpusId: string): Promise<Constraint[]>;
+  getConstraint(id: string): Promise<Constraint | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -502,6 +508,23 @@ export class DatabaseStorage implements IStorage {
   async getAnchorRecord(id: string): Promise<AnchorRecord | undefined> {
     const result = await db.select().from(anchorRecords)
       .where(eq(anchorRecords.id, id))
+      .limit(1);
+    return result[0];
+  }
+
+  async createConstraint(data: InsertConstraint): Promise<Constraint> {
+    const result = await db.insert(constraints).values(data).returning();
+    return result[0];
+  }
+
+  async listConstraintsByCorpus(corpusId: string): Promise<Constraint[]> {
+    return db.select().from(constraints)
+      .where(eq(constraints.corpusId, corpusId));
+  }
+
+  async getConstraint(id: string): Promise<Constraint | undefined> {
+    const result = await db.select().from(constraints)
+      .where(eq(constraints.id, id))
       .limit(1);
     return result[0];
   }

@@ -17,6 +17,23 @@ The application is a **client-heavy hybrid** architecture with server-side durab
 - **Stall Detection**: 30-second client-side watchdog with amber warning UI; server has 5-minute timeout
 - **Job States**: `pending`, `processing`, `completed`, `failed`, `cancelled`
 
+### Verified Record (Canonical Output Artifact)
+The **Verified Record** is the single deterministic, printable output artifact for every corpus run:
+- **Schema**: `lantern.verified_record.v1`
+- **Contents**:
+  - All input sources with SHA-256 hashes
+  - All supported claims (DEFENSIBLE) with exact source anchors
+  - All restricted claims (REFUSED) with refusal reasons
+  - All ambiguous claims
+  - Conflicts, missing evidence, and time mismatches
+  - Integrity metadata (SHA-256 content hash, timestamp, schema version)
+- **Serialization**: JSON (canonical) and text-based PDF export
+- **Determinism**: All arrays sorted by ID, canonical JSON serialization with sorted keys
+- **API Endpoints**:
+  - `GET /api/corpus/:corpusId/verified-record` - JSON export
+  - `GET /api/corpus/:corpusId/verified-record.pdf` - Text-based printable export
+- **Purpose**: Courts, regulators, executives, and audits
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

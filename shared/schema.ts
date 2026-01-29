@@ -428,3 +428,36 @@ export const insertPdfPageSchema = createInsertSchema(pdfPages).omit({
 
 export type InsertPdfPage = z.infer<typeof insertPdfPageSchema>;
 export type PdfPage = typeof pdfPages.$inferSelect;
+
+// Constraint type enum
+export const constraintTypeEnum = z.enum([
+  "CONFLICT",
+  "MISSING_EVIDENCE",
+  "TIME_MISMATCH"
+]);
+export type ConstraintType = z.infer<typeof constraintTypeEnum>;
+
+// Constraints table for conflicts, missing evidence, time mismatches
+export const constraints = pgTable("constraints", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  corpusId: varchar("corpus_id").notNull().references(() => corpora.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  summary: text("summary").notNull(),
+  claimId: varchar("claim_id"),
+  anchorIds: text("anchor_ids").array().notNull().default(sql`'{}'::text[]`),
+  timeContext: text("time_context"),
+  missing: text("missing"),
+  conflict: text("conflict"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("constraints_corpus_idx").on(table.corpusId),
+  index("constraints_type_idx").on(table.type),
+]);
+
+export const insertConstraintSchema = createInsertSchema(constraints).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertConstraint = z.infer<typeof insertConstraintSchema>;
+export type Constraint = typeof constraints.$inferSelect;

@@ -3,7 +3,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, Loader2, Anchor, FileText } from "lucide-react";
+import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck, Loader2, Anchor, FileText, Shield } from "lucide-react";
 import { confidenceToBand, clampConfidence, type Claim } from "@/lib/schema/claims";
 import { useReadOnlyMode } from "@/lib/config";
 import { apiGet, apiPost } from "@/lib/auth";
@@ -484,11 +484,17 @@ export default function ClaimSpace() {
           </>
         )}
 
-        <div className="mt-8 pt-6 border-t border-border/50">
-          <Link href={`/constraints?corpusId=${corpusId}`}>
+        <div className="mt-8 pt-6 border-t border-border/50 flex gap-4">
+          <Link href={`/constraints?corpusId=${corpusId}`} className="flex-1">
             <Button variant="outline" className="w-full" data-testid="button-constraints">
               <AlertTriangle className="w-4 h-4 mr-2" />
               View Constraints & Friction
+            </Button>
+          </Link>
+          <Link href={`/verified-record?corpusId=${corpusId}`} className="flex-1">
+            <Button variant="default" className="w-full" data-testid="button-verified-record">
+              <Shield className="w-4 h-4 mr-2" />
+              Export Verified Record
             </Button>
           </Link>
         </div>
