@@ -46,6 +46,23 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [autoLoggingIn, setAutoLoggingIn] = useState(false);
+  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false);
+
+  useEffect(() => {
+    if (!isAuthenticated && !autoLoginAttempted && !configLoading && !isReadOnly) {
+      setAutoLoginAttempted(true);
+      setAutoLoggingIn(true);
+      fetch("/api/auth/demo-key")
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (data?.key) {
+            setApiKey(data.key);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setAutoLoggingIn(false));
+    }
+  }, [isAuthenticated, autoLoginAttempted, configLoading, isReadOnly, setApiKey]);
 
   const handleDemoLogin = async () => {
     setAutoLoggingIn(true);
@@ -66,7 +83,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     setAutoLoggingIn(false);
   };
 
-  if (configLoading) {
+  if (configLoading || autoLoggingIn) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
