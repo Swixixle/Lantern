@@ -2061,6 +2061,96 @@ export async function registerRoutes(
     res.status(201).json(responsePacket);
   }));
   
+  // Export evidence packet as printable text format (must come before :packetId route)
+  app.get("/api/packets/:packetId.pdf", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
+    const packetId = req.params.packetId as string;
+    
+    const packet = await storage.getEvidencePacket(packetId);
+    if (!packet) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Packet not found"
+      });
+    }
+    
+    const storedData = JSON.parse(packet.packetJson);
+    
+    const lines: string[] = [];
+    const hr = "═".repeat(80);
+    const thinHr = "─".repeat(80);
+    
+    lines.push(hr);
+    lines.push("LANTERN EVIDENCE PACKET");
+    lines.push(hr);
+    lines.push("");
+    lines.push(`Packet ID: ${packet.id}`);
+    lines.push(`Created: ${packet.createdAt.toISOString()}`);
+    lines.push(`Corpus ID: ${storedData.corpus_id}`);
+    lines.push(`Snapshot ID: ${storedData.snapshot_id}`);
+    lines.push(`Snapshot Hash (SHA-256): ${storedData.snapshot_hash_hex}`);
+    lines.push(`Packet Hash (SHA-256): ${packet.hashHex}`);
+    lines.push("");
+    
+    lines.push(thinHr);
+    lines.push("CLAIM");
+    lines.push(thinHr);
+    const claim = storedData.claim;
+    lines.push(`Claim ID: ${claim.id}`);
+    lines.push(`Classification: ${claim.classification}`);
+    lines.push(`Confidence: ${Math.round((claim.confidence || 0) * 100)}%`);
+    lines.push("");
+    lines.push("Text:");
+    lines.push(`"${claim.text}"`);
+    lines.push("");
+    
+    lines.push(thinHr);
+    lines.push("SUPPORTING ANCHORS");
+    lines.push(thinHr);
+    
+    const anchors = storedData.anchors || [];
+    if (anchors.length === 0) {
+      lines.push("No anchors attached.");
+    } else {
+      for (let i = 0; i < anchors.length; i++) {
+        const anchor = anchors[i];
+        lines.push(`Anchor ${i + 1}:`);
+        lines.push(`  ID: ${anchor.id}`);
+        lines.push(`  Source: ${anchor.source_document}`);
+        lines.push(`  Page: ${anchor.page_ref || "N/A"}`);
+        if (anchor.section_ref) {
+          lines.push(`  Section: ${anchor.section_ref}`);
+        }
+        if (anchor.timeline_date) {
+          lines.push(`  Date: ${anchor.timeline_date}`);
+        }
+        lines.push(`  Quote: "${anchor.quote}"`);
+        lines.push("");
+      }
+    }
+    
+    lines.push(thinHr);
+    lines.push("CHAIN OF CUSTODY");
+    lines.push(thinHr);
+    lines.push("This packet is cryptographically linked to its corpus snapshot.");
+    lines.push(`Snapshot Hash: ${storedData.snapshot_hash_hex}`);
+    lines.push(`Packet Hash: ${packet.hashHex}`);
+    lines.push("");
+    lines.push("To verify integrity:");
+    lines.push(`  GET /api/packets/${packet.id}/verify`);
+    lines.push(`  GET /api/packets/${packet.id}/verify_chain`);
+    lines.push("");
+    
+    lines.push(hr);
+    lines.push("END OF EVIDENCE PACKET");
+    lines.push(hr);
+    
+    const textContent = lines.join("\n");
+    
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.setHeader("Content-Disposition", `inline; filename="packet-${packet.id}.txt"`);
+    res.send(textContent);
+  }));
+
   // Get evidence packet
   app.get("/api/packets/:packetId", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
     const packetId = req.params.packetId as string;
