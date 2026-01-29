@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation, Link, useSearch } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -138,7 +138,7 @@ function ConstraintSection({
 }
 
 export default function Constraints() {
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const params = new URLSearchParams(location.split("?")[1] || "");
   const corpusId = params.get("corpusId") || "corpus-demo-001";
 
@@ -174,12 +174,16 @@ export default function Constraints() {
             <h1 className="text-2xl font-bold tracking-tight">LANTERN</h1>
           </div>
 
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Claim Space
-            </Button>
-          </Link>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="mb-4" 
+            data-testid="button-back"
+            onClick={() => navigate(`/?corpusId=${corpusId}`)}
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Claim Space
+          </Button>
 
           <h2 className="text-lg font-semibold">Constraints & Friction</h2>
           <p className="text-xs text-muted-foreground font-mono mt-1">

@@ -171,7 +171,7 @@ export default function VerifiedRecordPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setLocation(`/claim-space?corpusId=${corpusId}`)}
+              onClick={() => setLocation(`/?corpusId=${corpusId}`)}
               data-testid="button-back"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />

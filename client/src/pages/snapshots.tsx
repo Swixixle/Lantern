@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,9 +17,11 @@ interface SnapshotResult {
 
 export default function Snapshots() {
   const [, navigate] = useLocation();
+  const searchString = useSearch();
+  const params = new URLSearchParams(searchString);
   const { isReadOnly } = useReadOnlyMode();
   const [claims] = useState<Claim[]>(MOCK_CLAIMS);
-  const corpusId = "corpus-demo-001";
+  const corpusId = params.get("corpusId") || "corpus-demo-001";
 
   const [saving, setSaving] = useState(false);
   const [snapshot, setSnapshot] = useState<SnapshotResult | null>(null);
@@ -70,12 +72,16 @@ export default function Snapshots() {
             <h1 className="text-2xl font-bold tracking-tight">LANTERN</h1>
           </div>
 
-          <Link href="/">
-            <Button variant="ghost" size="sm" className="mb-4" data-testid="button-back">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Claim Space
-            </Button>
-          </Link>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="mb-4" 
+            data-testid="button-back"
+            onClick={() => navigate(`/?corpusId=${corpusId}`)}
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Claim Space
+          </Button>
 
           <h2 className="text-lg font-semibold">Snapshot & Export</h2>
         </header>
