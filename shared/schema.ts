@@ -461,3 +461,65 @@ export const insertConstraintSchema = createInsertSchema(constraints).omit({
 
 export type InsertConstraint = z.infer<typeof insertConstraintSchema>;
 export type Constraint = typeof constraints.$inferSelect;
+
+// Incident Report status enum
+export const incidentReportStatusEnum = z.enum([
+  "ADMISSIBLE",
+  "REJECTED",
+  "SCRAPBOOKED",
+  "PENDING_TIME",
+  "QUARANTINED",
+  "DISPUTED"
+]);
+export type IncidentReportStatus = z.infer<typeof incidentReportStatusEnum>;
+
+// Incident Reports table
+export const incidentReports = pgTable("incident_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  caseId: varchar("case_id").notNull(),
+  organization: text("organization"),
+  environment: text("environment").notNull().default("demo"),
+  status: text("status").notNull().default("ADMISSIBLE"),
+  authoringMode: text("authoring_mode").notNull().default("system_generated"),
+  scopeBlockId: text("scope_block_id").notNull().default("SCOPE_V1"),
+  reportJson: text("report_json").notNull(),
+  markdownContent: text("markdown_content"),
+  immutableState: text("immutable_state").notNull().default("draft"),
+  artifactHash: text("artifact_hash"),
+  previousHash: text("previous_hash"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  finalizedAt: timestamp("finalized_at"),
+}, (table) => [
+  index("incident_reports_case_idx").on(table.caseId),
+  index("incident_reports_status_idx").on(table.status),
+]);
+
+export const insertIncidentReportSchema = createInsertSchema(incidentReports).omit({
+  id: true,
+  createdAt: true,
+  finalizedAt: true,
+});
+
+export type InsertIncidentReport = z.infer<typeof insertIncidentReportSchema>;
+export type IncidentReportRecord = typeof incidentReports.$inferSelect;
+
+// Report Artifacts table (immutable snapshots)
+export const reportArtifacts = pgTable("report_artifacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").notNull().references(() => incidentReports.id, { onDelete: "cascade" }),
+  artifactJson: text("artifact_json").notNull(),
+  artifactMarkdown: text("artifact_markdown").notNull(),
+  artifactHash: text("artifact_hash").notNull(),
+  previousHash: text("previous_hash"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("report_artifacts_report_idx").on(table.reportId),
+]);
+
+export const insertReportArtifactSchema = createInsertSchema(reportArtifacts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertReportArtifact = z.infer<typeof insertReportArtifactSchema>;
+export type ReportArtifact = typeof reportArtifacts.$inferSelect;

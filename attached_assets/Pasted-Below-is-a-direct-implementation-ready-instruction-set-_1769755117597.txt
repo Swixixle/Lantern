@@ -1,0 +1,414 @@
+Below is a **direct, implementation-ready instruction set** you can paste to the Replit agent. It specifies exactly what the **final report** must contain, what it must **never** contain, and how Lantern/ELI should generate it (including templates + suggested schemas). It is written so an engineer can build it without “interpreting your philosophy.”
+
+---
+
+## Message to Replit agent: Final Report Spec for Lantern/ELI
+
+### Goal
+
+Build a report generator that outputs a **ready-to-file post-incident review record** for hospitals (risk/legal/patient safety) that is:
+
+* **Decision-time anchored**
+* **Non-punitive**
+* **Non-adjudicative**
+* **Hindsight-resistant**
+* **Audit-ready**
+* **Mechanically consistent** (same structure every time)
+* **Loggable + verifiable** (immutable record, hashable)
+
+The report must reduce labor by producing most of what risk/legal already have to create (timeline, scope, constraints, allowed/blocked claims, action items), while preventing the system from producing dangerous language or overclaiming.
+
+---
+
+# A. Report Output Format Requirements
+
+### A1) Outputs
+
+Generate two outputs every time:
+
+1. **Human-readable report** (Markdown → PDF later)
+2. **Machine-readable JSON record** (same content, normalized)
+
+Both must include the same sections and data, and both must be stored as immutable artifacts once finalized.
+
+---
+
+# B. Required Sections (The Report Must Contain These, Always)
+
+## 1) Header / Metadata (Required)
+
+* Report Title: “Independent Post-Incident Review Record (Advisory / Non-Adjudicative)”
+* Organization / Facility: (string, optional)
+* Case ID: (required, unique)
+* Generated At: ISO timestamp + timezone
+* Version: report schema version (e.g., `report_v1`)
+* Environment: `demo | staging | prod`
+* Authoring mode: `human_assisted | system_generated`
+* Data sources list: (what records were used: forms, logs, uploaded docs; DO NOT include PHI)
+
+### Integrity fields (required at finalize)
+
+* `artifact_hash` (SHA-256 of canonical JSON)
+* `previous_hash` (optional, if chained artifacts)
+* `signature` (optional for now; placeholder field)
+* `immutable_state`: `finalized`
+
+## 2) Scope & Limits (Required, fixed language block)
+
+This is a mandatory preface (do not allow editing except choosing between approved variants). Must say:
+
+* The review reconstructs **decision-time conditions only**
+* It **does not** assess clinical correctness, intent, standard of care, negligence, or preventability
+* Outcome-derived information is excluded from judgment sections
+* This is **advisory**, constrains claims, does not issue verdicts
+
+Provide 2–3 approved variants but keep them pre-vetted; no free-text.
+
+## 3) Decision Under Review (Required)
+
+The report must define:
+
+* Decision Point (required): a single explicit decision (e.g., “Discharge from ED after imaging”)
+* Decision Window Start/End (required): timestamped or anchored
+* Decision Maker Role (required): role only (e.g., “ED attending”), **no names**
+* Setting / Unit / Context (optional but structured)
+
+If the decision target is missing, report must finalize as:
+
+* `status: REJECTED`
+* reason: `P003 Decision Target Undefined`
+
+## 4) Evidence Snapshot (Decision-Time Only) (Required)
+
+The report must include 3 lists:
+
+### 4.1 Admitted Information (decision-time)
+
+* Items with:
+
+  * `item_id`
+  * `description` (neutral)
+  * `source_type` (EHR note, order, timestamped log, etc.)
+  * `time_anchor` (absolute or relative anchor)
+  * `confidence` (high/medium/low based on verification)
+
+### 4.2 Pending / Missing at the time
+
+* What was not available but relevant (e.g., “final radiology read pending”)
+* Must not infer results.
+
+### 4.3 Explicitly Excluded Information (post-decision / outcome knowledge)
+
+* Later imaging, later labs, later deterioration, retrospective specialist interpretation, etc.
+* These may be used ONLY in the “System Learning” section (see below).
+
+## 5) Constraints & Conditions (Required)
+
+Checklist-style, structured fields. No narrative.
+
+Examples (boolean + optional structured detail):
+
+* time_pressure: yes/no
+* competing_demands: yes/no
+* staffing_or_resource_limits: yes/no
+* guideline_ambiguity: yes/no
+* handoffs_or_fragmentation: yes/no
+* irreversible_decision_context: yes/no
+* signal_quality_limits: yes/no
+
+Include “Evidence for constraint” as structured references (source IDs), not prose.
+
+## 6) Timeline (Admissible Timeline Only) (Required)
+
+A table with rows containing:
+
+* timestamp (absolute or anchored relative)
+* event label (neutral)
+* what happened (neutral, observable)
+* source reference(s)
+* verification status (`verified | partial | disputed`)
+
+Hard rules:
+
+* No “shortly after,” “before long,” “clearly,” “should have”
+* No inferred ordering if time anchors conflict
+* If ordering cannot be verified → use `PENDING_TIME` or `DISPUTED` state (see terminal states)
+
+## 7) Claim Boundaries (Required)
+
+This is the “what you can/can’t safely say” section.
+
+### 7.1 Permitted statements (bounded)
+
+Examples:
+
+* “The record supports that X information was available at time T.”
+* “The record does not support that Y was available/knowable at time T.”
+* “Certainty regarding foreseeability is limited given constraints A/B/C.”
+
+### 7.2 Disallowed claims (explicit checkbox list)
+
+Must include:
+
+* preventability
+* negligence
+* standard-of-care deviation
+* intent/motivation
+* “obvious”
+* “missed”
+* “failed”
+* “should have known”
+* any comparative performance language
+
+If system detects evaluative or outcome-loaded language in user input, it must:
+
+* reject or quarantine the input
+* emit reason code (e.g., `R003 Evaluative Language Detected`, `R004 Outcome Knowledge Contamination`)
+
+## 8) Governance Output (Constraints, Not Conclusions) (Required)
+
+This is where Lantern/ELI tells the institution what *it is allowed to do/claim*, not what happened.
+
+Required fields:
+
+* authority_tier (e.g., `advisory_only | procedurally_permitted`)
+* governance_constraints: list of constraint statements from templates
+* accountability_load_indicator (if present, it must constrain certainty, not label fault)
+
+Hard rule:
+
+* No “responsible party”
+* No “error”
+* No “appropriate care”
+* No disciplinary recommendations
+
+## 9) System Learning (Outcome-Informed Allowed Here Only) (Required but optional content)
+
+Outcome info is allowed only in this section and must be framed as:
+
+* “For system redesign / process improvement only.”
+* No retroactive attribution to decision maker.
+
+Include:
+
+* improvement opportunities (structured)
+* candidate mitigations (structured)
+* evidence basis (links to admitted/excluded items)
+
+## 10) Action Items (Optional but recommended)
+
+If included:
+
+* must be system-level actions (training, resource, workflow), not personnel discipline
+* must include owner role, due date, verification method
+* avoid any causal claim stronger than evidence supports
+
+## 11) Refusals / Quarantines Log (Required)
+
+List of everything the system refused to admit or forced to rewrite.
+Each includes:
+
+* reason code
+* what was attempted (redacted snippet)
+* allowed rewrite template (if any)
+* final disposition (`rejected | rewritten | quarantined`)
+
+This is critical: refusals are “successful enforcement,” not errors.
+
+## 12) Finalization / Immutability Statement (Required)
+
+* “This record is finalized and may not be edited.”
+* “Corrections are additive: new artifacts may be appended but originals remain unchanged.”
+* Provide export verification instructions (hash)
+
+---
+
+# C. Terminal States (Non-Negotiable)
+
+Every report ends in exactly one state:
+
+* `ADMISSIBLE`
+* `REJECTED`
+* `SCRAPBOOKED` (narrative/context only, non-evidentiary)
+* `PENDING_TIME`
+* `QUARANTINED`
+* `DISPUTED`
+
+No other states.
+
+No transitions after finalization. Additive-only new artifacts are allowed.
+
+---
+
+# D. Prohibited Content (Must Never Appear)
+
+The generator must never output:
+
+* clinician names or identifiers
+* HR/performance evaluation language
+* ranking/scoring of individuals
+* “should have known,” “obvious,” “missed,” “failed,” “negligent,” “inappropriate”
+* predictive guidance (“next time do X”)
+* diagnosis advice
+* claims of safety/compliance correctness
+* claims that data was “reviewed/understood/acted on” unless system can prove it (generally it cannot)
+
+---
+
+# E. Reason Code System (Implementation Guidance)
+
+Build enumerated reason codes; no free-text overrides.
+
+Minimum families:
+
+* R-series structural (R001–R004)
+* P-series procedural (P001–P003)
+* S-series safety/scope (S001–S003)
+* A-series admissibility conflicts (A001)
+
+When refusing, output a five-part refusal object:
+
+1. status
+2. reason_code
+3. what happened (structural)
+4. why it matters (plain)
+5. how to proceed (rewrite template or “no admissible transformation”)
+
+---
+
+# F. Data Model (Suggested JSON Skeleton)
+
+Use this as canonical JSON for hashing:
+
+```json
+{
+  "report_version": "report_v1",
+  "case_id": "string",
+  "generated_at": "2026-01-30T12:34:56-05:00",
+  "environment": "demo",
+  "status": "ADMISSIBLE",
+  "scope_limits_block_id": "SCOPE_V1",
+  "decision_under_review": {
+    "decision_point": "string",
+    "window_start": "ISO or anchor",
+    "window_end": "ISO or anchor",
+    "decision_maker_role": "string",
+    "setting": "string"
+  },
+  "evidence_snapshot": {
+    "admitted": [],
+    "missing_or_pending": [],
+    "excluded_outcome_info": []
+  },
+  "constraints": {
+    "time_pressure": false,
+    "competing_demands": false,
+    "resource_limits": false,
+    "guideline_ambiguity": false,
+    "handoffs_fragmentation": false,
+    "irreversibility": false,
+    "signal_quality_limits": false,
+    "constraint_evidence_refs": []
+  },
+  "timeline": [],
+  "claim_boundaries": {
+    "permitted_statements": [],
+    "disallowed_claims": []
+  },
+  "governance_output": {
+    "authority_tier": "advisory_only",
+    "constraints": []
+  },
+  "system_learning": {
+    "notes": [],
+    "improvement_opportunities": [],
+    "candidate_mitigations": []
+  },
+  "action_items": [],
+  "refusal_log": [],
+  "finalization": {
+    "immutable_state": "finalized",
+    "artifact_hash": "sha256",
+    "signature": null
+  }
+}
+```
+
+Canonicalization: stable key order before hashing.
+
+---
+
+# G. Report Rendering (Markdown Template Outline)
+
+Render the JSON into a clean, lawyer-readable Markdown report with consistent headings:
+
+1. Header / Metadata
+2. Scope & Limits
+3. Decision Under Review
+4. Decision-Time Evidence Snapshot
+5. Constraints & Conditions
+6. Admissible Timeline
+7. Claim Boundaries (Permitted vs Disallowed)
+8. Governance Output (Constraints)
+9. System Learning (Outcome allowed here only)
+10. Action Items
+11. Refusal/Quarantine Log
+12. Finalization & Verification Instructions
+
+---
+
+# H. Implementation Notes (How to Build in Replit)
+
+1. Add endpoint: `POST /api/report/generate`
+
+   * input: structured case data + optional narrative (goes to scrapbook/quarantine by default)
+   * output: JSON + Markdown
+
+2. Add endpoint: `POST /api/report/finalize`
+
+   * freezes record
+   * computes hash
+   * prohibits edits
+   * returns verification info
+
+3. Store:
+
+   * `reports` table: metadata + status + hashes
+   * `report_artifacts` table: immutable JSON blob + markdown snapshot + hash
+
+4. No “edit” endpoints for finalized artifacts. Only:
+
+   * append new artifact (linked to prior)
+
+5. UI:
+
+   * show report preview
+   * show “why refused” panels with reason codes
+   * show verification hash
+
+---
+
+# I. Quality Bar
+
+The report must be usable by:
+
+* risk manager
+* general counsel
+* patient safety officer
+
+If any output sounds like:
+
+* judgment, blame, diagnosis, prediction, or moralizing
+  it is a defect.
+
+If the system cannot verify time or sequence:
+
+* downgrade authority, preserve uncertainty, or refuse.
+
+---
+
+If you want, I can also write:
+
+* the exact wording blocks for the Scope/Limits section (3 variants),
+* the full controlled vocabulary for disallowed claims,
+* and a starter list of “governance constraint templates” so the engine outputs clean, reusable sentences.

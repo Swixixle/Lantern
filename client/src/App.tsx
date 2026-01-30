@@ -34,6 +34,7 @@ import AnchorProof from "@/pages/anchor-proof";
 import ReviewBundle from "@/pages/review-bundle";
 import ReviewAuditLines from "@/pages/review-audit-lines";
 import VerifiedRecord from "@/pages/verified-record";
+import IncidentReport from "@/pages/incident-report";
 import NotFound from "@/pages/not-found";
 import { Button } from "@/components/ui/button";
 import { Menu, X, BookOpen, Home, FileSearch, GitCompare, FolderOpen, Layers, AlertTriangle, Camera, FileUp, ScrollText, Eye, FileText, Anchor } from "lucide-react";
@@ -408,6 +409,8 @@ function Router() {
         <Route path="/snapshots" component={Snapshots} />
         <Route path="/snapshots/:snapshot_id" component={SnapshotDetail} />
         <Route path="/verified-record" component={VerifiedRecord} />
+        <Route path="/incident-report" component={IncidentReport} />
+        <Route path="/incident-report/:reportId" component={IncidentReport} />
         <Route path="/library" component={Library} />
         <Route path="/extract" component={LanternExtract} />
         <Route path="/dossier/:id" component={DossierEditor} />

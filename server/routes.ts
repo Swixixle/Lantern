@@ -3188,6 +3188,173 @@ Notes:
     res.send(pdfText);
   }));
 
+  // ========== INCIDENT REPORT ENDPOINTS ==========
+  
+  // Generate a new incident report
+  app.post("/api/report/generate", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
+    const { generateIncidentReport } = await import("./incidentReportGenerator");
+    const { GenerateReportInputSchema } = await import("../shared/incidentReport");
+    
+    const parseResult = GenerateReportInputSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({
+        type: "VALIDATION_ERROR",
+        message: "Invalid input",
+        errors: parseResult.error.flatten()
+      });
+    }
+    
+    const result = generateIncidentReport(parseResult.data);
+    
+    if (!result.report) {
+      return res.status(400).json({
+        success: false,
+        errors: result.errors,
+        refusals: result.refusals
+      });
+    }
+    
+    if (!result.success) {
+      return res.status(400).json({
+        success: false,
+        report: result.report,
+        markdown: result.markdown,
+        refusals: result.refusals,
+        errors: result.errors,
+        message: "Report generation failed validation. Report not persisted."
+      });
+    }
+    
+    const reportRecord = await storage.createIncidentReport({
+      caseId: result.report.case_id,
+      organization: result.report.organization || null,
+      environment: result.report.environment,
+      status: result.report.status,
+      authoringMode: result.report.authoring_mode,
+      scopeBlockId: result.report.scope_limits_block_id,
+      reportJson: JSON.stringify(result.report),
+      markdownContent: result.markdown || null,
+      immutableState: "draft",
+      artifactHash: null,
+      previousHash: null
+    });
+    
+    return res.json({
+      success: result.success,
+      report_id: reportRecord.id,
+      report: result.report,
+      markdown: result.markdown,
+      refusals: result.refusals,
+      errors: result.errors
+    });
+  }));
+  
+  // Finalize an incident report (make it immutable)
+  app.post("/api/report/:reportId/finalize", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
+    const { finalizeReport, computeReportHash } = await import("./incidentReportGenerator");
+    
+    const reportId = req.params.reportId as string;
+    const reportRecord = await storage.getIncidentReport(reportId);
+    
+    if (!reportRecord) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Report not found"
+      });
+    }
+    
+    if (reportRecord.immutableState === "finalized") {
+      return res.status(400).json({
+        type: "ALREADY_FINALIZED",
+        message: "This report is already finalized and cannot be modified"
+      });
+    }
+    
+    const report = JSON.parse(reportRecord.reportJson);
+    const finalizedReport = finalizeReport(report, reportRecord.previousHash || undefined);
+    const hash = computeReportHash(finalizedReport);
+    
+    // Create an immutable artifact
+    const artifact = await storage.createReportArtifact({
+      reportId: reportId,
+      artifactJson: JSON.stringify(finalizedReport),
+      artifactMarkdown: reportRecord.markdownContent || "",
+      artifactHash: hash,
+      previousHash: reportRecord.previousHash || null
+    });
+    
+    // Update the report record
+    await storage.finalizeIncidentReport(reportId, hash);
+    
+    return res.json({
+      success: true,
+      report_id: reportId,
+      artifact_id: artifact.id,
+      artifact_hash: hash,
+      finalized_at: new Date().toISOString(),
+      report: finalizedReport
+    });
+  }));
+  
+  // Get an incident report by ID
+  app.get("/api/report/:reportId", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
+    const reportId = req.params.reportId as string;
+    const reportRecord = await storage.getIncidentReport(reportId);
+    
+    if (!reportRecord) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Report not found"
+      });
+    }
+    
+    return res.json({
+      id: reportRecord.id,
+      case_id: reportRecord.caseId,
+      status: reportRecord.status,
+      immutable_state: reportRecord.immutableState,
+      artifact_hash: reportRecord.artifactHash,
+      created_at: reportRecord.createdAt,
+      finalized_at: reportRecord.finalizedAt,
+      report: JSON.parse(reportRecord.reportJson),
+      markdown: reportRecord.markdownContent
+    });
+  }));
+  
+  // Get incident report as Markdown
+  app.get("/api/report/:reportId.md", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
+    const reportId = req.params.reportId as string;
+    const reportRecord = await storage.getIncidentReport(reportId);
+    
+    if (!reportRecord) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Report not found"
+      });
+    }
+    
+    res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="report-${reportId}.md"`);
+    res.send(reportRecord.markdownContent || "");
+  }));
+  
+  // List all incident reports
+  app.get("/api/reports", optionalAuthForPublicReadonly, asyncHandler(async (req, res) => {
+    const reports = await storage.listIncidentReports();
+    
+    return res.json({
+      reports: reports.map(r => ({
+        id: r.id,
+        case_id: r.caseId,
+        organization: r.organization,
+        status: r.status,
+        immutable_state: r.immutableState,
+        created_at: r.createdAt,
+        finalized_at: r.finalizedAt
+      }))
+    });
+  }));
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     console.error("API Error:", err);
     

@@ -16,7 +16,9 @@ import {
   type LedgerEventType, type LedgerEntityType,
   type PdfPage, type InsertPdfPage,
   type Constraint, type InsertConstraint,
-  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords, evidencePackets, ledgerEvents, pdfPages, constraints
+  type IncidentReportRecord, type InsertIncidentReport,
+  type ReportArtifact, type InsertReportArtifact,
+  users, cases, uploads, uploadPages, chunks, extractionJobs, snapshots, corpora, corpusSources, anchorRecords, claimRecords, evidencePackets, ledgerEvents, pdfPages, constraints, incidentReports, reportArtifacts
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { eq, and, isNull, desc, gt } from "drizzle-orm";
@@ -117,6 +119,17 @@ export interface IStorage {
   createConstraint(data: InsertConstraint): Promise<Constraint>;
   listConstraintsByCorpus(corpusId: string): Promise<Constraint[]>;
   getConstraint(id: string): Promise<Constraint | undefined>;
+  
+  // Incident Reports
+  createIncidentReport(data: InsertIncidentReport): Promise<IncidentReportRecord>;
+  getIncidentReport(id: string): Promise<IncidentReportRecord | undefined>;
+  listIncidentReports(): Promise<IncidentReportRecord[]>;
+  finalizeIncidentReport(id: string, artifactHash: string): Promise<IncidentReportRecord | undefined>;
+  
+  // Report Artifacts
+  createReportArtifact(data: InsertReportArtifact): Promise<ReportArtifact>;
+  getReportArtifact(id: string): Promise<ReportArtifact | undefined>;
+  listReportArtifacts(reportId: string): Promise<ReportArtifact[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -527,6 +540,53 @@ export class DatabaseStorage implements IStorage {
       .where(eq(constraints.id, id))
       .limit(1);
     return result[0];
+  }
+  
+  async createIncidentReport(data: InsertIncidentReport): Promise<IncidentReportRecord> {
+    const result = await db.insert(incidentReports).values(data).returning();
+    return result[0];
+  }
+  
+  async getIncidentReport(id: string): Promise<IncidentReportRecord | undefined> {
+    const result = await db.select().from(incidentReports)
+      .where(eq(incidentReports.id, id))
+      .limit(1);
+    return result[0];
+  }
+  
+  async listIncidentReports(): Promise<IncidentReportRecord[]> {
+    return db.select().from(incidentReports)
+      .orderBy(desc(incidentReports.createdAt));
+  }
+  
+  async finalizeIncidentReport(id: string, artifactHash: string): Promise<IncidentReportRecord | undefined> {
+    const result = await db.update(incidentReports)
+      .set({
+        immutableState: "finalized",
+        artifactHash: artifactHash,
+        finalizedAt: new Date()
+      })
+      .where(eq(incidentReports.id, id))
+      .returning();
+    return result[0];
+  }
+  
+  async createReportArtifact(data: InsertReportArtifact): Promise<ReportArtifact> {
+    const result = await db.insert(reportArtifacts).values(data).returning();
+    return result[0];
+  }
+  
+  async getReportArtifact(id: string): Promise<ReportArtifact | undefined> {
+    const result = await db.select().from(reportArtifacts)
+      .where(eq(reportArtifacts.id, id))
+      .limit(1);
+    return result[0];
+  }
+  
+  async listReportArtifacts(reportId: string): Promise<ReportArtifact[]> {
+    return db.select().from(reportArtifacts)
+      .where(eq(reportArtifacts.reportId, reportId))
+      .orderBy(desc(reportArtifacts.createdAt));
   }
 }
 
