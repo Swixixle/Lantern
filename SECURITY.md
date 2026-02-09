@@ -18,9 +18,11 @@ Include:
 - Potential impact
 - Suggested fix (if any)
 
+You should receive a response within 48 hours.
+
 ## Scope
 
-Lantern is early-stage research software. It is provided **"as is"** without warranties of any kind. No production use is recommended without independent security review.
+Lantern is early-stage research software. It is provided "as is" without warranties of any kind. No production use is recommended without independent security review.
 
 ## Known Limitations
 
