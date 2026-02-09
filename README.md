@@ -1,7 +1,12 @@
 # Lantern
 
-Investigative intelligence platform for structured data extraction, dossier curation, and heuristic analysis.
+Lantern is an interpretive inspection framework for reasoning about fixed evidence artifacts.
 
+It integrates with cryptographic receipt systems to support tamper-evident audit trails.
+Currently demonstrated using HALO-RECEIPTS (private system; available by inquiry).
+
+Lantern does not assert truth, intent, or legitimacy.
+It demonstrates how conclusions change under explicit interpretive lenses.
 > **Status**: Early research. Open to technical collaboration on cryptographic verification and interpretive frameworks.
 
 ## Evidence Walkthrough
