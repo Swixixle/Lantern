@@ -2,6 +2,8 @@
 
 Investigative intelligence platform for structured data extraction, dossier curation, and heuristic analysis.
 
+> **Status**: Early research. Open to technical collaboration on cryptographic verification and interpretive frameworks.
+
 ## Evidence Walkthrough
 
 See `/demos/evidence-walkthrough` for a complete example of Lantern's interpretive discipline applied to a fixed exhibit.
