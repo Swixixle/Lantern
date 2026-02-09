@@ -2,6 +2,10 @@
 
 Investigative intelligence platform for structured data extraction, dossier curation, and heuristic analysis.
 
+## Evidence Walkthrough
+
+See `/demos/evidence-walkthrough` for a complete example of Lantern's interpretive discipline applied to a fixed exhibit.
+
 ## Quick Start
 
 ```bash
