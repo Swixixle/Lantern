@@ -7,6 +7,13 @@
  * are properly configured for running Lantern on Replit.
  */
 
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 console.log("🏮 Lantern - Replit Environment Validator\n");
 
 const checks = [];
@@ -72,9 +79,7 @@ checks.forEach(check => {
 });
 
 // Check if node_modules exists
-const fs = require('fs');
-const path = require('path');
-const nodeModulesPath = path.join(process.cwd(), 'node_modules');
+const nodeModulesPath = path.join(path.dirname(__dirname), 'node_modules');
 
 console.log("\nDependencies:");
 if (fs.existsSync(nodeModulesPath)) {
