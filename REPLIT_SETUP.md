@@ -19,12 +19,18 @@ This guide will help you set up and run the Lantern project on Replit.
    npm install
    ```
 
-4. **Initialize the Database**
+4. **Validate Configuration (Optional but Recommended)**
+   ```bash
+   npm run validate:replit
+   ```
+   This will check that all required environment variables and dependencies are properly set up.
+
+5. **Initialize the Database**
    ```bash
    npm run db:push
    ```
 
-5. **Start the Application**
+6. **Start the Application**
    - Click the "Run" button in Replit
    - Or use the command: `npm run dev`
    - The app will be available at the URL shown in the Webview panel
@@ -65,6 +71,7 @@ Lantern/
 | `npm start` | Run production server |
 | `npm run check` | TypeScript type check |
 | `npm run db:push` | Push database schema to PostgreSQL |
+| `npm run validate:replit` | Validate Replit environment configuration |
 
 ## Accessing the Application
 
