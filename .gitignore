@@ -6,10 +6,10 @@ attached_assets/
 
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 
-.replit
 .upm/
 .cache/
 .local/
