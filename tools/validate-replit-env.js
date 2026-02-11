@@ -42,7 +42,7 @@ const optionalEnvVars = {
 };
 
 console.log("Required Environment Variables:");
-for (const [varName, description] of Object.entries(requiredEnvVars)) {
+for (const [varName] of Object.entries(requiredEnvVars)) {
   const value = process.env[varName];
   if (varName === "DATABASE_URL") {
     // Always required
@@ -63,7 +63,7 @@ for (const [varName, description] of Object.entries(requiredEnvVars)) {
 }
 
 console.log("\nOptional Environment Variables:");
-for (const [varName, description] of Object.entries(optionalEnvVars)) {
+for (const [varName] of Object.entries(optionalEnvVars)) {
   const value = process.env[varName];
   if (value) {
     checks.push({ name: `  ${varName}`, status: "✅", detail: value === "true" || value === "false" ? value : "Set" });
