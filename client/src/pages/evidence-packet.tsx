@@ -162,8 +162,11 @@ export default function EvidencePacket() {
     setEliError(null);
 
     // Generate fresh requestId for idempotency
+    // Use crypto.randomUUID() if available (modern browsers), fallback for older environments
     const requestId = 
-      (globalThis.crypto as any)?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random()}`;
 
     const payload = {
       source: "lantern",
@@ -194,7 +197,10 @@ export default function EvidencePacket() {
       const text = await res.text();
 
       // Treat 409 DUPLICATE_REQUEST as success if it includes url/caseId
-      if (!res.ok && res.status !== 409) {
+      // This makes retries safe and idempotent (ELI returns the original case)
+      const isDuplicateWithCase = res.status === 409;
+      
+      if (!res.ok && !isDuplicateWithCase) {
         setEliError(text || `Failed: ${res.status}`);
         setSendingToEli(false);
         return;
