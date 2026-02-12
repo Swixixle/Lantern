@@ -362,13 +362,19 @@ export async function registerRoutes(
     }
 
     try {
+      // Force source to "lantern" server-side for safety (don't trust client)
+      const payload = {
+        ...req.body,
+        source: "lantern"
+      };
+
       const upstream = await fetch(`${base}/api/integrations/ingest`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(req.body),
+        body: JSON.stringify(payload),
       });
 
       const text = await upstream.text();

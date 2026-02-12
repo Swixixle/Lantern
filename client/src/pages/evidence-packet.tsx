@@ -201,7 +201,20 @@ export default function EvidencePacket() {
       const isDuplicateWithCase = res.status === 409;
       
       if (!res.ok && !isDuplicateWithCase) {
-        setEliError(text || `Failed: ${res.status}`);
+        // Try to parse error response for better messaging
+        let errorMsg = text || `Failed: ${res.status}`;
+        try {
+          const errorData = JSON.parse(text);
+          if (errorData.error) {
+            errorMsg = errorData.error;
+            if (errorData.detail) {
+              errorMsg += `: ${errorData.detail}`;
+            }
+          }
+        } catch {
+          // Use raw text if not JSON
+        }
+        setEliError(errorMsg);
         setSendingToEli(false);
         return;
       }
