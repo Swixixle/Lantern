@@ -33,6 +33,23 @@ cd Lantern
 npm install
 ```
 
+## Environment Configuration
+
+**ELI Integration (Optional):**
+
+To enable "Send to ELI" functionality for external case management, set these environment variables:
+
+```bash
+ELI_BASE_URL=https://ajmaksimeli.com
+ELI_INGEST_TOKEN=<your-eli-token>
+```
+
+**In Replit:**
+- **Development**: Project → Secrets → Add the variables above
+- **Production**: Deployments → [Your Deployment] → Secrets/Env → Add the variables above
+
+Without these secrets, the "Send to ELI" button will show a configuration error.
+
 ## Quick Start
 
 ```bash

@@ -352,6 +352,36 @@ export async function registerRoutes(
     res.json({ public_readonly: process.env.LANTERN_PUBLIC_READONLY === "true" });
   });
 
+  // ELI Integration: Server-side forwarder (keeps token off browser)
+  app.post("/api/send-to-eli", asyncHandler(async (req, res) => {
+    const base = process.env.ELI_BASE_URL;
+    const token = process.env.ELI_INGEST_TOKEN;
+
+    if (!base || !token) {
+      return res.status(500).json({ error: "ELI integration not configured" });
+    }
+
+    try {
+      const upstream = await fetch(`${base}/api/integrations/ingest`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(req.body),
+      });
+
+      const text = await upstream.text();
+
+      res
+        .status(upstream.status)
+        .type(upstream.headers.get("content-type") || "application/json")
+        .send(text);
+    } catch (e: any) {
+      res.status(502).json({ error: "ELI upstream failed", detail: String(e?.message ?? e) });
+    }
+  }));
+
   // v1.23 Public Review Bundle Download (read-only, no auth when public_readonly=true)
   app.get("/api/review/:corpusId/bundle", asyncHandler(async (req, res) => {
     const isPublicReadOnly = process.env.LANTERN_PUBLIC_READONLY === "true";

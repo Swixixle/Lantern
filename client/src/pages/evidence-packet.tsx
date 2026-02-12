@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useLocation, useParams } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, CheckCircle, XCircle, Download, FileText, Loader2, Shield, Anchor, Link2 } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Download, FileText, Loader2, Shield, Anchor, Link2, Send } from "lucide-react";
 import { apiGet } from "@/lib/auth";
 
 interface EvidencePacketData {
@@ -67,6 +67,9 @@ export default function EvidencePacket() {
   const [verifyingChain, setVerifyingChain] = useState(false);
   const [verifyChainResult, setVerifyChainResult] = useState<VerifyChainResponse | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [sendingToEli, setSendingToEli] = useState(false);
+  const [eliUrl, setEliUrl] = useState<string | null>(null);
+  const [eliError, setEliError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!packetId) return;
@@ -150,6 +153,69 @@ export default function EvidencePacket() {
       URL.revokeObjectURL(url);
     } finally {
       setExporting(false);
+    }
+  };
+
+  const handleSendToEli = async () => {
+    if (!packet) return;
+    setSendingToEli(true);
+    setEliError(null);
+
+    // Generate fresh requestId for idempotency
+    const requestId = 
+      (globalThis.crypto as any)?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+
+    const payload = {
+      source: "lantern",
+      eventType: "evidence_packet",
+      eventTime: new Date().toISOString(),
+      description: "Lantern evidence packet captured",
+      metadata: {
+        requestId,
+        packetId: packet.packet_id,
+        corpusId: packet.corpus_id,
+        snapshotId: packet.snapshot_id,
+        claimId: packet.claim.id,
+        claimText: packet.claim.text,
+        classification: packet.claim.classification,
+        confidence: packet.claim.confidence,
+        anchorCount: packet.anchors.length,
+        hashHex: packet.hash_hex,
+      },
+    };
+
+    try {
+      const res = await fetch("/api/send-to-eli", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await res.text();
+
+      // Treat 409 DUPLICATE_REQUEST as success if it includes url/caseId
+      if (!res.ok && res.status !== 409) {
+        setEliError(text || `Failed: ${res.status}`);
+        setSendingToEli(false);
+        return;
+      }
+
+      let data: { url?: string; caseId?: string; error?: string } | null = null;
+      try {
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+
+      if (data?.url) {
+        setEliUrl(data.url);
+      } else {
+        setEliError(text || "Unexpected response from ELI");
+      }
+    } catch (e: any) {
+      setEliError(String(e?.message ?? e));
+    } finally {
+      setSendingToEli(false);
     }
   };
 
@@ -269,8 +335,57 @@ export default function EvidencePacket() {
               )}
               Export PDF
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSendToEli}
+              disabled={sendingToEli}
+              data-testid="button-send-to-eli"
+            >
+              {sendingToEli ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Send to ELI
+            </Button>
           </div>
         </header>
+
+        {eliUrl && (
+          <Card className="border-blue-500/30 bg-blue-500/5 mb-6" data-testid="eli-success">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-blue-500" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">Sent to ELI successfully</p>
+                  <a 
+                    href={eliUrl} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="text-sm text-blue-400 hover:underline"
+                  >
+                    Open case in ELI →
+                  </a>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {eliError && (
+          <Card className="border-red-500/30 bg-red-500/5 mb-6" data-testid="eli-error">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-3">
+                <XCircle className="w-5 h-5 text-red-500" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-400">Failed to send to ELI</p>
+                  <p className="text-sm text-red-300">{eliError}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {verifyResult && (
           <Card className={verifyResult.verified ? "border-emerald-500/30 bg-emerald-500/5" : "border-red-500/30 bg-red-500/5"} data-testid="verify-result">
