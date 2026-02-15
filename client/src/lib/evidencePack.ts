@@ -13,12 +13,14 @@ import { renderLegalOnePager } from "@/export/templates/legalOnePager";
 const TOOL_VERSION = "0.1.8";
 const SCHEMA_VERSION = "lantern.evidence_pack.v0";
 
-async function sha256(content: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
+async function sha256Bytes(data: Uint8Array): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function toBytes(str: string): Uint8Array {
+  return new TextEncoder().encode(str);
 }
 
 interface Findings {
@@ -37,8 +39,8 @@ export async function exportEvidencePack(
 
   const dossierMd =
     lens === "legal"
-      ? renderLegalMarkdown(pack, findings, reportHash)
-      : renderNewsroomMarkdown(pack, findings, reportHash);
+      ? renderLegalMarkdown(pack, findings, reportHash, createdAt)
+      : renderNewsroomMarkdown(pack, findings, reportHash, createdAt);
 
   const claimsJson = JSON.stringify(
     {
@@ -101,11 +103,17 @@ export async function exportEvidencePack(
       ? renderLegalOnePager(pack, reportHash, createdAt)
       : renderNewsroomOnePager(pack, reportHash, createdAt);
 
-  const dossierHash = await sha256(dossierMd);
-  const claimsHash = await sha256(claimsJson);
-  const sourcesHash = await sha256(sourcesJson);
-  const appHash = await sha256(appJson);
-  const onePagerHash = await sha256(onePagerMd);
+  const dossierBytes = toBytes(dossierMd);
+  const claimsBytes = toBytes(claimsJson);
+  const sourcesBytes = toBytes(sourcesJson);
+  const appBytes = toBytes(appJson);
+  const onePagerBytes = toBytes(onePagerMd);
+
+  const dossierHash = await sha256Bytes(dossierBytes);
+  const claimsHash = await sha256Bytes(claimsBytes);
+  const sourcesHash = await sha256Bytes(sourcesBytes);
+  const appHash = await sha256Bytes(appBytes);
+  const onePagerHash = await sha256Bytes(onePagerBytes);
 
   const manifestJson = JSON.stringify(
     {
@@ -118,11 +126,11 @@ export async function exportEvidencePack(
       schema_version: pack.schemaVersion,
       report_hash: reportHash,
       files: {
-        "DOSSIER.md": { sha256: dossierHash, size: dossierMd.length },
-        "CLAIMS.json": { sha256: claimsHash, size: claimsJson.length },
-        "SOURCES.json": { sha256: sourcesHash, size: sourcesJson.length },
-        "APP.json": { sha256: appHash, size: appJson.length },
-        "ONE_PAGER.md": { sha256: onePagerHash, size: onePagerMd.length },
+        "DOSSIER.md": { sha256: dossierHash, size: dossierBytes.byteLength },
+        "ONE_PAGER.md": { sha256: onePagerHash, size: onePagerBytes.byteLength },
+        "CLAIMS.json": { sha256: claimsHash, size: claimsBytes.byteLength },
+        "SOURCES.json": { sha256: sourcesHash, size: sourcesBytes.byteLength },
+        "APP.json": { sha256: appHash, size: appBytes.byteLength },
       },
       raw_sources_included: false,
       raw_sources_reason: "Raw source embedding not implemented in v0",
@@ -134,11 +142,11 @@ export async function exportEvidencePack(
   const { default: JSZip } = await import("jszip");
   const zip = new JSZip();
   zip.file("MANIFEST.json", manifestJson);
-  zip.file("DOSSIER.md", dossierMd);
-  zip.file("CLAIMS.json", claimsJson);
-  zip.file("SOURCES.json", sourcesJson);
-  zip.file("APP.json", appJson);
-  zip.file("ONE_PAGER.md", onePagerMd);
+  zip.file("DOSSIER.md", dossierBytes);
+  zip.file("ONE_PAGER.md", onePagerBytes);
+  zip.file("CLAIMS.json", claimsBytes);
+  zip.file("SOURCES.json", sourcesBytes);
+  zip.file("APP.json", appBytes);
 
   return zip.generateAsync({ type: "blob" });
 }

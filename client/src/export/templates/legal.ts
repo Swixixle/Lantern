@@ -20,9 +20,10 @@ export function renderLegalMarkdown(
     funding: FundingGravityFinding | null;
     enforcement: EnforcementMapFinding | null;
   },
-  reportHash: string
+  reportHash: string,
+  createdAt?: string
 ): string {
-  const date = new Date().toISOString().split("T")[0];
+  const date = (createdAt || new Date().toISOString()).split("T")[0];
 
   let md = `---
 title: "${safeStr(pack.subjectName)} - Case Memorandum"

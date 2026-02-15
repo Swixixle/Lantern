@@ -11,7 +11,7 @@ export function renderLegalOnePager(
   const unsupported = pack.claims.filter((c) => c.evidenceIds.length === 0);
   const supported = pack.claims.filter((c) => c.evidenceIds.length > 0);
   const topAssertions = [...supported]
-    .sort((a, b) => b.confidence - a.confidence)
+    .sort((a, b) => b.confidence - a.confidence || a.id.localeCompare(b.id))
     .slice(0, 10);
   const topRisks = [...unsupported].slice(0, 5);
 

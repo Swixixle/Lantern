@@ -20,9 +20,7 @@ export interface VerifyPackResult {
   errors: string[];
 }
 
-async function sha256(content: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(content);
+async function sha256Bytes(data: Uint8Array): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -92,15 +90,15 @@ export async function verifyEvidencePack(zipBlob: Blob): Promise<VerifyPackResul
       continue;
     }
 
-    const content = await zipEntry.async("string");
-    const actualHash = await sha256(content);
+    const bytes = await zipEntry.async("uint8array");
+    const actualHash = await sha256Bytes(bytes);
 
     fileResults.push({
       filename,
       expected_sha256: meta.sha256,
       actual_sha256: actualHash,
       size_expected: meta.size,
-      size_actual: content.length,
+      size_actual: bytes.byteLength,
       match: actualHash === meta.sha256,
     });
 

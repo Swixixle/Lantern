@@ -11,7 +11,7 @@ export function renderNewsroomOnePager(
   const unsourced = pack.claims.filter((c) => c.evidenceIds.length === 0);
   const verified = pack.claims.filter((c) => c.evidenceIds.length > 0);
   const topClaims = [...verified]
-    .sort((a, b) => b.confidence - a.confidence)
+    .sort((a, b) => b.confidence - a.confidence || a.id.localeCompare(b.id))
     .slice(0, 10);
   const topRisks = [...unsourced].slice(0, 5);
 
