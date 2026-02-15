@@ -7,6 +7,8 @@ import type {
 } from "@/lib/heuristics/types";
 import { renderNewsroomMarkdown } from "@/export/templates/newsroom";
 import { renderLegalMarkdown } from "@/export/templates/legal";
+import { renderNewsroomOnePager } from "@/export/templates/newsroomOnePager";
+import { renderLegalOnePager } from "@/export/templates/legalOnePager";
 
 const TOOL_VERSION = "0.1.7";
 const SCHEMA_VERSION = "lantern.evidence_pack.v0";
@@ -31,6 +33,8 @@ export async function exportEvidencePack(
   findings: Findings,
   reportHash: string
 ): Promise<Blob> {
+  const createdAt = new Date().toISOString();
+
   const dossierMd =
     lens === "legal"
       ? renderLegalMarkdown(pack, findings, reportHash)
@@ -79,7 +83,7 @@ export async function exportEvidencePack(
       tool: "Lantern",
       tool_version: TOOL_VERSION,
       schema_version: SCHEMA_VERSION,
-      generated_at: new Date().toISOString(),
+      generated_at: createdAt,
       identity: "Evidence-first investigative workbench",
       constraints: [
         "No inference",
@@ -92,10 +96,16 @@ export async function exportEvidencePack(
     2
   );
 
+  const onePagerMd =
+    lens === "legal"
+      ? renderLegalOnePager(pack, reportHash, createdAt)
+      : renderNewsroomOnePager(pack, reportHash, createdAt);
+
   const dossierHash = await sha256(dossierMd);
   const claimsHash = await sha256(claimsJson);
   const sourcesHash = await sha256(sourcesJson);
   const appHash = await sha256(appJson);
+  const onePagerHash = await sha256(onePagerMd);
 
   const manifestJson = JSON.stringify(
     {
@@ -103,7 +113,7 @@ export async function exportEvidencePack(
       pack_id: pack.packId,
       case_id: pack.packId,
       export_lens: lens,
-      created_at: new Date().toISOString(),
+      created_at: createdAt,
       tool_version: TOOL_VERSION,
       schema_version: pack.schemaVersion,
       report_hash: reportHash,
@@ -112,6 +122,7 @@ export async function exportEvidencePack(
         "CLAIMS.json": { sha256: claimsHash, size: claimsJson.length },
         "SOURCES.json": { sha256: sourcesHash, size: sourcesJson.length },
         "APP.json": { sha256: appHash, size: appJson.length },
+        "ONE_PAGER.md": { sha256: onePagerHash, size: onePagerMd.length },
       },
       raw_sources_included: false,
       raw_sources_reason: "Raw source embedding not implemented in v0",
@@ -127,6 +138,7 @@ export async function exportEvidencePack(
   zip.file("CLAIMS.json", claimsJson);
   zip.file("SOURCES.json", sourcesJson);
   zip.file("APP.json", appJson);
+  zip.file("ONE_PAGER.md", onePagerMd);
 
   return zip.generateAsync({ type: "blob" });
 }

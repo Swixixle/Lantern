@@ -10,7 +10,8 @@ import { InfluenceHubsFinding, FundingGravityFinding, EnforcementMapFinding } fr
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Printer, Download, Share2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Printer, Download, Share2, AlertTriangle, Upload, CheckCircle2, XCircle, AlertTriangle as AlertTriangleIcon } from "lucide-react";
+import { verifyEvidencePack, type VerifyPackResult } from "@/lib/verifyPack";
 
 import { computeReportHash } from "@/lib/integrity";
 
@@ -29,6 +30,8 @@ export default function DossierReport() {
   const { lens } = useLens();
   const [exportLens, setExportLens] = useState<Lens>(lens);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [verifyResult, setVerifyResult] = useState<VerifyPackResult | null>(null);
+  const [verifying, setVerifying] = useState(false);
   
   // Computed Findings
   const [influence, setInfluence] = useState<InfluenceHubsFinding | null>(null);
@@ -94,6 +97,32 @@ export default function DossierReport() {
     a.click();
     URL.revokeObjectURL(url);
     setShowExportModal(false);
+  };
+
+  const handleVerifyPack = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setVerifying(true);
+    setVerifyResult(null);
+    try {
+      const result = await verifyEvidencePack(file);
+      setVerifyResult(result);
+    } catch (err) {
+      setVerifyResult({
+        status: "FAILED",
+        schema: "",
+        pack_id: "",
+        export_lens: "",
+        tool_version: "",
+        created_at: "",
+        report_hash: "",
+        files: [],
+        warnings: [],
+        errors: [`Verification error: ${err instanceof Error ? err.message : "Unknown error"}`],
+      });
+    }
+    setVerifying(false);
+    e.target.value = "";
   };
 
   return (
@@ -163,6 +192,69 @@ export default function DossierReport() {
                     Cancel
                   </Button>
                 </div>
+                <div className="border-t pt-4 mt-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Verify Evidence Pack</label>
+                  <label
+                    className="flex items-center justify-center w-full p-3 border-2 border-dashed rounded-lg cursor-pointer hover:border-gray-400 transition-colors text-sm text-gray-500"
+                    data-testid="button-verify-pack"
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    {verifying ? "Verifying..." : "Select .zip to verify"}
+                    <input
+                      type="file"
+                      accept=".zip"
+                      className="hidden"
+                      onChange={handleVerifyPack}
+                      disabled={verifying}
+                    />
+                  </label>
+                </div>
+
+                {verifyResult && (
+                  <div className={`mt-3 p-4 rounded-lg border text-sm ${
+                    verifyResult.status === "VERIFIED"
+                      ? "bg-emerald-50 border-emerald-200"
+                      : verifyResult.status === "VERIFIED_WITH_WARNINGS"
+                        ? "bg-amber-50 border-amber-200"
+                        : "bg-red-50 border-red-200"
+                  }`} data-testid="verify-result">
+                    <div className="flex items-center gap-2 font-bold mb-2">
+                      {verifyResult.status === "VERIFIED" && <CheckCircle2 className="w-5 h-5 text-emerald-600" />}
+                      {verifyResult.status === "VERIFIED_WITH_WARNINGS" && <AlertTriangleIcon className="w-5 h-5 text-amber-600" />}
+                      {verifyResult.status === "FAILED" && <XCircle className="w-5 h-5 text-red-600" />}
+                      <span>{verifyResult.status.replace(/_/g, " ")}</span>
+                    </div>
+                    <div className="space-y-1 text-xs text-gray-600">
+                      {verifyResult.pack_id && <p>Pack: <code className="font-mono">{verifyResult.pack_id}</code></p>}
+                      {verifyResult.tool_version && <p>Tool: v{verifyResult.tool_version}</p>}
+                      {verifyResult.created_at && <p>Created: {new Date(verifyResult.created_at).toLocaleString()}</p>}
+                    </div>
+                    {verifyResult.files.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {verifyResult.files.map((f) => (
+                          <div key={f.filename} className="flex items-center gap-2 text-xs font-mono">
+                            {f.match ? (
+                              <CheckCircle2 className="w-3 h-3 text-emerald-500 flex-shrink-0" />
+                            ) : (
+                              <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />
+                            )}
+                            <span>{f.filename}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {verifyResult.errors.length > 0 && (
+                      <div className="mt-2 text-xs text-red-600">
+                        {verifyResult.errors.map((e, i) => <p key={i}>{e}</p>)}
+                      </div>
+                    )}
+                    {verifyResult.warnings.length > 0 && (
+                      <div className="mt-2 text-xs text-amber-600">
+                        {verifyResult.warnings.map((w, i) => <p key={i}>{w}</p>)}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

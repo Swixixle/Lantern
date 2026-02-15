@@ -58,21 +58,32 @@ generatedBy: Lantern (Evidence-First Workbench)
   md += `* **Evidence Items:** ${pack.evidence.length}\n`;
   md += `* **Relationships:** ${pack.edges.length}\n\n`;
 
-  md += `## 02. Claims Ledger\n\n`;
+  md += `## 02. Unknown Inventory\n\n`;
+  const unsourced = pack.claims.filter((c) => c.evidenceIds.length === 0);
+  if (unsourced.length === 0) {
+    md += `*All claims have at least one evidence source.*\n\n`;
+  } else {
+    unsourced.forEach((c, i) => {
+      md += `${i + 1}. ${safeStr(c.text)}\n`;
+    });
+    md += `\n`;
+  }
+
+  md += `## 03. Claims Ledger\n\n`;
   md += `| # | Type | Claim | Confidence | Evidence |\n`;
   md += `|---|------|-------|------------|----------|\n`;
   const sorted = [...pack.claims].sort(
-    (a, b) => b.confidence - a.confidence
+    (a, b) => b.confidence - a.confidence || a.id.localeCompare(b.id)
   );
   sorted.forEach((claim, i) => {
     md += `| ${i + 1} | ${claim.claimType.toUpperCase()} | ${safeStr(claim.text.slice(0, 80))} | ${(claim.confidence * 100).toFixed(0)}% | ${claim.evidenceIds.length} |\n`;
   });
   md += `\n`;
 
-  md += `## 03. Timeline\n\n`;
+  md += `## 04. Timeline\n\n`;
   const datedClaims = pack.claims
     .filter((c) => c.createdAt)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   if (datedClaims.length === 0) {
     md += `*No timeline data available.*\n\n`;
   } else {
@@ -83,7 +94,7 @@ generatedBy: Lantern (Evidence-First Workbench)
   }
 
   if (findings.influence) {
-    md += `## 04. Structural Influence (Hubs)\n\n`;
+    md += `## 05. Structural Influence (Hubs)\n\n`;
     if (findings.influence.status === "insufficient") {
       md += `> **Insufficient Data.** Minimum threshold not met.\n\n`;
     } else if (findings.influence.results.length > 0) {
@@ -102,7 +113,7 @@ generatedBy: Lantern (Evidence-First Workbench)
   }
 
   if (findings.funding) {
-    md += `## 05. Financial Flows\n\n`;
+    md += `## 06. Financial Flows\n\n`;
     if (findings.funding.status === "insufficient") {
       md += `> **Insufficient Data.** Minimum threshold not met.\n\n`;
     } else if (findings.funding.concentration) {
@@ -129,7 +140,7 @@ generatedBy: Lantern (Evidence-First Workbench)
   }
 
   if (findings.enforcement) {
-    md += `## 06. Gatekeeping & Enforcement\n\n`;
+    md += `## 07. Gatekeeping & Enforcement\n\n`;
     if (findings.enforcement.status === "insufficient") {
       md += `> **Insufficient Data.** Minimum threshold not met.\n\n`;
     } else if (findings.enforcement.enforcers.length > 0) {
@@ -155,25 +166,15 @@ generatedBy: Lantern (Evidence-First Workbench)
     }
   }
 
-  md += `## Unknown Inventory\n\n`;
-  const unsourced = pack.claims.filter((c) => c.evidenceIds.length === 0);
-  if (unsourced.length === 0) {
-    md += `*All claims have at least one evidence source.*\n\n`;
-  } else {
-    unsourced.forEach((c, i) => {
-      md += `${i + 1}. ${safeStr(c.text)}\n`;
-    });
-    md += `\n`;
-  }
-
   md += `## Question Queue\n\n`;
   md += `*Open questions requiring further reporting or corroboration.*\n\n`;
 
   md += `## Sources Index\n\n`;
-  if (pack.evidence.length === 0) {
+  const sortedEvidence = [...pack.evidence].sort((a, b) => a.id.localeCompare(b.id));
+  if (sortedEvidence.length === 0) {
     md += `*No evidence sources recorded.*\n\n`;
   } else {
-    pack.evidence.forEach((ev, i) => {
+    sortedEvidence.forEach((ev, i) => {
       md += `${i + 1}. **${safeStr(ev.title)}** [${ev.sourceType}] (${ev.date})${ev.url ? ` — [Link](${ev.url})` : ""}\n`;
     });
     md += `\n`;

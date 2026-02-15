@@ -445,6 +445,58 @@ export default function ClaimSpace() {
           </div>
         )}
 
+        {claims.length > 0 && (restricted.length > 0 || ambiguous.length > 0) && (
+          <Card className="mb-6 border-amber-500/30 bg-amber-500/5" data-testid="unsupported-summary">
+            <CardContent className="py-4">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+                <h3 className="text-sm font-semibold">{labels.sectionTitles.unknownInventory}</h3>
+                <Badge variant="secondary" className="text-xs">
+                  {restricted.length + ambiguous.length}
+                </Badge>
+              </div>
+              {restricted.length > 0 && (
+                <div className="mb-2">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {labels.claimStatus.RESTRICTED} ({restricted.length}):
+                  </p>
+                  <ul className="space-y-1">
+                    {restricted.slice(0, 3).map((c) => (
+                      <li key={c.id} className="text-xs text-muted-foreground pl-3 border-l-2 border-red-500/30">
+                        {c.text.slice(0, 100)}{c.text.length > 100 ? "..." : ""}
+                      </li>
+                    ))}
+                    {restricted.length > 3 && (
+                      <li className="text-xs text-muted-foreground pl-3 italic">
+                        +{restricted.length - 3} more
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+              {ambiguous.length > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {labels.claimStatus.AMBIGUOUS} ({ambiguous.length}):
+                  </p>
+                  <ul className="space-y-1">
+                    {ambiguous.slice(0, 2).map((c) => (
+                      <li key={c.id} className="text-xs text-muted-foreground pl-3 border-l-2 border-amber-500/30">
+                        {c.text.slice(0, 100)}{c.text.length > 100 ? "..." : ""}
+                      </li>
+                    ))}
+                    {ambiguous.length > 2 && (
+                      <li className="text-xs text-muted-foreground pl-3 italic">
+                        +{ambiguous.length - 2} more
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />

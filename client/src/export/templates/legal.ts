@@ -60,11 +60,22 @@ generatedBy: Lantern (Evidence-First Workbench)
   md += `* **Exhibits Referenced:** ${pack.evidence.length}\n`;
   md += `* **Relationships Documented:** ${pack.edges.length}\n\n`;
 
-  md += `## II. Factual Assertions Table\n\n`;
+  md += `## II. Unsupported / Unsubstantiated Assertions\n\n`;
+  const unsupported = pack.claims.filter((c) => c.evidenceIds.length === 0);
+  if (unsupported.length === 0) {
+    md += `*All assertions have at least one evidentiary reference.*\n\n`;
+  } else {
+    unsupported.forEach((c, i) => {
+      md += `${i + 1}. ${safeStr(c.text)}\n`;
+    });
+    md += `\n> **Note:** The above assertions lack sufficient evidentiary basis in the current record and should not be relied upon without further corroboration.\n\n`;
+  }
+
+  md += `## III. Factual Assertions Table\n\n`;
   md += `| No. | Classification | Assertion | Evidentiary Confidence | Exhibits |\n`;
   md += `|-----|---------------|-----------|----------------------|----------|\n`;
   const sorted = [...pack.claims].sort(
-    (a, b) => b.confidence - a.confidence
+    (a, b) => b.confidence - a.confidence || a.id.localeCompare(b.id)
   );
   sorted.forEach((claim, i) => {
     const classification =
@@ -79,10 +90,10 @@ generatedBy: Lantern (Evidence-First Workbench)
   });
   md += `\n`;
 
-  md += `## III. Chronology\n\n`;
+  md += `## IV. Chronology\n\n`;
   const datedClaims = pack.claims
     .filter((c) => c.createdAt)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   if (datedClaims.length === 0) {
     md += `*No chronological data available for this matter.*\n\n`;
   } else {
@@ -93,7 +104,7 @@ generatedBy: Lantern (Evidence-First Workbench)
   }
 
   if (findings.influence) {
-    md += `## IV. Structural Relationships Analysis\n\n`;
+    md += `## V. Structural Relationships Analysis\n\n`;
     if (findings.influence.status === "insufficient") {
       md += `> **Insufficient Evidence.** The evidentiary record does not meet the minimum threshold for structural analysis.\n\n`;
     } else if (findings.influence.results.length > 0) {
@@ -112,7 +123,7 @@ generatedBy: Lantern (Evidence-First Workbench)
   }
 
   if (findings.funding) {
-    md += `## V. Financial Flow Analysis\n\n`;
+    md += `## VI. Financial Flow Analysis\n\n`;
     if (findings.funding.status === "insufficient") {
       md += `> **Insufficient Evidence.** The evidentiary record does not support financial flow analysis.\n\n`;
     } else if (findings.funding.concentration) {
@@ -139,7 +150,7 @@ generatedBy: Lantern (Evidence-First Workbench)
   }
 
   if (findings.enforcement) {
-    md += `## VI. Enforcement Actions & Regulatory Events\n\n`;
+    md += `## VII. Enforcement Actions & Regulatory Events\n\n`;
     if (findings.enforcement.status === "insufficient") {
       md += `> **Insufficient Evidence.** Enforcement data below minimum threshold.\n\n`;
     } else if (findings.enforcement.enforcers.length > 0) {
@@ -165,27 +176,17 @@ generatedBy: Lantern (Evidence-First Workbench)
     }
   }
 
-  md += `## VII. Unsupported / Unsubstantiated Assertions\n\n`;
-  const unsupported = pack.claims.filter((c) => c.evidenceIds.length === 0);
-  if (unsupported.length === 0) {
-    md += `*All assertions have at least one evidentiary reference.*\n\n`;
-  } else {
-    unsupported.forEach((c, i) => {
-      md += `${i + 1}. ${safeStr(c.text)}\n`;
-    });
-    md += `\n> **Note:** The above assertions lack sufficient evidentiary basis in the current record and should not be relied upon without further corroboration.\n\n`;
-  }
-
   md += `## VIII. Open Issues / Required Corroboration\n\n`;
   md += `*Items requiring additional evidence, witness statements, or documentary support before any assertion can be deemed supportable.*\n\n`;
 
   md += `## IX. Exhibit Index\n\n`;
-  if (pack.evidence.length === 0) {
+  const sortedEvidence = [...pack.evidence].sort((a, b) => a.id.localeCompare(b.id));
+  if (sortedEvidence.length === 0) {
     md += `*No exhibits referenced in this memorandum.*\n\n`;
   } else {
     md += `| Exhibit | Title | Type | Date | Reference |\n`;
     md += `|---------|-------|------|------|-----------|\n`;
-    pack.evidence.forEach((ev, i) => {
+    sortedEvidence.forEach((ev, i) => {
       md += `| Ex. ${i + 1} | ${safeStr(ev.title)} | ${ev.sourceType} | ${ev.date} | ${ev.url ? `[Link](${ev.url})` : "On file"} |\n`;
     });
     md += `\n`;
