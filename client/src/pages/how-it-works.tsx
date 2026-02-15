@@ -286,6 +286,32 @@ export default function HowItWorks() {
             </div>
           </section>
 
+          <section>
+            <h2 className="text-lg font-semibold border-b border-border/50 pb-2 mb-4">
+              11. Versioning Discipline
+            </h2>
+            <div className="space-y-4 text-sm text-muted-foreground">
+              <p>Lantern tracks three distinct version identifiers to prevent confusion:</p>
+              <div className="grid gap-3">
+                <div className="border-l-2 border-border pl-4">
+                  <h3 className="font-medium text-foreground">schema</h3>
+                  <p className="mt-1">Evidence Pack format identifier (<code className="bg-muted px-1.5 py-0.5 rounded text-xs">lantern.evidence_pack.v0</code>, <code className="bg-muted px-1.5 py-0.5 rounded text-xs">v1</code>, etc.).</p>
+                  <p className="mt-1">Changes when ZIP file structure or manifest contract changes.</p>
+                </div>
+                <div className="border-l-2 border-border pl-4">
+                  <h3 className="font-medium text-foreground">schema_version</h3>
+                  <p className="mt-1">Database schema version (<code className="bg-muted px-1.5 py-0.5 rounded text-xs">1</code>, <code className="bg-muted px-1.5 py-0.5 rounded text-xs">2</code>, etc.).</p>
+                  <p className="mt-1">Changes when IndexedDB stores are added, removed, or restructured.</p>
+                </div>
+                <div className="border-l-2 border-border pl-4">
+                  <h3 className="font-medium text-foreground">tool_version</h3>
+                  <p className="mt-1">Application build version (<code className="bg-muted px-1.5 py-0.5 rounded text-xs">0.1.8</code>, etc.).</p>
+                  <p className="mt-1">Changes with each release. Recorded in Evidence Pack metadata for provenance.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
         </article>
 
         <footer className="mt-16 pt-6 border-t border-border/50 text-xs text-muted-foreground">

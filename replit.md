@@ -124,10 +124,34 @@ Two discriminated pack types coexist in the library:
 
 ### Evidence Pack (ZIP Export)
 - **Schema**: `lantern.evidence_pack.v0`
-- **Contents**: MANIFEST.json, DOSSIER.md, CLAIMS.json, SOURCES.json, APP.json
+- **Contents**: MANIFEST.json, DOSSIER.md, ONE_PAGER.md, CLAIMS.json, SOURCES.json, APP.json
 - **Integrity**: SHA-256 hash per file in manifest
 - **Honesty**: `raw_sources_included: false` with reason documented
 - **Lens-aware**: Export uses selected lens template (newsroom or legal)
+- **Verify**: Upload .zip to verify all file hashes against manifest (VERIFIED/FAILED/VERIFIED_WITH_WARNINGS)
+- **One-Pagers**: Editor One-Pager (newsroom) / Counsel One-Pager (legal) — concise 10-20 bullet summaries
+
+### Verified Record (Canonical Output Artifact)
+The **Verified Record** is the single deterministic, printable output artifact for every corpus run:
+- **Schema**: `lantern.verified_record.v1`
+- **Contents**:
+  - All input sources with SHA-256 hashes
+  - All supported claims (DEFENSIBLE) with exact source anchors
+  - All restricted claims (REFUSED) with refusal reasons
+  - All ambiguous claims
+  - Conflicts, missing evidence, and time mismatches
+  - Integrity metadata (SHA-256 content hash, timestamp, schema version)
+- **Serialization**: JSON (canonical) and text-based PDF export
+- **Determinism**: All arrays sorted by ID, canonical JSON serialization with sorted keys
+- **API Endpoints**:
+  - `GET /api/corpus/:corpusId/verified-record` - JSON export
+  - `GET /api/corpus/:corpusId/verified-record.pdf` - Text-based printable export
+- **Purpose**: Courts, regulators, executives, and audits
+
+### Versioning Discipline
+- **schema**: Evidence Pack format (`lantern.evidence_pack.v0`, `v1`…) — changes when ZIP structure changes
+- **schema_version**: DB schema version (1, 2, 3…) — changes when IndexedDB stores change
+- **tool_version**: App build version (`0.1.8`…) — changes with each release
 
 ### File Structure
 ```
@@ -139,11 +163,13 @@ client/src/
 ├── export/
 │   └── templates/
 │       ├── newsroom.ts         # Editor Review Packet template
-│       └── legal.ts            # Case Memorandum template
+│       ├── legal.ts            # Case Memorandum template
+│       ├── newsroomOnePager.ts # Editor One-Pager template
+│       └── legalOnePager.ts    # Counsel One-Pager template
 ├── pages/
 │   ├── lantern-extract.tsx     # Main extraction UI with pagination (100 items/page)
 │   ├── dossier-editor.tsx      # CRUD for dossier curation
-│   ├── dossier-report.tsx      # Publication-ready reports with lens export modal + ZIP
+│   ├── dossier-report.tsx      # Publication-ready reports with lens export modal + ZIP + verify
 │   ├── dossier-comparison.tsx  # Cross-dossier analysis
 │   └── how-it-works.tsx        # Evidence-first workbench documentation
 ├── lib/
@@ -151,6 +177,7 @@ client/src/
 │   ├── storage.ts              # IndexedDB persistence layer (unified DB, exports getDB)
 │   ├── vault.ts                # Case-level CRUD vault (uses shared getDB)
 │   ├── evidencePack.ts         # ZIP evidence pack export
+│   ├── verifyPack.ts           # ZIP evidence pack hash verification
 │   ├── heuristics/             # Analysis algorithms
 │   └── schema/pack_v1.ts       # Dossier schema (v2)
 ├── workers/

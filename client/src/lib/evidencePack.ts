@@ -10,7 +10,7 @@ import { renderLegalMarkdown } from "@/export/templates/legal";
 import { renderNewsroomOnePager } from "@/export/templates/newsroomOnePager";
 import { renderLegalOnePager } from "@/export/templates/legalOnePager";
 
-const TOOL_VERSION = "0.1.7";
+const TOOL_VERSION = "0.1.8";
 const SCHEMA_VERSION = "lantern.evidence_pack.v0";
 
 async function sha256(content: string): Promise<string> {
