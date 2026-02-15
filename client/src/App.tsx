@@ -247,6 +247,23 @@ function LensToggle() {
   );
 }
 
+function StorageBadge() {
+  const { isAuthenticated } = useAuth();
+  const { isReadOnly } = useReadOnlyMode();
+
+  if (isReadOnly || !isAuthenticated) return null;
+
+  return (
+    <div
+      className="fixed bottom-4 left-4 z-50 px-3 py-1.5 bg-background/80 backdrop-blur border border-border/50 rounded-lg print:hidden flex items-center gap-2 text-[10px] font-mono text-muted-foreground"
+      data-testid="badge-storage-mode"
+    >
+      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+      LOCAL VAULT (IndexedDB)
+    </div>
+  );
+}
+
 function TutorialButton() {
   const { isAuthenticated } = useAuth();
   const { isReadOnly } = useReadOnlyMode();
@@ -467,6 +484,7 @@ function App() {
               <AuthGate>
                 <LogoutButton />
                 <LensToggle />
+                <StorageBadge />
                 <TutorialButton />
                 <TutorialOverlay />
                 <Router />

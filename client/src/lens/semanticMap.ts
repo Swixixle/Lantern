@@ -62,13 +62,13 @@ const legalLabels: SemanticLabels = {
   claimStatus: {
     DEFENSIBLE: "SUPPORTED",
     RESTRICTED: "UNSUBSTANTIATED",
-    AMBIGUOUS: "IN DISPUTE",
+    AMBIGUOUS: "DISPUTED",
   },
   sectionTitles: {
     claimSpace: "Factual Assertions Space",
     defensibleClaims: "Supported Assertions",
     restrictedClaims: "Unsubstantiated Assertions",
-    ambiguousClaims: "Assertions In Dispute",
+    ambiguousClaims: "Disputed Assertions",
     unknownInventory: "Unsupported / Unsubstantiated Assertions",
     questionQueue: "Open Issues / Required Corroboration",
     claimsLedger: "Factual Assertions Table",

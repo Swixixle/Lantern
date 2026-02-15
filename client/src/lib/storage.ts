@@ -19,7 +19,7 @@ export function isDossierPack(p: AnyPack): p is Pack {
 }
 
 const DB_NAME = "lantern-db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 export const SCHEMA_VERSION = 1;
 
@@ -42,15 +42,31 @@ interface LanternDBSchema extends DBSchema {
     key: string;
     value: PersistentRecord;
   };
+  cases: {
+    key: string;
+    value: any;
+    indexes: { "by-updated": string };
+  };
+  vault_meta: {
+    key: string;
+    value: { key: string; value: string };
+  };
 }
 
 let dbPromise: Promise<IDBPDatabase<LanternDBSchema>> | null = null;
 
-function getDB() {
+export function getDB() {
   if (!dbPromise) {
     dbPromise = openDB<LanternDBSchema>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        db.createObjectStore("root");
+      upgrade(db, oldVersion) {
+        if (oldVersion < 1) {
+          db.createObjectStore("root");
+        }
+        if (oldVersion < 2) {
+          const caseStore = db.createObjectStore("cases", { keyPath: "caseId" });
+          caseStore.createIndex("by-updated", "updatedAt");
+          db.createObjectStore("vault_meta", { keyPath: "key" });
+        }
       },
     });
   }

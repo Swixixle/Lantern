@@ -1,8 +1,10 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from "react";
+import { vault } from "@/lib/vault";
 
 export type Lens = "newsroom" | "legal";
 
 const LENS_STORAGE_KEY = "lantern_lens";
+const VAULT_LENS_KEY = "preferredLens";
 
 interface LensContextValue {
   lens: Lens;
@@ -22,8 +24,17 @@ export function LensProvider({ children }: { children: ReactNode }) {
     return saved === "legal" ? "legal" : "newsroom";
   });
 
+  useEffect(() => {
+    vault.getMeta(VAULT_LENS_KEY).then((saved) => {
+      if (saved === "legal" || saved === "newsroom") {
+        setLensState(saved);
+      }
+    }).catch(() => {});
+  }, []);
+
   const setLens = useCallback((newLens: Lens) => {
     setLensState(newLens);
+    vault.setMeta(VAULT_LENS_KEY, newLens).catch(() => {});
     localStorage.setItem(LENS_STORAGE_KEY, newLens);
   }, []);
 

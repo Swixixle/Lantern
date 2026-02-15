@@ -140,12 +140,22 @@ export default function HowItWorks() {
               </div>
               <div className="border-l-4 border-amber-500 pl-4">
                 <h3 className="font-medium text-foreground">
-                  {lens === "legal" ? "IN DISPUTE" : "CONTESTABLE"} (Ambiguous)
+                  {lens === "legal" ? "DISPUTED" : "CONTESTABLE"} (Ambiguous)
                 </h3>
                 <p className="text-muted-foreground mt-1">
                   Claims with partial or conflicting evidence. Marked UNRESOLVED — not inferred, not dismissed.
                 </p>
               </div>
+            </div>
+          </section>
+
+          <section>
+            <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-lg">
+              <p className="text-foreground font-medium text-sm">Classification is not truth.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Classification reflects source binding strength, not objective truth.
+                "Verified" or "Supported" means backed by bound excerpts from the evidence record — it does not mean the claim is true.
+              </p>
             </div>
           </section>
 

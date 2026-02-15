@@ -19,6 +19,7 @@ import { generateMarkdown, downloadFile } from "@/lib/export";
 import { useLens, type Lens } from "@/context/LensContext";
 import { renderNewsroomMarkdown } from "@/export/templates/newsroom";
 import { renderLegalMarkdown } from "@/export/templates/legal";
+import { exportEvidencePack } from "@/lib/evidencePack";
 
 export default function DossierReport() {
   const { id } = useParams();
@@ -81,6 +82,20 @@ export default function DossierReport() {
       setShowExportModal(false);
   };
 
+  const handleDownloadZip = async (targetLens?: Lens) => {
+    if (!pack) return;
+    const lensToUse = targetLens || exportLens;
+    const findingsObj = { influence, funding, enforcement };
+    const blob = await exportEvidencePack(pack, lensToUse, findingsObj, reportHash);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${pack.subjectName.replace(/\s+/g, "_")}_Evidence_Pack.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setShowExportModal(false);
+  };
+
   return (
     <div className="min-h-screen bg-white text-black p-8 md:p-16 font-serif selection:bg-yellow-200">
       <div className="max-w-4xl mx-auto space-y-12 print:space-y-8">
@@ -121,19 +136,29 @@ export default function DossierReport() {
                     <option value="legal">Legal (Case Memorandum + Exhibit Index)</option>
                   </select>
                 </div>
-                <div className="flex gap-2 pt-2">
+                <div className="flex flex-col gap-2 pt-2">
                   <Button
-                    className="flex-1"
+                    className="w-full"
                     onClick={() => handleDownloadMarkdown()}
                     data-testid="button-export-download"
                   >
                     <Download className="w-4 h-4 mr-2" />
-                    Download .md
+                    Download Markdown (.md)
                   </Button>
                   <Button
+                    className="w-full"
                     variant="outline"
+                    onClick={() => handleDownloadZip()}
+                    data-testid="button-export-zip"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download Evidence Pack (.zip)
+                  </Button>
+                  <Button
+                    variant="ghost"
                     onClick={() => setShowExportModal(false)}
                     data-testid="button-export-cancel"
+                    className="w-full"
                   >
                     Cancel
                   </Button>

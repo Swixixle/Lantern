@@ -46,6 +46,7 @@ generatedBy: Lantern (Evidence-First Workbench)
 > * This memorandum is a structured compilation of factual assertions and evidentiary references. It does not constitute legal advice or opinion.
 > * All assertions are source-bound. No inference, synthesis, or conclusion has been drawn beyond what the cited evidence directly supports.
 > * Evidentiary sufficiency assessments are preliminary and subject to attorney review.
+> **Refusal Rule:** Assertions without a bound source excerpt are refused and isolated under Unsupported Assertions.
 
 `;
 

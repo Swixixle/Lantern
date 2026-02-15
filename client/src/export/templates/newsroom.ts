@@ -44,6 +44,7 @@ generatedBy: Lantern (Evidence-First Workbench)
 > * Heuristics are indicators, not verdicts. Structural centrality or funding flows suggest influence pathways but do not prove wrongdoing or intent.
 > * Evidence is point-in-time. Claims are based on available records as of the extraction date.
 > * Source-bound analysis only. No inference, no synthesis, no conclusions.
+> **Refusal Rule:** Claims without a bound source excerpt are refused and isolated in Unknown Inventory.
 
 `;
 
