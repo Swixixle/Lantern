@@ -11,7 +11,7 @@ import { renderNewsroomOnePager } from "@/export/templates/newsroomOnePager";
 import { renderLegalOnePager } from "@/export/templates/legalOnePager";
 
 const TOOL_VERSION = "0.1.8";
-const SCHEMA_VERSION = "lantern.evidence_pack.v0";
+const PACK_SCHEMA = "lantern.evidence_pack.v0";
 
 async function sha256Bytes(data: Uint8Array): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
@@ -84,7 +84,7 @@ export async function exportEvidencePack(
     {
       tool: "Lantern",
       tool_version: TOOL_VERSION,
-      schema_version: SCHEMA_VERSION,
+      schema_version: PACK_SCHEMA,
       generated_at: createdAt,
       identity: "Evidence-first investigative workbench",
       constraints: [
@@ -117,7 +117,7 @@ export async function exportEvidencePack(
 
   const manifestJson = JSON.stringify(
     {
-      schema: SCHEMA_VERSION,
+      schema: PACK_SCHEMA,
       pack_id: pack.packId,
       case_id: pack.packId,
       export_lens: lens,

@@ -9,6 +9,7 @@ import { useReadOnlyMode } from "@/lib/config";
 import { apiGet, apiPost } from "@/lib/auth";
 import { useLens } from "@/context/LensContext";
 import { getSemanticLabels } from "@/lens/semanticMap";
+import { computePosture } from "@/lib/posture";
 
 interface SnapshotResult {
   snapshot_id: string;
@@ -206,6 +207,7 @@ export default function ClaimSpace() {
   const defensible = claims.filter(c => c.classification === "DEFENSIBLE");
   const restricted = claims.filter(c => c.classification === "RESTRICTED");
   const ambiguous = claims.filter(c => c.classification === "AMBIGUOUS");
+  const posture = computePosture({ defensible: defensible.length, restricted: restricted.length, ambiguous: ambiguous.length }, lens);
 
   const handleGeneratePacket = async (claimId: string) => {
     const result = await apiGet<{ snapshots: SnapshotOption[] }>(`/api/corpus/${corpusId}/snapshots`);
@@ -444,6 +446,43 @@ export default function ClaimSpace() {
             </Button>
           </div>
         )}
+
+        {claims.length > 0 && (() => {
+          const cardStyle = posture.color === "emerald" ? "border-emerald-500/30 bg-emerald-500/5"
+            : posture.color === "red" ? "border-red-500/30 bg-red-500/5"
+            : posture.color === "amber" ? "border-amber-500/30 bg-amber-500/5"
+            : "border-gray-500/30 bg-gray-500/5";
+          const iconStyle = posture.color === "emerald" ? "text-emerald-500"
+            : posture.color === "red" ? "text-red-500"
+            : posture.color === "amber" ? "text-amber-500"
+            : "text-gray-500";
+          const badgeStyle = posture.color === "emerald" ? "border-emerald-500 text-emerald-600"
+            : posture.color === "red" ? "border-red-500 text-red-600"
+            : posture.color === "amber" ? "border-amber-500 text-amber-600"
+            : "border-gray-500 text-gray-600";
+          return (
+            <Card className={`mb-6 ${cardStyle}`} data-testid="posture-widget">
+              <CardContent className="py-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Shield className={`w-4 h-4 ${iconStyle}`} />
+                    <h3 className="text-sm font-semibold">Posture</h3>
+                  </div>
+                  <Badge variant="outline" className={`text-xs font-mono ${badgeStyle}`} data-testid="posture-label">
+                    {posture.label}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  {posture.actions.map((action, i) => (
+                    <p key={i} className="text-xs text-muted-foreground pl-3 border-l-2 border-border">
+                      {action}
+                    </p>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })()}
 
         {claims.length > 0 && (restricted.length > 0 || ambiguous.length > 0) && (
           <Card className="mb-6 border-amber-500/30 bg-amber-500/5" data-testid="unsupported-summary">

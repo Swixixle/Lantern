@@ -9,6 +9,7 @@ import type {
   EnforcerStat,
   TargetStat,
 } from "@/lib/heuristics/types";
+import { postureLineForExport } from "@/lib/posture";
 
 const safeStr = (str: string): string =>
   str.replace(/\|/g, "\\|").replace(/`/g, "\\`");
@@ -56,10 +57,13 @@ generatedBy: Lantern (Evidence-First Workbench)
   const allegations = pack.claims.filter(
     (c) => c.claimType === "allegation"
   ).length;
+  const unsupportedCount = pack.claims.filter((c) => c.evidenceIds.length === 0).length;
+  const supportedCount = pack.claims.length - unsupportedCount;
   md += `* **Supported Assertions:** ${supported}\n`;
   md += `* **Allegations Under Review:** ${allegations}\n`;
   md += `* **Exhibits Referenced:** ${pack.evidence.length}\n`;
-  md += `* **Relationships Documented:** ${pack.edges.length}\n\n`;
+  md += `* **Relationships Documented:** ${pack.edges.length}\n`;
+  md += `* ${postureLineForExport({ defensible: supportedCount, restricted: unsupportedCount, ambiguous: allegations }, "legal")}\n\n`;
 
   md += `## II. Unsupported / Unsubstantiated Assertions\n\n`;
   const unsupported = pack.claims.filter((c) => c.evidenceIds.length === 0);
