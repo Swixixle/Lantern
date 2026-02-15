@@ -105,22 +105,35 @@ Two discriminated pack types coexist in the library:
 - **LensContext** (`client/src/context/LensContext.tsx`): React context providing `lens` (newsroom|legal) and `setLens`
 - **Semantic Map** (`client/src/lens/semanticMap.ts`): Maps internal statuses to lens-specific labels
   - Newsroom: VERIFIED / UNSOURCED / CONTESTABLE
-  - Legal: SUPPORTED / UNSUBSTANTIATED / IN DISPUTE
+  - Legal: SUPPORTED / UNSUBSTANTIATED / DISPUTED
 - **Export Templates** (`client/src/export/templates/`):
   - `newsroom.ts`: Editor Review Packet format
   - `legal.ts`: Case Memorandum + Exhibit Index format
 - Switching lens does NOT refetch data — only re-renders labels
+- **Lens persistence**: Canonical source is vault meta (`preferredLens`); localStorage fallback for backwards compatibility
 
-### Local Vault
-- **Vault** (`client/src/lib/vault.ts`): Case-level CRUD abstraction on top of IndexedDB
-- **Storage** (`client/src/lib/storage.ts`): Pack-level IndexedDB persistence (existing)
+### Local Vault (Unified DB)
+- **Single IndexedDB** (`lantern-db` v2): All data in one canonical database
+  - `root` store: Pack library (existing)
+  - `cases` store: Case-level CRUD records
+  - `vault_meta` store: Key-value metadata (lens preference, migration flags)
+- **Vault** (`client/src/lib/vault.ts`): Case-level CRUD abstraction importing `getDB()` from storage.ts
+- **Storage** (`client/src/lib/storage.ts`): Pack-level persistence + shared DB export
+- No second IndexedDB. Vault and storage share the same connection.
 - localStorage migration runs once on startup
+
+### Evidence Pack (ZIP Export)
+- **Schema**: `lantern.evidence_pack.v0`
+- **Contents**: MANIFEST.json, DOSSIER.md, CLAIMS.json, SOURCES.json, APP.json
+- **Integrity**: SHA-256 hash per file in manifest
+- **Honesty**: `raw_sources_included: false` with reason documented
+- **Lens-aware**: Export uses selected lens template (newsroom or legal)
 
 ### File Structure
 ```
 client/src/
 ├── context/
-│   └── LensContext.tsx         # Newsroom/Legal lens provider
+│   └── LensContext.tsx         # Newsroom/Legal lens provider (vault-backed)
 ├── lens/
 │   └── semanticMap.ts          # Semantic label mappings
 ├── export/
@@ -130,13 +143,14 @@ client/src/
 ├── pages/
 │   ├── lantern-extract.tsx     # Main extraction UI with pagination (100 items/page)
 │   ├── dossier-editor.tsx      # CRUD for dossier curation
-│   ├── dossier-report.tsx      # Publication-ready reports with lens export modal
+│   ├── dossier-report.tsx      # Publication-ready reports with lens export modal + ZIP
 │   ├── dossier-comparison.tsx  # Cross-dossier analysis
 │   └── how-it-works.tsx        # Evidence-first workbench documentation
 ├── lib/
 │   ├── lanternExtract.ts       # Core extraction engine
-│   ├── storage.ts              # IndexedDB persistence layer
-│   ├── vault.ts                # Case-level CRUD vault abstraction
+│   ├── storage.ts              # IndexedDB persistence layer (unified DB, exports getDB)
+│   ├── vault.ts                # Case-level CRUD vault (uses shared getDB)
+│   ├── evidencePack.ts         # ZIP evidence pack export
 │   ├── heuristics/             # Analysis algorithms
 │   └── schema/pack_v1.ts       # Dossier schema (v2)
 ├── workers/
