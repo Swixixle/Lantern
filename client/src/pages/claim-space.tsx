@@ -7,6 +7,8 @@ import { AlertTriangle, CheckCircle, HelpCircle, Eye, Layers, Camera, CheckCheck
 import { confidenceToBand, clampConfidence, type Claim } from "@/lib/schema/claims";
 import { useReadOnlyMode } from "@/lib/config";
 import { apiGet, apiPost } from "@/lib/auth";
+import { useLens } from "@/context/LensContext";
+import { getSemanticLabels } from "@/lens/semanticMap";
 
 interface SnapshotResult {
   snapshot_id: string;
@@ -29,7 +31,7 @@ interface SnapshotOption {
   hash_hex: string;
 }
 
-function ClaimCard({ claim, corpusId, onGeneratePacket, isReadOnly }: { claim: Claim; corpusId: string; onGeneratePacket: (claimId: string) => void; isReadOnly: boolean }) {
+function ClaimCard({ claim, corpusId, onGeneratePacket, isReadOnly, labels }: { claim: Claim; corpusId: string; onGeneratePacket: (claimId: string) => void; isReadOnly: boolean; labels: ReturnType<typeof getSemanticLabels> }) {
   const [, navigate] = useLocation();
   
   const handleViewEvidence = () => {
@@ -56,7 +58,7 @@ function ClaimCard({ claim, corpusId, onGeneratePacket, isReadOnly }: { claim: C
             
             {claim.classification === "RESTRICTED" && claim.refusal_reason && (
               <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded text-xs text-red-400">
-                <span className="font-semibold">Not supported by corpus: </span>
+                <span className="font-semibold">{labels.notSupportedPrefix}</span>
                 {claim.refusal_reason}
               </div>
             )}
@@ -108,7 +110,8 @@ function ClaimSection({
   emptyMessage,
   corpusId,
   onGeneratePacket,
-  isReadOnly
+  isReadOnly,
+  labels
 }: { 
   title: string; 
   icon: React.ReactNode; 
@@ -117,6 +120,7 @@ function ClaimSection({
   corpusId: string;
   onGeneratePacket: (claimId: string) => void;
   isReadOnly: boolean;
+  labels: ReturnType<typeof getSemanticLabels>;
 }) {
   return (
     <section className="mb-8">
@@ -135,7 +139,7 @@ function ClaimSection({
       ) : (
         <div className="space-y-3">
           {claims.map((claim) => (
-            <ClaimCard key={claim.id} claim={claim} corpusId={corpusId} onGeneratePacket={onGeneratePacket} isReadOnly={isReadOnly} />
+            <ClaimCard key={claim.id} claim={claim} corpusId={corpusId} onGeneratePacket={onGeneratePacket} isReadOnly={isReadOnly} labels={labels} />
           ))}
         </div>
       )}
@@ -154,6 +158,8 @@ export default function ClaimSpace() {
   const params = new URLSearchParams(searchString);
   const corpusIdFromQuery = params.get("corpusId");
   const { isReadOnly } = useReadOnlyMode();
+  const { lens } = useLens();
+  const labels = getSemanticLabels(lens);
   
   const [claims, setClaims] = useState<Claim[]>([]);
   const [loading, setLoading] = useState(false);
@@ -300,7 +306,7 @@ export default function ClaimSpace() {
               </Button>
             )}
           </div>
-          <p className="text-muted-foreground">Claim Space</p>
+          <p className="text-muted-foreground">{labels.sectionTitles.claimSpace}</p>
           {corpusIdFromQuery && (
             <p className="text-xs font-mono text-muted-foreground mt-1" data-testid="corpus-id-display">
               corpus_id: {corpusId}
@@ -453,33 +459,36 @@ export default function ClaimSpace() {
         ) : (
           <>
             <ClaimSection
-              title="Defensible Claims"
+              title={labels.sectionTitles.defensibleClaims}
               icon={<CheckCircle className="w-5 h-5 text-emerald-500" />}
               claims={defensible}
-              emptyMessage="No defensible claims in this corpus."
+              emptyMessage={`No ${labels.claimStatus.DEFENSIBLE.toLowerCase()} claims in this corpus.`}
               corpusId={corpusId}
               onGeneratePacket={handleGeneratePacket}
               isReadOnly={isReadOnly}
+              labels={labels}
             />
 
             <ClaimSection
-              title="Restricted / Unsupported Claims"
+              title={labels.sectionTitles.restrictedClaims}
               icon={<AlertTriangle className="w-5 h-5 text-red-500" />}
               claims={restricted}
-              emptyMessage="No restricted claims identified."
+              emptyMessage={`No ${labels.claimStatus.RESTRICTED.toLowerCase()} claims identified.`}
               corpusId={corpusId}
               onGeneratePacket={handleGeneratePacket}
               isReadOnly={isReadOnly}
+              labels={labels}
             />
 
             <ClaimSection
-              title="Ambiguous Claims"
+              title={labels.sectionTitles.ambiguousClaims}
               icon={<HelpCircle className="w-5 h-5 text-amber-500" />}
               claims={ambiguous}
-              emptyMessage="No ambiguous claims identified."
+              emptyMessage={`No ${labels.claimStatus.AMBIGUOUS.toLowerCase()} claims identified.`}
               corpusId={corpusId}
               onGeneratePacket={handleGeneratePacket}
               isReadOnly={isReadOnly}
+              labels={labels}
             />
           </>
         )}
@@ -494,7 +503,7 @@ export default function ClaimSpace() {
           <Link href={`/verified-record?corpusId=${corpusId}`} className="flex-1">
             <Button variant="default" className="w-full" data-testid="button-verified-record">
               <Shield className="w-4 h-4 mr-2" />
-              Export Verified Record
+              {labels.sectionTitles.verifiedRecord}
             </Button>
           </Link>
         </div>

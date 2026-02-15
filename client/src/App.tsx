@@ -7,9 +7,10 @@ import { ConfigProvider, useReadOnlyMode } from "./lib/config";
 import { AuthProvider, useAuth, apiGet } from "./lib/auth";
 import { TutorialProvider, useTutorial } from "./lib/tutorial";
 import { TutorialOverlay } from "./components/TutorialOverlay";
+import { LensProvider, useLens } from "./context/LensContext";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Lock, Loader2, LogOut, GraduationCap } from "lucide-react";
+import { Lock, Loader2, LogOut, GraduationCap, Scale, Newspaper } from "lucide-react";
 import ClaimSpace from "@/pages/claim-space";
 import AnchorView from "@/pages/anchor-view";
 import Constraints from "@/pages/constraints";
@@ -213,6 +214,35 @@ function LogoutButton() {
       data-testid="button-logout"
     >
       <LogOut className="w-4 h-4" />
+    </button>
+  );
+}
+
+function LensToggle() {
+  const { isAuthenticated } = useAuth();
+  const { isReadOnly } = useReadOnlyMode();
+  const { lens, setLens } = useLens();
+
+  if (isReadOnly || !isAuthenticated) return null;
+
+  return (
+    <button
+      onClick={() => setLens(lens === "newsroom" ? "legal" : "newsroom")}
+      className="fixed top-4 left-24 z-50 p-2 bg-background/80 backdrop-blur border border-border/50 rounded-lg print:hidden flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+      title={`Switch to ${lens === "newsroom" ? "Legal" : "Newsroom"} lens`}
+      data-testid="button-lens-toggle"
+    >
+      {lens === "newsroom" ? (
+        <>
+          <Newspaper className="w-4 h-4" />
+          <span className="hidden sm:inline">Newsroom</span>
+        </>
+      ) : (
+        <>
+          <Scale className="w-4 h-4" />
+          <span className="hidden sm:inline">Legal</span>
+        </>
+      )}
     </button>
   );
 }
@@ -431,15 +461,18 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ConfigProvider>
         <AuthProvider>
-          <TutorialProvider>
-            <Toaster />
-            <AuthGate>
-              <LogoutButton />
-              <TutorialButton />
-              <TutorialOverlay />
-              <Router />
-            </AuthGate>
-          </TutorialProvider>
+          <LensProvider>
+            <TutorialProvider>
+              <Toaster />
+              <AuthGate>
+                <LogoutButton />
+                <LensToggle />
+                <TutorialButton />
+                <TutorialOverlay />
+                <Router />
+              </AuthGate>
+            </TutorialProvider>
+          </LensProvider>
         </AuthProvider>
       </ConfigProvider>
     </QueryClientProvider>

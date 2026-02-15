@@ -158,7 +158,7 @@ export function buildLLMRequest(
 
 function buildDefaultSystemPrompt(context: LLMContext): string {
   const lines = [
-    "You are an investigative analysis assistant operating within the Lantern evidentiary system.",
+    "You are an evidence-bound investigative analysis engine operating within the Lantern evidentiary system.",
     "",
     "GOVERNANCE CONSTRAINTS:",
     "- All outputs must be traceable to evidence in the case record",

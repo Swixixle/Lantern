@@ -101,28 +101,53 @@ Two discriminated pack types coexist in the library:
 5. **Binary Import Policy**: Pack collision = SKIP, no partial merging
 6. **No Guessing**: Ambiguous data marked UNRESOLVED, not inferred
 
+### Semantic Lens System
+- **LensContext** (`client/src/context/LensContext.tsx`): React context providing `lens` (newsroom|legal) and `setLens`
+- **Semantic Map** (`client/src/lens/semanticMap.ts`): Maps internal statuses to lens-specific labels
+  - Newsroom: VERIFIED / UNSOURCED / CONTESTABLE
+  - Legal: SUPPORTED / UNSUBSTANTIATED / IN DISPUTE
+- **Export Templates** (`client/src/export/templates/`):
+  - `newsroom.ts`: Editor Review Packet format
+  - `legal.ts`: Case Memorandum + Exhibit Index format
+- Switching lens does NOT refetch data — only re-renders labels
+
+### Local Vault
+- **Vault** (`client/src/lib/vault.ts`): Case-level CRUD abstraction on top of IndexedDB
+- **Storage** (`client/src/lib/storage.ts`): Pack-level IndexedDB persistence (existing)
+- localStorage migration runs once on startup
+
 ### File Structure
 ```
 client/src/
+├── context/
+│   └── LensContext.tsx         # Newsroom/Legal lens provider
+├── lens/
+│   └── semanticMap.ts          # Semantic label mappings
+├── export/
+│   └── templates/
+│       ├── newsroom.ts         # Editor Review Packet template
+│       └── legal.ts            # Case Memorandum template
 ├── pages/
-│   ├── lantern-extract.tsx    # Main extraction UI with pagination (100 items/page)
-│   ├── dossier-editor.tsx     # CRUD for dossier curation
-│   ├── dossier-report.tsx     # Publication-ready reports
-│   └── dossier-comparison.tsx # Cross-dossier analysis
+│   ├── lantern-extract.tsx     # Main extraction UI with pagination (100 items/page)
+│   ├── dossier-editor.tsx      # CRUD for dossier curation
+│   ├── dossier-report.tsx      # Publication-ready reports with lens export modal
+│   ├── dossier-comparison.tsx  # Cross-dossier analysis
+│   └── how-it-works.tsx        # Evidence-first workbench documentation
 ├── lib/
-│   ├── lanternExtract.ts      # Core extraction engine
-│   ├── storage.ts             # IndexedDB persistence layer
-│   ├── heuristics/            # Analysis algorithms
-│   └── schema/pack_v1.ts      # Dossier schema (v2)
+│   ├── lanternExtract.ts       # Core extraction engine
+│   ├── storage.ts              # IndexedDB persistence layer
+│   ├── vault.ts                # Case-level CRUD vault abstraction
+│   ├── heuristics/             # Analysis algorithms
+│   └── schema/pack_v1.ts       # Dossier schema (v2)
 ├── workers/
-│   └── extraction.worker.ts   # Web Worker for browser-side extraction
+│   └── extraction.worker.ts    # Web Worker for browser-side extraction
 server/
-├── index.ts                   # Express entrypoint
-├── routes.ts                  # API endpoints for job queue and file upload
-├── extractionProcessor.ts     # Server-side extraction job processor
-└── storage.ts                 # MemStorage adapter for job persistence
+├── index.ts                    # Express entrypoint
+├── routes.ts                   # API endpoints for job queue and file upload
+├── extractionProcessor.ts      # Server-side extraction job processor
+└── storage.ts                  # MemStorage adapter for job persistence
 shared/
-└── schema.ts                  # Drizzle schema for extraction_jobs table
+└── schema.ts                   # Drizzle schema for extraction_jobs table
 ```
 
 ## External Dependencies

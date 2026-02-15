@@ -16,12 +16,18 @@ import { computeReportHash } from "@/lib/integrity";
 
 import { CopyID } from "@/components/copy-id";
 import { generateMarkdown, downloadFile } from "@/lib/export";
+import { useLens, type Lens } from "@/context/LensContext";
+import { renderNewsroomMarkdown } from "@/export/templates/newsroom";
+import { renderLegalMarkdown } from "@/export/templates/legal";
 
 export default function DossierReport() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
   const [pack, setPack] = useState<Pack | null>(null);
   const [reportHash, setReportHash] = useState<string>("");
+  const { lens } = useLens();
+  const [exportLens, setExportLens] = useState<Lens>(lens);
+  const [showExportModal, setShowExportModal] = useState(false);
   
   // Computed Findings
   const [influence, setInfluence] = useState<InfluenceHubsFinding | null>(null);
@@ -63,14 +69,16 @@ export default function DossierReport() {
 
   const handlePrint = () => window.print();
 
-  const handleDownloadMarkdown = () => {
+  const handleDownloadMarkdown = (targetLens?: Lens) => {
       if (!pack) return;
-      const md = generateMarkdown(
-          pack, 
-          { influence, funding, enforcement }, 
-          reportHash
-      );
-      downloadFile(md, `${pack.subjectName.replace(/\s+/g, "_")}_Dossier_Report.md`, "text/markdown");
+      const lensToUse = targetLens || exportLens;
+      const findingsObj = { influence, funding, enforcement };
+      const md = lensToUse === "legal"
+        ? renderLegalMarkdown(pack, findingsObj, reportHash)
+        : renderNewsroomMarkdown(pack, findingsObj, reportHash);
+      const suffix = lensToUse === "legal" ? "Case_Memorandum" : "Editor_Review_Packet";
+      downloadFile(md, `${pack.subjectName.replace(/\s+/g, "_")}_${suffix}.md`, "text/markdown");
+      setShowExportModal(false);
   };
 
   return (
@@ -83,14 +91,57 @@ export default function DossierReport() {
                  <ArrowLeft className="w-4 h-4 mr-2" /> Back to Editor
              </Button>
              <div className="flex gap-2">
-                 <Button variant="outline" size="sm" onClick={handleDownloadMarkdown}>
-                     <Download className="w-4 h-4 mr-2" /> Markdown
+                 <Button variant="outline" size="sm" onClick={() => setShowExportModal(true)} data-testid="button-export-modal">
+                     <Download className="w-4 h-4 mr-2" /> Export
                  </Button>
                  <Button variant="outline" size="sm" onClick={handlePrint}>
                      <Printer className="w-4 h-4 mr-2" /> Print PDF
                  </Button>
              </div>
         </div>
+
+        {showExportModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 print:hidden" data-testid="export-modal">
+            <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+              <h3 className="text-lg font-bold mb-4">Export Dossier</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Current View Lens</label>
+                  <p className="text-sm text-gray-500 capitalize">{lens}</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Export As</label>
+                  <select
+                    value={exportLens}
+                    onChange={(e) => setExportLens(e.target.value as Lens)}
+                    className="w-full p-2 border rounded text-sm"
+                    data-testid="select-export-lens"
+                  >
+                    <option value="newsroom">Newsroom (Editor Review Packet)</option>
+                    <option value="legal">Legal (Case Memorandum + Exhibit Index)</option>
+                  </select>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    className="flex-1"
+                    onClick={() => handleDownloadMarkdown()}
+                    data-testid="button-export-download"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download .md
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowExportModal(false)}
+                    data-testid="button-export-cancel"
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Header */}
         <header className="text-center border-b-4 border-black pb-8">
