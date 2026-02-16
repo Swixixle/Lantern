@@ -41,12 +41,12 @@ if (testAuthHeader !== "true") {
 
 Added grep check to test:integration script:
 ```bash
-! grep -R "storage\.db\|storage\.schema\|storage\.eq\|storage\.and" -n server
+! grep -R "storage\.db\|storage\.schema\|storage\.eq\|storage\.and" -n server || (echo "ERROR: forbidden storage.* patterns found" && exit 1)
 ```
 
 This check:
 - Runs before integration tests
-- Fails immediately if forbidden patterns detected
+- Fails immediately with clear error message if forbidden patterns detected
 - Prevents mixed abstraction patterns
 - Current status: **0 violations found**
 
