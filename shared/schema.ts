@@ -523,3 +523,108 @@ export const insertReportArtifactSchema = createInsertSchema(reportArtifacts).om
 
 export type InsertReportArtifact = z.infer<typeof insertReportArtifactSchema>;
 export type ReportArtifact = typeof reportArtifacts.$inferSelect;
+
+// Chain-of-Custody Manifests table
+export const chainOfCustodyManifests = pgTable("chain_of_custody_manifests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  caseId: varchar("case_id").notNull().references(() => cases.id, { onDelete: "cascade" }),
+  manifestVersion: text("manifest_version").notNull().default("1.0"),
+  manifestJson: text("manifest_json").notNull(),
+  evidencePackHash: text("evidence_pack_hash").notNull(),
+  reportHash: text("report_hash"),
+  previousManifestHash: text("previous_manifest_hash"),
+  createdBy: varchar("created_by").notNull().references(() => users.id),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+}, (table) => [
+  index("manifests_case_idx").on(table.caseId),
+  index("manifests_created_at_idx").on(table.createdAt),
+]);
+
+export const insertChainOfCustodyManifestSchema = createInsertSchema(chainOfCustodyManifests).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertChainOfCustodyManifest = z.infer<typeof insertChainOfCustodyManifestSchema>;
+export type ChainOfCustodyManifest = typeof chainOfCustodyManifests.$inferSelect;
+
+// Enhanced sources table for encrypted storage
+export const enhancedSources = pgTable("enhanced_sources", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  caseId: varchar("case_id").notNull().references(() => cases.id, { onDelete: "cascade" }),
+  uploadId: varchar("upload_id").references(() => uploads.id, { onDelete: "cascade" }),
+  filename: text("filename").notNull(),
+  sha256: text("sha256").notNull(),
+  byteLength: integer("byte_length").notNull(),
+  encryptedBlob: text("encrypted_blob"), // JSON string of EncryptedData
+  encryptionIv: text("encryption_iv"),
+  encryptionAlgorithm: text("encryption_algorithm").default("aes-256-gcm"),
+  ingestedAt: timestamp("ingested_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+}, (table) => [
+  index("enhanced_sources_case_idx").on(table.caseId),
+  index("enhanced_sources_upload_idx").on(table.uploadId),
+]);
+
+export const insertEnhancedSourceSchema = createInsertSchema(enhancedSources).omit({
+  id: true,
+  ingestedAt: true,
+  deletedAt: true,
+});
+
+export type InsertEnhancedSource = z.infer<typeof insertEnhancedSourceSchema>;
+export type EnhancedSource = typeof enhancedSources.$inferSelect;
+
+// Tracked claims table for assertion tracking
+export const trackedClaims = pgTable("tracked_claims", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  caseId: varchar("case_id").notNull().references(() => cases.id, { onDelete: "cascade" }),
+  sourceId: varchar("source_id").notNull().references(() => enhancedSources.id, { onDelete: "cascade" }),
+  startOffset: integer("start_offset").notNull(),
+  endOffset: integer("end_offset").notNull(),
+  sha256Fragment: text("sha256_fragment").notNull(),
+  assertionType: text("assertion_type").notNull().default("system-derived"), // "system-derived" | "user-asserted"
+  userOverrideAt: timestamp("user_override_at"),
+  userId: varchar("user_id").references(() => users.id),
+  claimText: text("claim_text"),
+  confidence: doublePrecision("confidence"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at"),
+}, (table) => [
+  index("tracked_claims_case_idx").on(table.caseId),
+  index("tracked_claims_source_idx").on(table.sourceId),
+  index("tracked_claims_assertion_type_idx").on(table.assertionType),
+]);
+
+export const insertTrackedClaimSchema = createInsertSchema(trackedClaims).omit({
+  id: true,
+  createdAt: true,
+  deletedAt: true,
+});
+
+export type InsertTrackedClaim = z.infer<typeof insertTrackedClaimSchema>;
+export type TrackedClaim = typeof trackedClaims.$inferSelect;
+
+// User roles for RBAC
+export const roleEnum = z.enum(["lead_investigator", "reviewer", "auditor"]);
+export type UserRole = z.infer<typeof roleEnum>;
+
+export const userRoles = pgTable("user_roles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  caseId: varchar("case_id").references(() => cases.id, { onDelete: "cascade" }), // null = global role
+  role: text("role").notNull(), // "lead_investigator" | "reviewer" | "auditor"
+  grantedAt: timestamp("granted_at").notNull().defaultNow(),
+  grantedBy: varchar("granted_by").references(() => users.id),
+}, (table) => [
+  index("user_roles_user_idx").on(table.userId),
+  index("user_roles_case_idx").on(table.caseId),
+]);
+
+export const insertUserRoleSchema = createInsertSchema(userRoles).omit({
+  id: true,
+  grantedAt: true,
+});
+
+export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
+export type UserRoleRecord = typeof userRoles.$inferSelect;
