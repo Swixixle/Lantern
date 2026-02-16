@@ -1105,6 +1105,8 @@ export async function registerRoutes(
       const encrypted = encryptFile(buffer);
       
       // Store encrypted source as system of record
+      // TODO: Optimize storage by using separate binary columns for ciphertext and authTag
+      // Current JSON+base64 approach has ~33% overhead but provides compatibility
       await storage.db.insert(storage.schema.enhancedSources).values({
         caseId: caseId,
         uploadId: uploadId,
@@ -1121,16 +1123,12 @@ export async function registerRoutes(
       
       console.log(`[Legal Hardening] Encrypted source stored: ${uploadId} (${sha256})`);
     } catch (encError) {
-      console.error("Encryption failed, falling back to unencrypted storage:", encError);
-      // Fallback: store without encryption if encryption fails
-      await storage.db.insert(storage.schema.enhancedSources).values({
-        caseId: caseId,
-        uploadId: uploadId,
-        filename: upload.filename,
-        sha256: sha256,
-        byteLength: buffer.length,
-        encryptionIv: null,
-        encryptedBlob: null,
+      console.error("Encryption failed:", encError);
+      // Legal Hardening v1.0: Fail upload if encryption fails (no silent fallback)
+      return res.status(500).json({
+        error: "Failed to encrypt source file",
+        details: encError instanceof Error ? encError.message : "Unknown error",
+        message: "Encryption is required for all uploads. Please ensure ENCRYPTION_KEY is configured."
       });
     }
     

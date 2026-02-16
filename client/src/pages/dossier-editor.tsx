@@ -305,51 +305,63 @@ export default function DossierEditor() {
       }
       
       // Create claim as system-derived (sufficient evidence)
-      const claim: Claim = {
-          id: uuidv4(),
-          text: newClaim.text,
-          claimType: newClaim.type as any,
-          claimScope: newClaim.scope as "utterance" | "content",
-          confidence: newClaim.confidence,
-          evidenceIds: Array.from(newClaim.evidenceIds),
-          counterEvidenceIds: [],
-          createdAt: new Date().toISOString(),
-          assertionType: "system-derived"
-      };
-      
-      const updated = { ...pack, claims: [...pack.claims, claim] };
-      saveDossier(updated);
-      setNewClaim({ text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() });
-      toast.success("Claim added (system-derived)");
+      try {
+        const claim: Claim = {
+            id: uuidv4(),
+            text: newClaim.text,
+            claimType: newClaim.type as any,
+            claimScope: newClaim.scope as "utterance" | "content",
+            confidence: newClaim.confidence,
+            evidenceIds: Array.from(newClaim.evidenceIds),
+            counterEvidenceIds: [],
+            createdAt: new Date().toISOString(),
+            assertionType: "system-derived"
+        };
+        
+        const updated = { ...pack, claims: [...pack.claims, claim] };
+        saveDossier(updated);
+        setNewClaim({ text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() });
+        toast.success("Claim added (system-derived)");
+      } catch (error) {
+        console.error("Failed to save claim:", error);
+        toast.error("Failed to save claim. Please try again.");
+      }
   };
   
   // Handle user assertion override
   const handleUserAssertion = (justification: string) => {
       if (!pack || !pendingClaim) return;
       
-      // Create user override record
+      // TODO: Replace with actual authenticated user ID from session/auth context
+      // Current implementation uses placeholder for demonstration
       const userOverride = createUserOverride("current-user", justification);
       
       // Create claim as user-asserted
-      const claim: Claim = {
-          id: uuidv4(),
-          text: pendingClaim.text,
-          claimType: pendingClaim.type as any,
-          claimScope: pendingClaim.scope as "utterance" | "content",
-          confidence: pendingClaim.confidence,
-          evidenceIds: Array.from(pendingClaim.evidenceIds),
-          counterEvidenceIds: [],
-          createdAt: new Date().toISOString(),
-          assertionType: "user-asserted",
-          userOverride: userOverride
-      };
-      
-      const updated = { ...pack, claims: [...pack.claims, claim] };
-      saveDossier(updated);
-      setNewClaim({ text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() });
-      setPendingClaim(null);
-      setShowEvidenceWarning(false);
-      toast.success("Claim added as user-asserted");
+      try {
+        const claim: Claim = {
+            id: uuidv4(),
+            text: pendingClaim.text,
+            claimType: pendingClaim.type as any,
+            claimScope: pendingClaim.scope as "utterance" | "content",
+            confidence: pendingClaim.confidence,
+            evidenceIds: Array.from(pendingClaim.evidenceIds),
+            counterEvidenceIds: [],
+            createdAt: new Date().toISOString(),
+            assertionType: "user-asserted",
+            userOverride: userOverride
+        };
+        
+        const updated = { ...pack, claims: [...pack.claims, claim] };
+        saveDossier(updated);
+        setNewClaim({ text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() });
+        setPendingClaim(null);
+        setShowEvidenceWarning(false);
+        toast.success("Claim added as user-asserted");
+      } catch (error) {
+        console.error("Failed to save user-asserted claim:", error);
+        toast.error("Failed to save claim. Please try again.");
+        setShowEvidenceWarning(false);
+      }
   };
   
   const handleCancelAssertion = () => {
