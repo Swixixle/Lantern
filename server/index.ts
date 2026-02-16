@@ -73,6 +73,13 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // TEST ONLY: Auth bypass for integration tests
+  // Only active when NODE_ENV=test AND LANTERN_TEST_AUTH_BYPASS=true
+  if (process.env.NODE_ENV === "test") {
+    const { testAuthBypass } = await import("./lib/testAuth.js");
+    app.use(testAuthBypass);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {

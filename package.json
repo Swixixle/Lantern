@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "test:coc": "vitest run server/__tests__/chainOfCustody",
     "test:encryption": "vitest run server/lib/__tests__/encryption",
-    "test:integration": "docker compose -f docker-compose.test.yml up -d && sleep 5 && DATABASE_URL=postgresql://lantern_test:test_password@localhost:5433/lantern_test npm run db:push && DATABASE_URL=postgresql://lantern_test:test_password@localhost:5433/lantern_test vitest run server/__tests__/coc.http.integration.test.ts && docker compose -f docker-compose.test.yml down",
+    "test:integration": "docker compose -f docker-compose.test.yml up -d && node tools/wait-for-postgres.js && DATABASE_URL=postgresql://lantern_test:test_password@localhost:5433/lantern_test npm run db:push && DATABASE_URL=postgresql://lantern_test:test_password@localhost:5433/lantern_test vitest run server/__tests__/coc.http.integration.test.ts && docker compose -f docker-compose.test.yml down -v",
     "test:integration:setup": "docker compose -f docker-compose.test.yml up -d && sleep 5",
     "test:integration:teardown": "docker compose -f docker-compose.test.yml down",
     "db:push": "drizzle-kit push",
