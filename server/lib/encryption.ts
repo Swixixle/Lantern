@@ -58,7 +58,10 @@ export function getEncryptionKey(opts?: { allowDefault?: boolean }): Buffer {
     }
     // Development mode - fail if allowDefault is false
     if (!allowDefault) {
-      throw new Error("Encryption key not configured and allowDefault is false");
+      throw new Error(
+        "DEVELOPMENT: Encryption key not configured. " +
+        "Set LANTERN_VAULT_KEY or ENCRYPTION_KEY environment variable."
+      );
     }
     return deriveKey("default-dev-key-change-in-production");
   }

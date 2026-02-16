@@ -24,9 +24,10 @@ These tests prove the legal hardening capabilities of Lantern by testing the com
 
 ### 4. **Refusal Override Logging**
 - ✅ User-asserted claims store `assertion_type: "user-asserted"` in DB
-- ✅ User ID and override timestamp are persisted
-- ✅ Ledger events created with `user_override_refusal_threshold` type
+- ✅ User ID and override timestamp are persisted in tracked_claims table
 - ✅ Manifest preserves distinction between system-derived and user-asserted claims
+
+**Note:** In the current implementation, ledger events are corpus-scoped. The integration tests verify that tracked_claims table stores all necessary audit fields (assertion_type, userId, userOverrideAt) for future ledger event creation when claims are added to a corpus.
 
 ## Requirements
 

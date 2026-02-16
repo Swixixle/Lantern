@@ -320,22 +320,15 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
     it("should fail decryption if tampered", async () => {
       const encrypted = encryptFile(testFileContent);
       
-      // Tamper with ciphertext
+      // Tamper with ciphertext by flipping first byte
+      const ciphertextHex = Buffer.from(encrypted.ciphertext, "base64").toString("hex");
+      const tamperedHex = "FF" + ciphertextHex.slice(2); // Replace first byte
+      const tamperedCiphertext = Buffer.from(tamperedHex, "hex").toString("base64");
+      
       const tamperedEncrypted = {
         ...encrypted,
-        ciphertext: Buffer.from(encrypted.ciphertext, "base64")
-          .toString("hex")
-          .replace(/^../, "FF") // Flip first byte
-          + Buffer.from(encrypted.ciphertext, "base64")
-            .toString("hex")
-            .slice(2),
+        ciphertext: tamperedCiphertext,
       };
-      
-      // Convert back to base64
-      tamperedEncrypted.ciphertext = Buffer.from(
-        tamperedEncrypted.ciphertext,
-        "hex"
-      ).toString("base64");
       
       // Decryption should fail due to authentication tag mismatch
       const { decryptFile } = await import("../lib/encryption");
