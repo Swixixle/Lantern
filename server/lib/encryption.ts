@@ -37,13 +37,58 @@ export function deriveKey(passphrase: string): Buffer {
 /**
  * Gets the encryption key from environment or uses default.
  * 
- * IMPORTANT: Set ENCRYPTION_KEY in production environment!
+ * IMPORTANT: Set LANTERN_VAULT_KEY or ENCRYPTION_KEY in production environment!
  * 
+ * @param allowDefault - If false, throws error when no key is set (fail-closed mode)
  * @returns Encryption key buffer
+ * @throws Error if production mode and no key is set
  */
-export function getEncryptionKey(): Buffer {
-  const keyString = process.env.ENCRYPTION_KEY || "default-dev-key-change-in-production";
+export function getEncryptionKey(allowDefault = true): Buffer {
+  const keyString = process.env.LANTERN_VAULT_KEY || process.env.ENCRYPTION_KEY;
+  
+  // Fail-closed in production if no key is set
+  if (!keyString) {
+    if (process.env.NODE_ENV === "production" && !allowDefault) {
+      throw new Error(
+        "SECURITY: LANTERN_VAULT_KEY or ENCRYPTION_KEY must be set in production. " +
+        "Generate a secure key with: openssl rand -hex 32"
+      );
+    }
+    // Development fallback
+    if (!allowDefault) {
+      throw new Error("Encryption key not configured");
+    }
+    return deriveKey("default-dev-key-change-in-production");
+  }
+  
   return deriveKey(keyString);
+}
+
+/**
+ * Validates that encryption key is properly configured.
+ * Throws error if running in production without a proper key.
+ * Call this at application startup.
+ */
+export function validateEncryptionKeySetup(): void {
+  const isProduction = process.env.NODE_ENV === "production";
+  const hasKey = !!(process.env.LANTERN_VAULT_KEY || process.env.ENCRYPTION_KEY);
+  
+  if (isProduction && !hasKey) {
+    throw new Error(
+      "SECURITY: Encryption key is required in production.\n" +
+      "Set LANTERN_VAULT_KEY or ENCRYPTION_KEY environment variable.\n" +
+      "Generate a secure key with: openssl rand -hex 32"
+    );
+  }
+  
+  if (!isProduction && !hasKey) {
+    console.warn(
+      "⚠️  WARNING: Using default encryption key for development.\n" +
+      "   Set LANTERN_VAULT_KEY for production-like testing."
+    );
+  } else if (hasKey) {
+    console.log("✓ Encryption key configured");
+  }
 }
 
 /**

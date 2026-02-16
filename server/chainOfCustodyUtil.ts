@@ -5,13 +5,13 @@
  */
 
 import { createHash } from "crypto";
-import { stableStringify, hashCanonical } from "../lib/stableStringify";
+import { stableStringify, hashCanonical } from "./lib/stableStringify";
 import type {
   ChainOfCustodyManifestV1,
   ChainOfCustodySource,
   ChainOfCustodyClaim,
   IntegrityCheckResult,
-} from "../schemas/chainOfCustody";
+} from "./schemas/chainOfCustody";
 
 /**
  * Compute SHA-256 hash of raw bytes.
