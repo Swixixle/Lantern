@@ -1,13 +1,13 @@
 # LANTERN SYSTEM SNAPSHOT
 
 Portable reference document for external review.
-Generated: 2026-01-22
+Generated: 2026-02-16
 
 ---
 
 ## A. What This System Is
 
-Lantern is an evidentiary record system for investigative analysis. It allows analysts to extract structured data from unstructured text, curate dossiers of entities and relationships, apply bounded heuristics to detect structural patterns, and generate publication-ready reports with cryptographic integrity verification. All analysis requires human-in-the-loop curation. The system does not issue verdicts. Outputs are designed to withstand legal and journalistic scrutiny by emphasizing traceability over persuasion.
+Lantern is an institutional-grade evidentiary record system for investigative analysis. It allows analysts to upload source documents (text and PDF), extract structured evidence anchors, curate claims with posture classifications, generate cryptographically-verified evidence packets, and maintain an append-only audit ledger with hash-chain integrity. The system operates as a full-stack application with a PostgreSQL backend (17 tables), 50+ REST API endpoints, and a React frontend. All analysis requires human-in-the-loop curation. The system does not issue verdicts. Outputs are designed to withstand legal and journalistic scrutiny by emphasizing traceability, chain-of-custody, and tamper-evidence over persuasion.
 
 ---
 
@@ -17,43 +17,60 @@ Lantern is an evidentiary record system for investigative analysis. It allows an
 - **Not predictive**: Lantern does not forecast outcomes or behaviors.
 - **Not a recommender**: Lantern does not suggest actions or next steps.
 - **Not verdict-issuing**: Lantern does not determine guilt, innocence, intent, or truth.
-- **Not autonomous**: All dossier content is human-curated. Heuristics produce conditional findings, not conclusions.
+- **Not autonomous**: All claims and evidence curation is human-driven. Heuristics produce conditional findings, not conclusions.
+- **Not an LLM system**: Extraction is deterministic regex-based heuristics, not AI-generated.
 
 ---
 
 ## C. Core Objects & Schemas
 
-### Extract Pack
-- **Schema discriminator**: `schema: "lantern.extract.pack.v1"`
-- **Contents**: Entities, quotes, metrics, timeline events extracted from source text
-- **Provenance**: All items include character offsets to original source
+### Database Tables (PostgreSQL, 17 tables)
 
-### Dossier Pack (v2)
-- **Schema discriminator**: `schemaVersion: 2`, presence of `packId`, absence of extract schema
-- **Contents**: Curated entities, edges (relationships), claims, evidence links
-- **Migration**: v1 packs auto-migrate on load; transformations logged
+| Table | Purpose |
+|-------|---------|
+| users | User accounts |
+| cases | Case management containers |
+| uploads | Source documents (text, PDF) |
+| upload_pages | Page-level data for uploads |
+| chunks | Text chunks from source documents |
+| extraction_jobs | Server-side extraction job queue |
+| corpora | Corpus containers grouping sources |
+| corpus_sources | Source-to-corpus associations |
+| anchor_records | Evidence anchors extracted from sources |
+| claim_records | Claims with posture (DEFENSIBLE/RESTRICTED/AMBIGUOUS) |
+| evidence_packets | Evidence packets with SHA-256 chain-of-custody |
+| snapshots | Point-in-time corpus snapshots |
+| ledger_events | Append-only revision ledger with hash chains |
+| pdf_pages | Rendered PDF page images |
+| constraints | Conflicts, missing evidence, time mismatches |
+| incident_reports | Incident reports with immutable artifacts |
+| report_artifacts | Generated report artifacts |
 
-### Report Snapshot
-- **Contents**: Frozen dossier state plus heuristic outputs
-- **Integrity**: SHA-256 fingerprint of canonical data
-- **Export format**: Markdown with YAML frontmatter
+### Client-Side Objects
 
-### Comparison Report
-- **Contents**: Structural alignment of two dossiers
-- **Integrity**: Fingerprint A + Fingerprint B + comparison timestamp → comparison fingerprint
-- **Sufficiency**: Both packs must meet evidence thresholds independently
+| Object | Storage | Purpose |
+|--------|---------|---------|
+| Extract Pack | IndexedDB (idb) | Extraction results from source text |
+| Dossier Pack | IndexedDB (idb) | Curated entities, edges, claims, evidence |
+| Verified Record | Server (PostgreSQL) | Canonical output artifact (schema v1.0.0) |
 
 ---
 
 ## D. System Flow (Stepwise)
 
-1. **Upload**: User provides source text (article, document, transcript)
-2. **Extract**: System extracts entities, quotes, metrics, timeline events with character offsets
-3. **Promote**: User promotes Extract Pack to Dossier Pack for curation
-4. **Curate**: User adds/edits entities, edges, claims, and evidence
-5. **Analyze**: Report view applies heuristics to dossier data
-6. **Report**: Structured report generated with findings, limits, interpretation disclaimers
-7. **Export**: Markdown export with integrity fingerprint for external use
+1. **Upload**: User uploads source documents (text or PDF) via `/intake`
+2. **Store**: Server stores documents in PostgreSQL (`uploads`, `upload_pages`, `chunks`) and filesystem (`uploads/`)
+3. **Extract**: Extraction runs via Web Worker (browser) or server-side job queue (`extraction_jobs`); produces evidence anchors
+4. **Anchor**: Evidence anchors stored in `anchor_records` with source provenance and character offsets
+5. **Corpus Build**: Sources grouped into corpora; corpus build processes all sources
+6. **Claim**: Users create claims in Claim Space with posture classification (DEFENSIBLE/RESTRICTED/AMBIGUOUS)
+7. **Evidence Packet**: Claims linked to evidence anchors; packets generated with SHA-256 chain-of-custody
+8. **Ledger**: All mutations recorded in append-only ledger with hash chains
+9. **Snapshot**: Point-in-time corpus snapshots with integrity verification
+10. **Constraints**: Automated detection of conflicts, missing evidence, and time mismatches
+11. **Verified Record**: Canonical output artifact generated for legal/journalistic submission
+12. **Export**: ZIP bundle with manifest, reproducibility pack, or one-pager export
+13. **Review**: External reviewers access read-only review mode with audit lines
 
 ---
 
@@ -84,15 +101,33 @@ Lantern is an evidentiary record system for investigative analysis. It allows an
 
 ## F. Safety & Epistemic Controls
 
-### Claim Scope
-- **Utterance**: "X said Y" — records that X made this statement
-- **Content**: "Y is true" — records an assertion about Y itself
-- User must select scope when recording claims to prevent conflation
+### Claim Posture System
+- **DEFENSIBLE**: Claim supported by sufficient evidence anchors
+- **RESTRICTED**: Claim has evidence but with caveats or limitations
+- **AMBIGUOUS**: Claim lacks sufficient evidence for classification
+- **Computation**: `client/src/lib/posture.ts` evaluates evidence density per claim
 
-### Migration Logs
-- All schema transformations recorded in `pack.migrationLog[]`
-- Includes ISO timestamp and description of each change
-- Displayed in reports for audit
+### Readiness Posture
+- **DRAFT**: Corpus under construction
+- **HIGH_RISK**: Significant constraints or missing evidence
+- **REVIEW_REQUIRED**: Constraints present but manageable
+- **EVIDENCE_STRONG**: Sufficient evidence with no critical constraints
+
+### Chain-of-Custody
+- Evidence packets are SHA-256 fingerprinted at creation
+- Full chain verification available via API (`/api/packets/:packetId/verify_chain`)
+- Each link in the chain is independently verifiable
+
+### Append-Only Ledger
+- Every mutation creates a ledger event
+- Each event contains hash of previous event (hash chain)
+- Events cannot be modified or deleted
+- Chain integrity verifiable via API (`/api/ledger/:eventId/verify`)
+
+### Constraints System
+- **CONFLICT**: Contradictory evidence or claims detected
+- **MISSING_EVIDENCE**: Claims without sufficient anchor support
+- **TIME_MISMATCH**: Temporal inconsistencies in evidence
 
 ### Interpretation Limits
 - Every report includes explicit disclaimers about what findings do NOT imply
@@ -107,46 +142,92 @@ Lantern is an evidentiary record system for investigative analysis. It allows an
 
 ## G. Integrity & Auditability
 
+### Evidence Packet Fingerprinting
+- **Algorithm**: SHA-256
+- **Scope**: Individual packet content + linked anchors
+- **Verification**: `/api/packets/:packetId/verify` and `/api/packets/:packetId/verify_chain`
+
+### Ledger Hash Chain
+- **Structure**: Each event hashes its content plus the previous event's hash
+- **Verification**: `/api/ledger/:eventId/verify` checks chain from event back to genesis
+- **Property**: Any modification to any event breaks the chain for all subsequent events
+
+### Snapshot Integrity
+- **Method**: Snapshot captures corpus state at point in time
+- **Verification**: `/api/snapshots/:snapshotId/verify`
+- **Purpose**: Provably frozen state for audit or legal submission
+
+### Verified Record
+- **Schema**: v1.0.0
+- **Purpose**: Canonical output artifact suitable for legal/journalistic submission
+- **Generation**: `server/verifiedRecordGenerator.ts`
+
+### Export Bundle
+- **Format**: ZIP with JSON manifest
+- **Contents**: All claims, anchors, packets, ledger events, constraints
+- **Verification**: `shared/bundleVerify.ts` for bundle integrity checking
+- **Reproducibility Pack**: Complete data package for independent verification
+
 ### Report Fingerprinting
 - **Algorithm**: SHA-256
-- **Input**: Canonical JSON of dossier data (sorted keys, sorted arrays)
+- **Input**: Canonical JSON of pack data (sorted keys, sorted arrays)
 - **Purpose**: Tamper-evidence for the exact state analyzed
 
-### Comparison Fingerprinting
-- **Method**: Hash(Fingerprint A + Fingerprint B + timestamp)
-- **Purpose**: Cryptographically binds two dossiers at comparison time
+---
 
-### Non-Auto-Updating Snapshots
-- Reports and comparisons are frozen at generation time
-- Changes to underlying dossier do not update existing reports
-- Each report is a point-in-time audit record
+## H. Authentication & Access Control
 
-### Legal and Journalistic Relevance
-- Fingerprints allow independent verification of analyzed data
-- Chain of custody can be established via export + fingerprint
-- Supports FOIA responses, legal discovery, editorial review
+### API Key Authentication
+- **Mechanism**: `x-api-key` header on all API requests
+- **Implementation**: `client/src/lib/auth.tsx`
+- **Demo Mode**: `/api/auth/demo-key` provides a demo key for investor presentations
+
+### Read-Only Review Mode
+- **Routes**: `/review/:corpusId`, `/review/:corpusId/bundle`, `/review/:corpusId/audit_lines`
+- **Purpose**: External reviewers can inspect corpus without modification capability
+- **Detection**: `client/src/lib/config.tsx` detects read-only context
+
+### Semantic Lens
+- **Modes**: Newsroom, Legal
+- **Implementation**: `client/src/context/LensContext.tsx` + `client/src/lens/semanticMap.ts`
+- **Effect**: Changes UI labels and export templates to match domain vocabulary
 
 ---
 
-## H. Intended Use Cases
+## I. Intended Use Cases
 
-- **Investigative journalism**: Mapping relationships between actors across source materials
-- **Legal review**: Structuring evidence and claims with traceable provenance
+- **Investigative journalism**: Mapping relationships between actors across source materials with chain-of-custody evidence
+- **Legal review**: Structuring evidence and claims with traceable provenance and tamper-evident packaging
 - **Historical analysis**: Recording documented relationships and events without inference
-- **Adversarial inquiry**: Testing claims against evidence with explicit sufficiency checks
+- **Adversarial inquiry**: Testing claims against evidence with explicit sufficiency checks and constraint detection
+- **Regulatory compliance**: Producing verified records with append-only audit trails
+- **External review**: Sharing read-only corpus access with reviewers or auditors
 
 ---
 
-## Visual Surfaces (Referenced)
+## J. Visual Surfaces
 
-| Surface | Purpose |
-|---------|---------|
-| Library View | Landing page. Lists all Extract Packs and Dossier Packs. Entry point. |
-| Extract View | Text input. Produces Extract Packs from source text. |
-| Dossier Editor | CRUD interface for entities, edges, claims, evidence. |
-| Report View | Read-only analysis output with heuristics, limits, fingerprint. |
-| Comparison View | Cross-dossier structural alignment with dual fingerprint binding. |
-| Reference View | "How Lantern Works" documentation (method, limits, safeguards). |
+| Surface | Route | Purpose |
+|---------|-------|---------|
+| Claim Space | `/` | Primary view — claims organized by posture with evidence anchors |
+| Intake | `/intake` | Corpus creation and document upload |
+| Sources | `/sources` | Source document management |
+| Anchor Browser | `/anchors/browse` | Browse all evidence anchors |
+| Anchor Proof | `/anchors/proof` | Extraction proof with source page images |
+| Evidence Packet | `/packets/:id` | Packet viewer with chain-of-custody |
+| Ledger | `/ledger` | Append-only revision history |
+| Constraints | `/constraints` | Conflicts, missing evidence, time mismatches |
+| Snapshots | `/snapshots` | Point-in-time corpus snapshots |
+| Verified Record | `/verified-record` | Canonical output artifact |
+| Incident Report | `/incident-report` | Formal incident documentation |
+| Review Mode | `/review/:corpusId` | Read-only external review |
+| Library | `/library` | Extract and dossier pack browser |
+| Extract | `/extract` | Text extraction interface |
+| Dossier Editor | `/dossier/:id` | Entity, edge, claim, evidence CRUD |
+| Dossier Report | `/dossier/:id/report` | Publication-ready report |
+| Comparison | `/compare` | Cross-dossier structural alignment |
+| Cases | `/cases` | Case management |
+| Reference | `/reference` | System documentation |
 
 ---
 

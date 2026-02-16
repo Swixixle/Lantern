@@ -2,6 +2,94 @@
 
 All notable changes to the Lantern investigative intelligence platform.
 
+## [2.0.0] - 2026-02 (Phase 2: Productization)
+
+### Server-Side Backend
+- PostgreSQL database with 17 tables via Drizzle ORM (shared/schema.ts)
+- 50+ REST API endpoints in server/routes.ts
+- PostgreSQL storage adapter (server/storage.ts) replacing in-memory MemStorage
+- Server-side extraction job queue (server/extractionProcessor.ts)
+- PDF upload with page-level extraction and PNG rendering (server/pdfProcessor.ts)
+- Incident report generation (server/incidentReportGenerator.ts)
+- Verified record generation (server/verifiedRecordGenerator.ts)
+
+### Authentication & Access
+- API key authentication via x-api-key header (client/src/lib/auth.tsx)
+- Demo login key endpoint (GET /api/auth/demo-key) for investor presentations
+- Read-only review mode for external reviewers (/review/:corpusId)
+- Review bundle and audit line views
+
+### Claim Space & Evidence System
+- Claim Space as primary view (/) with DEFENSIBLE/RESTRICTED/AMBIGUOUS posture classification
+- Evidence Packets with SHA-256 chain-of-custody (evidence_packets table)
+- Evidence Pack ZIP export with manifest (client/src/lib/evidencePack.ts)
+- Evidence pack verification (client/src/lib/verifyPack.ts)
+- Posture system: DRAFT, HIGH_RISK, REVIEW_REQUIRED, EVIDENCE_STRONG (client/src/lib/posture.ts)
+
+### Integrity & Audit
+- Append-only Ledger with hash chains (shared/ledger.ts, ledger_events table)
+- Ledger event verification endpoint (GET /api/ledger/:eventId/verify)
+- Corpus Snapshots with integrity verification (snapshots table)
+- Snapshot verification endpoint (GET /api/snapshots/:snapshotId/verify)
+- Verified Record canonical output artifact, schema v1.0.0 (shared/verifiedRecord.ts)
+- Constraints system: CONFLICT, MISSING_EVIDENCE, TIME_MISMATCH (constraints table)
+- Incident Reports with immutable artifacts (incident_reports table)
+- Bundle verification (shared/bundleVerify.ts)
+
+### Corpus & Source Management
+- Corpus intake with multi-source management (/intake)
+- Source document management page (/sources)
+- Anchor browser (/anchors/browse) and anchor detail view (/anchors)
+- Anchor extraction proof with page images (/anchors/proof)
+- Case management (/cases)
+- Multi-source corpora via corpus_sources table
+
+### Export & Output
+- Export bundle ZIP with manifest (GET /api/corpus/:corpusId/export_bundle)
+- Reproducibility pack export (GET /api/corpus/:corpusId/export_repro_pack)
+- Newsroom export template (client/src/export/templates/newsroom.ts)
+- Legal export template (client/src/export/templates/legal.ts)
+- Newsroom one-pager (client/src/export/templates/newsroomOnePager.ts)
+- Legal one-pager (client/src/export/templates/legalOnePager.ts)
+- Evidence packet PDF download (GET /api/packets/:packetId.pdf)
+
+### UX & Interface
+- Newsroom/Legal semantic lens toggle (client/src/context/LensContext.tsx)
+- Semantic label mappings (client/src/lens/semanticMap.ts)
+- Tutorial system for onboarding (client/src/lib/tutorial.tsx)
+- App configuration with read-only mode detection (client/src/lib/config.tsx)
+- Upload drawer component
+- Case-level CRUD vault (client/src/lib/vault.ts)
+
+### Extraction
+- Web Worker for browser-side extraction (client/src/workers/extraction.worker.ts)
+- Server-side extraction job queue with PostgreSQL backing (server/extractionProcessor.ts)
+- PDF page-level extraction and rendering
+
+### New Pages (17 new routes)
+- `/` ClaimSpace (primary view, replaced Library as landing)
+- `/intake` Intake
+- `/sources` Sources
+- `/anchors/browse` AnchorBrowser
+- `/anchors` AnchorView
+- `/anchors/proof` AnchorProof
+- `/packets/:packetId` EvidencePacket
+- `/ledger` Ledger
+- `/constraints` Constraints
+- `/snapshots` Snapshots
+- `/snapshots/:snapshot_id` SnapshotDetail
+- `/verified-record` VerifiedRecord
+- `/incident-report` IncidentReport
+- `/review/:corpusId` Review
+- `/review/:corpusId/bundle` ReviewBundle
+- `/review/:corpusId/audit_lines` ReviewAuditLines
+- `/cases` Cases
+
+### Database Tables Added (17 total)
+- users, cases, uploads, upload_pages, chunks, extraction_jobs, corpora, corpus_sources, anchor_records, claim_records, evidence_packets, snapshots, ledger_events, pdf_pages, constraints, incident_reports, report_artifacts
+
+---
+
 ## [1.0.0] - 2026-01-22
 
 ### Complete Feature Set (M1-M12)

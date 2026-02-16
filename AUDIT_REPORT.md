@@ -1,7 +1,7 @@
 # Lantern Audit Report (Ground Truth)
 
-**Date**: January 21, 2026
-**Status**: PROCEED (Baseline Functionality Restored)
+**Date**: February 16, 2026
+**Status**: OPERATIONAL (Full-Stack PostgreSQL System)
 
 ## 1. Repository Map & Entrypoints
 
@@ -9,83 +9,156 @@
 ```
 .
 ├── client
-│   ├── index.html          # Web Entrypoint
+│   ├── index.html                    # Web Entrypoint
 │   └── src
-│       ├── main.tsx        # React Root
-│       ├── App.tsx         # Routing
-│       ├── pages
-│       │   └── lantern-extract.tsx # Main Application Logic
-│       └── lib
-│           └── lanternExtract.ts   # Core Extraction Engine (Client-Side)
+│       ├── main.tsx                  # React Root
+│       ├── App.tsx                   # Routing (24 routes)
+│       ├── pages/                    # 24 page components
+│       │   ├── claim-space.tsx       # Primary view (/)
+│       │   ├── intake.tsx            # Corpus creation (/intake)
+│       │   ├── sources.tsx           # Source management (/sources)
+│       │   ├── anchor-browser.tsx    # Anchor browsing (/anchors/browse)
+│       │   ├── anchor-view.tsx       # Anchor detail (/anchors)
+│       │   ├── anchor-proof.tsx      # Extraction proof (/anchors/proof)
+│       │   ├── evidence-packet.tsx   # Packet viewer (/packets/:packetId)
+│       │   ├── ledger.tsx            # Append-only ledger (/ledger)
+│       │   ├── constraints.tsx       # Conflicts & gaps (/constraints)
+│       │   ├── snapshots.tsx         # Snapshot list (/snapshots)
+│       │   ├── snapshot-detail.tsx   # Snapshot detail (/snapshots/:id)
+│       │   ├── verified-record.tsx   # Canonical output (/verified-record)
+│       │   ├── incident-report.tsx   # Incident report (/incident-report)
+│       │   ├── review.tsx            # Read-only review (/review/:corpusId)
+│       │   ├── review-bundle.tsx     # Review bundle (/review/:corpusId/bundle)
+│       │   ├── review-audit-lines.tsx# Audit lines (/review/:corpusId/audit_lines)
+│       │   ├── library.tsx           # Pack library (/library)
+│       │   ├── lantern-extract.tsx   # Extraction (/extract)
+│       │   ├── dossier-editor.tsx    # Dossier CRUD (/dossier/:id)
+│       │   ├── dossier-report.tsx    # Publication report (/dossier/:id/report)
+│       │   ├── dossier-comparison.tsx# Cross-dossier (/compare)
+│       │   ├── cases.tsx             # Case management (/cases)
+│       │   ├── how-it-works.tsx      # Reference (/reference)
+│       │   └── dashboard.tsx         # Legacy (/legacy)
+│       ├── lib/
+│       │   ├── auth.tsx              # API key authentication
+│       │   ├── config.tsx            # App config + read-only mode
+│       │   ├── tutorial.tsx          # Tutorial system
+│       │   ├── posture.ts            # Readiness posture computation
+│       │   ├── evidencePack.ts       # ZIP evidence pack export
+│       │   ├── verifyPack.ts         # Evidence pack verification
+│       │   ├── vault.ts              # Case-level CRUD vault
+│       │   ├── storage.ts            # IndexedDB persistence (idb)
+│       │   ├── lanternExtract.ts     # Core extraction engine
+│       │   ├── integrity.ts          # SHA-256 fingerprinting
+│       │   ├── comparison.ts         # Cross-dossier comparison
+│       │   ├── migrations.ts         # Schema migration v1→v2
+│       │   ├── heuristics/           # Analysis algorithms
+│       │   └── schema/               # Client-side schemas
+│       ├── context/LensContext.tsx    # Newsroom/Legal lens provider
+│       ├── lens/semanticMap.ts       # Semantic label mappings
+│       ├── export/templates/         # Export templates (newsroom, legal, one-pagers)
+│       └── workers/extraction.worker.ts # Web Worker for extraction
 ├── server
-│   ├── index.ts            # Express Server Entrypoint
-│   ├── routes.ts           # API Routes (Currently Empty)
-│   └── storage.ts          # Backend Storage Adapter (MemStorage - Unused)
+│   ├── index.ts                      # Express server entrypoint
+│   ├── routes.ts                     # 50+ API endpoints
+│   ├── storage.ts                    # PostgreSQL storage adapter (Drizzle ORM)
+│   ├── extractionProcessor.ts        # Server-side extraction job queue
+│   ├── pdfProcessor.ts              # PDF upload + page rendering
+│   ├── incidentReportGenerator.ts   # Incident report generation
+│   ├── verifiedRecordGenerator.ts   # Verified record generation
+│   ├── static.ts                    # Static file serving
+│   └── vite.ts                      # Vite dev middleware
 ├── shared
-│   └── schema.ts           # Database Schema (Users - Unused)
+│   ├── schema.ts                    # Drizzle ORM schema (17 tables)
+│   ├── ledger.ts                    # Ledger hash chain logic
+│   ├── verifiedRecord.ts           # Verified record schema
+│   ├── incidentReport.ts           # Incident report schema
+│   └── bundleVerify.ts             # Bundle verification logic
 └── package.json
 ```
 
 ### Entrypoints
-*   **Client (Dev)**: `vite dev --port 5000` (via `npm run dev:client`)
-*   **Server (Prod)**: `node dist/index.cjs` (via `npm start`)
 *   **Full Stack (Dev)**: `tsx server/index.ts` (via `npm run dev`)
+*   **Server (Prod)**: `node dist/index.cjs` (via `npm start`)
+*   **Frontend**: Vite dev server proxied through Express on port 5000
 
 ## 2. Runtime Architecture (As Built)
 
-**Verdict**: **Hybrid (Client-Heavy)**.
-While the repository contains a full-stack scaffold (`server/`, `drizzle`), the **active** application logic is **100% Client-Side**.
+**Verdict**: **Full-Stack (Server-Authoritative)**.
+The application is a complete client-server system with PostgreSQL as the authoritative data store.
 
-*   **Data Flow**: User Input (UI) → `extract()` (Browser JS) → `localStorage` (Browser).
-*   **Server Role**: Currently acts only as a static asset host and API placeholder. `routes.ts` contains no active endpoints.
+*   **Data Flow**: Client UI → REST API (Express) → PostgreSQL (Drizzle ORM) → Response
+*   **Server Role**: Authoritative backend with 50+ API endpoints handling authentication, CRUD operations, extraction jobs, integrity verification, export generation, and file uploads.
 *   **Storage**:
-    *   **Backend**: `MemStorage` (In-Memory Map) is implemented but **not connected** to the frontend.
-    *   **Frontend**: `localStorage` is the *actual* system of record for Lantern Packs.
+    *   **Backend**: PostgreSQL database with 17 tables via Drizzle ORM (server/storage.ts)
+    *   **Frontend**: IndexedDB via `idb` library for client-side pack storage (lantern-db v2)
+*   **Authentication**: API key-based auth with demo key for investor demos
+*   **File Uploads**: PDF and text uploads stored in `uploads/` directory with SHA-256 content-addressed filenames
 
 ## 3. Network, Secrets & Telemetry
 
-*   **Network Calls**: Zero application-level network calls found. No `fetch`, `axios`, or `XMLHttpRequest` calls inside `client/src` related to data transmission.
-*   **Secrets**: No secrets are loaded or accessed. The app operates as an isolated tool.
-*   **Telemetry**: No analytics or tracking scripts identified.
+*   **Network Calls**: All data operations go through REST API endpoints (`/api/*`). Client uses `@tanstack/react-query` for data fetching with `queryClient.ts`.
+*   **Authentication**: API key passed via `x-api-key` header; demo key available at `/api/auth/demo-key`
+*   **Secrets**: `LANTERN_API_KEY` environment variable for production auth; `DATABASE_URL` for PostgreSQL connection
+*   **Telemetry**: No external analytics or tracking scripts
 
 ## 4. Storage & Persistence Reality
 
-*   **Declared Schema**: `shared/schema.ts` defines a Postgres `users` table (Drizzle ORM).
-*   **Actual Usage**:
-    *   The server uses `MemStorage` (ephemeral RAM) for the `users` interface.
-    *   The extraction app uses **Browser LocalStorage** (`key: lantern_packs`) for persisting extraction results.
-    *   **Risk**: Data is lost if browser cache is cleared.
+*   **Database**: PostgreSQL with 17 tables defined in `shared/schema.ts` via Drizzle ORM
+*   **Tables**: users, cases, uploads, upload_pages, chunks, extraction_jobs, corpora, corpus_sources, anchor_records, claim_records, evidence_packets, snapshots, ledger_events, pdf_pages, constraints, incident_reports, report_artifacts
+*   **Client Storage**: IndexedDB via `idb` library for local pack storage (extract packs, dossier packs)
+*   **File Storage**: Uploaded files stored in `uploads/` directory; PDF pages rendered to PNG in `uploads/pages/`
+*   **Risk**: PostgreSQL is durable; IndexedDB packs are browser-local but exportable as JSON/ZIP
 
 ## 5. Extraction Engine Audit
 
-**Module**: `client/src/lib/lanternExtract.ts`
+**Modules**: `client/src/lib/lanternExtract.ts` + `server/extractionProcessor.ts`
 
-*   **Methodology**: Deterministic Regex Heuristics (v0.1.5).
-*   **Determinism**: Uses a custom `mockHash` function to generate stable IDs based on content + offsets.
-*   **Segmentation**: Regex-based sentence approximation.
-*   **Quality**: Implements a strict "Quality Contract" with F1 scoring against golden fixtures (`client/src/fixtures/`).
+*   **Client-Side**: Deterministic regex heuristics via Web Worker (`extraction.worker.ts`)
+*   **Server-Side**: PostgreSQL-backed extraction job queue (`extractionProcessor.ts`)
+*   **Methodology**: Deterministic regex heuristics (v0.1.5+) with entity extraction, sentence segmentation, metric normalization
+*   **Determinism**: SHA-256 content-addressed IDs for all extracted items
+*   **Quality**: Strict Quality Contract with F1 scoring against golden fixtures (`client/src/fixtures/`)
 
-## 6. Known Failure Modes / Risks
+## 6. Integrity & Chain-of-Custody
 
-1.  **Data Loss**: `localStorage` is volatile. Users *will* lose work if cache is cleared.
-2.  **Performance**: Large texts (>1MB) processed synchronously in the main thread will freeze the UI.
-3.  **Heuristic Fragility**: Regex extraction is brittle for complex nested entities or non-standard quote formats.
-4.  **Backend Disconnect**: The server exists but does nothing; upgrading to real persistence requires wiring up the `server/routes.ts`.
+*   **Evidence Packets**: SHA-256 fingerprinted with full chain-of-custody verification (`/api/packets/:packetId/verify_chain`)
+*   **Ledger**: Append-only revision ledger with hash chains (`shared/ledger.ts`); each event links to previous via hash
+*   **Snapshots**: Corpus snapshots with integrity verification (`/api/snapshots/:snapshotId/verify`)
+*   **Verified Record**: Canonical output artifact with schema v1.0.0 (`server/verifiedRecordGenerator.ts`)
+*   **Export Bundle**: ZIP export with manifest and reproducibility pack (`/api/corpus/:corpusId/export_bundle`)
 
-## 7. Purchase-Grade Verdict
+## 7. API Endpoint Summary (50+)
 
-**PROCEED**.
-The core engine integrity is high (good rigorous code), even if the storage layer is currently prototyping-grade (`localStorage`). The architecture is clean and ready for Phase 3 upgrades (Backend Persistence).
+| Category | Endpoints |
+|----------|-----------|
+| Auth | GET /api/auth/status, GET /api/auth/demo-key |
+| Config | GET /api/config |
+| Review | GET /api/review/:corpusId/bundle, GET /api/review/:corpusId/audit_lines |
+| Upload | POST /api/upload, POST /api/upload/pdf |
+| Cases | GET/POST /api/cases, GET/PUT/DELETE /api/cases/:caseId, GET /api/cases/:caseId/uploads |
+| Extract | POST /api/extract, GET /api/jobs/:jobId |
+| Corpora | GET/POST /api/corpus, GET /api/corpus/:corpusId, POST /api/corpus/:corpusId/sources, POST /api/corpus/:corpusId/build |
+| Claims | GET/POST /api/corpus/:corpusId/claims, PUT/DELETE /api/corpus/:corpusId/claims/:claimId, POST /api/corpus/:corpusId/claims/:claimId/packet |
+| Anchors | GET /api/anchors, GET /api/corpus/:corpusId/anchors, GET /api/anchors/:anchorId/proof |
+| Sources | GET /api/sources/:sourceId/pages/:pageIndex |
+| Packets | GET /api/packets/:packetId, GET /api/packets/:packetId.pdf, GET /api/packets/:packetId/verify, GET /api/packets/:packetId/verify_chain |
+| Constraints | GET /api/constraints |
+| Snapshots | POST /api/snapshots, GET /api/corpus/:corpusId/snapshots, GET /api/snapshots/:snapshotId, GET /api/snapshots/:snapshotId/verify |
+| Ledger | GET /api/corpus/:corpusId/ledger, GET /api/ledger/:eventId/verify |
+| Export | GET /api/corpus/:corpusId/export_bundle, GET /api/corpus/:corpusId/export_repro_pack |
+
+## 8. Known Failure Modes / Risks
+
+1.  **Single Auth Key**: Only one API key (demo mode); no multi-user accounts or RBAC
+2.  **Client Pack Loss**: IndexedDB packs are browser-local; mitigated by JSON/ZIP export
+3.  **Heuristic Fragility**: Regex extraction is brittle for complex nested entities or non-standard formats
+4.  **PDF Processing**: Large PDFs may be slow; page rendering depends on server-side processing
+
+## 9. Purchase-Grade Verdict
+
+**OPERATIONAL**.
+The system has evolved from a client-only localStorage prototype to a full-stack PostgreSQL-backed institutional-grade evidentiary record system. The core engine integrity is high, with cryptographic chain-of-custody, append-only ledger, snapshot verification, and evidence packet integrity. The architecture is production-capable with proper authentication, file upload handling, and export capabilities.
 
 ---
 
-## Current Breakage & Root Cause (Fixed)
-
-*   **Issue**: Application failed to load ("Does not work at all").
-*   **Root Cause**:
-    1.  **Syntax Error**: Missing closing `</div>` tag in `client/src/pages/lantern-extract.tsx` (Line ~866) caused React parser failure.
-    2.  **Missing Logic**: Core `lanternExtract.ts` file was previously overwritten with placeholders, breaking the extraction function.
-*   **Fix**:
-    1.  Restored valid JSX structure.
-    2.  Restored full heuristic extraction engine logic.
-    3.  Verified via "Quality Dashboard" regression tests.
+*This audit reflects the implementation as of February 2026.*

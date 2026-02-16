@@ -11,104 +11,207 @@ Suitable for internal audit, legal review, and future maintainers.
 
 | Route | Component | Purpose |
 |-------|-----------|---------|
-| `/` | Library | Landing page. Lists extract packs and dossier packs. Entry point for workflow. |
-| `/extract` | LanternExtract | Text extraction interface. Produces Extract Packs from source text. |
-| `/dossier/:id` | DossierEditor | CRUD interface for dossier curation (entities, edges, claims, evidence). |
-| `/dossier/:id/report` | DossierReport | Read-only report view with heuristic analysis and integrity fingerprints. |
-| `/compare` | DossierComparison | Cross-dossier comparison with structural alignment and fingerprint binding. |
-| `/reference` | HowItWorks | Reference documentation. Method, limits, safeguards. |
-| `/legacy` | Dashboard | Archived finance dashboard (not part of Lantern v1 workflow). |
+| `/` | ClaimSpace | Primary view — Defensible/Restricted/Ambiguous claims with evidence anchors |
+| `/intake` | Intake | Corpus creation and document upload |
+| `/sources` | Sources | Source document management |
+| `/anchors/browse` | AnchorBrowser | Browse evidence anchors |
+| `/anchors` | AnchorView | Anchor detail view |
+| `/anchors/proof` | AnchorProof | Anchor extraction proof with page images |
+| `/packets/:packetId` | EvidencePacket | Evidence packet viewer with chain-of-custody |
+| `/ledger` | Ledger | Append-only revision ledger |
+| `/constraints` | Constraints | Conflicts, missing evidence, time mismatches |
+| `/snapshots` | Snapshots | Corpus snapshot list |
+| `/snapshots/:snapshot_id` | SnapshotDetail | Snapshot detail with claims |
+| `/verified-record` | VerifiedRecord | Canonical output artifact |
+| `/incident-report` | IncidentReport | Incident report viewer |
+| `/review/:corpusId` | Review | Read-only review mode for external reviewers |
+| `/review/:corpusId/bundle` | ReviewBundle | Review bundle export |
+| `/review/:corpusId/audit_lines` | ReviewAuditLines | Audit line review |
+| `/library` | Library | Pack library (extract + dossier packs) |
+| `/extract` | LanternExtract | Text extraction interface |
+| `/dossier/:id` | DossierEditor | Dossier CRUD |
+| `/dossier/:id/report` | DossierReport | Publication-ready report |
+| `/compare` | DossierComparison | Cross-dossier comparison |
+| `/cases` | Cases | Case management |
+| `/reference` | HowItWorks | Reference documentation |
+| `/legacy` | Dashboard | Archived finance dashboard |
 
 ### Major Modules
 
 | Module | Location | Responsibility |
 |--------|----------|----------------|
-| `lanternExtract.ts` | `client/src/lib/` | Deterministic text extraction engine. Produces entities, quotes, metrics, timeline. |
-| `storage.ts` | `client/src/lib/` | IndexedDB persistence layer. Pack storage, retrieval, type guards. |
-| `migrations.ts` | `client/src/lib/` | Schema migration (v1 → v2). Field transformations, migration logging. |
-| `integrity.ts` | `client/src/lib/` | SHA-256 fingerprint generation for reports and comparisons. |
-| `comparison.ts` | `client/src/lib/` | Cross-dossier structural comparison. Jaccard index, entity matching. |
-| `heuristics/` | `client/src/lib/heuristics/` | `influenceHubs.ts`, `fundingGravity.ts`, `enforcementMap.ts`, `sensitivity.ts` |
-| `pack_v1.ts` | `client/src/lib/schema/` | Zod schema definitions for Pack v2, entities, edges, claims, evidence. |
+| `auth.tsx` | `client/src/lib/` | API key authentication with demo login |
+| `config.tsx` | `client/src/lib/` | App configuration, read-only mode detection |
+| `tutorial.tsx` | `client/src/lib/` | Tutorial/onboarding system |
+| `posture.ts` | `client/src/lib/` | Readiness posture computation (DRAFT/HIGH_RISK/REVIEW_REQUIRED/EVIDENCE_STRONG) |
+| `evidencePack.ts` | `client/src/lib/` | ZIP evidence pack export with manifest |
+| `verifyPack.ts` | `client/src/lib/` | Evidence pack verification |
+| `vault.ts` | `client/src/lib/` | Case-level CRUD vault |
+| `storage.ts` | `client/src/lib/` | IndexedDB persistence layer (idb library, lantern-db v2) |
+| `lanternExtract.ts` | `client/src/lib/` | Deterministic text extraction engine |
+| `integrity.ts` | `client/src/lib/` | SHA-256 fingerprint generation |
+| `comparison.ts` | `client/src/lib/` | Cross-dossier structural comparison |
+| `migrations.ts` | `client/src/lib/` | Schema migration v1→v2 |
+| `heuristics/` | `client/src/lib/heuristics/` | influenceHubs, fundingGravity, enforcementMap, sensitivity |
+| `LensContext.tsx` | `client/src/context/` | Newsroom/Legal semantic lens provider |
+| `semanticMap.ts` | `client/src/lens/` | Semantic label mappings for lens modes |
+| `templates/` | `client/src/export/templates/` | Export templates: newsroom, legal, one-pagers |
+| `extraction.worker.ts` | `client/src/workers/` | Web Worker for browser-side extraction |
+| `routes.ts` | `server/` | 50+ REST API endpoints |
+| `storage.ts` | `server/` | PostgreSQL storage adapter (Drizzle ORM) |
+| `extractionProcessor.ts` | `server/` | Server-side extraction job queue |
+| `pdfProcessor.ts` | `server/` | PDF upload + page-level rendering |
+| `incidentReportGenerator.ts` | `server/` | Incident report generation |
+| `verifiedRecordGenerator.ts` | `server/` | Verified record generation |
+| `schema.ts` | `shared/` | Drizzle ORM schema (17 tables) |
+| `ledger.ts` | `shared/` | Ledger hash chain logic |
+| `verifiedRecord.ts` | `shared/` | Verified record schema |
+| `incidentReport.ts` | `shared/` | Incident report schema |
+| `bundleVerify.ts` | `shared/` | Bundle verification logic |
 
 ### Data Flow
 
 ```
-Source Text → Extract → Extract Pack → Promote → Dossier Pack → Edit → Analysis → Report → Export
-                                                    ↓
-                                               Compare (2 packs)
+Upload (Text/PDF) → Server API → PostgreSQL (uploads, chunks)
+       ↓
+Extraction (Web Worker or Server Queue) → Anchors (anchor_records)
+       ↓
+Corpus Build → Claims (claim_records) → Claim Space (DEFENSIBLE/RESTRICTED/AMBIGUOUS)
+       ↓
+Evidence Packets (evidence_packets) → Chain-of-Custody Verification
+       ↓
+Ledger Events (ledger_events) → Hash Chain → Append-Only Audit Trail
+       ↓
+Snapshots (snapshots) → Integrity Verification → Verified Record
+       ↓
+Export Bundle (ZIP) / Reproducibility Pack / One-Pager / Review Mode
 ```
 
 ---
 
-## B. Data Lifecycle
+## B. Database Schema (17 Tables)
 
-### Extract → Dossier → Analysis → Report → Export
+### Core Tables
 
-1. **Extract**: User pastes text → `lanternExtract.ts` extracts structured items → Extract Pack created
-2. **Promote**: User promotes Extract Pack → Dossier Pack scaffolded from extracted entities
-3. **Edit**: User curates dossier (add/remove entities, edges, claims, evidence)
-4. **Analysis**: Report page runs heuristics on dossier data
-5. **Report**: Structured report generated with findings, limits, fingerprint
-6. **Export**: Markdown export with YAML frontmatter, suitable for version control
-
-### Where Migrations Occur
-
-- **On Load**: `storage.loadLibrary()` runs `migratePack()` on all dossier packs
-- **Trigger**: Any pack with `schemaVersion < 2` or missing v2 fields
-- **Log**: All transformations recorded in `pack.migrationLog[]`
-
-### Where Integrity Checks Occur
-
-- **Report Generation**: SHA-256 fingerprint computed from canonical pack data
-- **Comparison**: Both pack fingerprints plus comparison fingerprint generated
-- **Export**: Fingerprints embedded in YAML frontmatter
-
-### Where Refusal / Gating Occurs
-
-- **Heuristics**: If edge count < threshold, returns `status: "INSUFFICIENT_DATA"`
-- **Comparison**: If either pack lacks sufficient data, shows "Analysis Unavailable"
-- **Sensitivity**: If removal simulation cannot run, section omitted
+| Table | Purpose |
+|-------|---------|
+| `users` | User accounts |
+| `cases` | Case management containers |
+| `uploads` | Uploaded source documents (text, PDF) |
+| `upload_pages` | Page-level data for multi-page uploads |
+| `chunks` | Text chunks from source documents |
+| `extraction_jobs` | Server-side extraction job queue |
+| `corpora` | Corpus containers (groups of sources) |
+| `corpus_sources` | Source-to-corpus associations |
+| `anchor_records` | Evidence anchors extracted from sources |
+| `claim_records` | Claims with posture classification |
+| `evidence_packets` | Evidence packets with SHA-256 chain-of-custody |
+| `snapshots` | Corpus point-in-time snapshots |
+| `ledger_events` | Append-only revision ledger with hash chains |
+| `pdf_pages` | Rendered PDF page images |
+| `constraints` | Conflicts, missing evidence, time mismatches |
+| `incident_reports` | Incident reports with immutable artifacts |
+| `report_artifacts` | Generated report artifacts |
 
 ---
 
-## C. Schema & Versioning
+## C. API Endpoints (50+)
 
-### Pack Types
+### Authentication
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/auth/status | Check authentication status |
+| GET | /api/auth/demo-key | Get demo API key for investor demos |
 
-| Type | Discriminator | Schema |
-|------|---------------|--------|
-| Extract Pack | `schema: "lantern.extract.pack.v1"` | `LanternPack` type |
-| Dossier Pack | `packId` present, no extract schema | `Pack` type (v2) |
+### Configuration
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/config | App configuration and feature flags |
 
-### Type Guards
+### Review (Read-Only)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/review/:corpusId/bundle | Review bundle for external reviewers |
+| GET | /api/review/:corpusId/audit_lines | Audit line data for review |
 
-```typescript
-// storage.ts
-export function isExtractPack(p: AnyPack): p is LanternPack {
-  return "schema" in p && p.schema === "lantern.extract.pack.v1";
-}
+### Upload
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | /api/upload | Upload text document |
+| POST | /api/upload/pdf | Upload PDF with page-level extraction |
 
-export function isDossierPack(p: AnyPack): p is Pack {
-  return "packId" in p && !("schema" in p && (p as any).schema === "lantern.extract.pack.v1");
-}
-```
+### Cases
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET/POST | /api/cases | List/create cases |
+| GET/PUT/DELETE | /api/cases/:caseId | Case CRUD |
+| GET | /api/cases/:caseId/uploads | Uploads for a case |
 
-### Migration Strategy
+### Extraction
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | /api/extract | Start extraction job |
+| GET | /api/jobs/:jobId | Poll extraction job status |
 
-| v1 Field | v2 Field | Transformation |
-|----------|----------|----------------|
-| `createdAt`, `updatedAt` | `timestamps: { created, updated }` | Nested object |
-| `title` | `subjectName` | Rename |
-| (missing) | `packType` | Default to `"public_figure"` |
-| `sourceId`, `targetId` (edges) | `fromEntityId`, `toEntityId` | Rename |
-| Unknown edge types | `"affiliated_with"` | Remap with notes |
+### Corpora
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET/POST | /api/corpus | List/create corpora |
+| GET | /api/corpus/:corpusId | Get corpus details |
+| POST | /api/corpus/:corpusId/sources | Add source to corpus |
+| POST | /api/corpus/:corpusId/build | Build corpus (run extraction) |
 
-### Backward Compatibility
+### Claims
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET/POST | /api/corpus/:corpusId/claims | List/create claims |
+| PUT/DELETE | /api/corpus/:corpusId/claims/:claimId | Update/delete claim |
+| POST | /api/corpus/:corpusId/claims/:claimId/packet | Generate evidence packet |
 
-- `isDossierPack` detects both v1 and v2 packs by checking for `packId` presence
-- Migration runs automatically on load, transparent to user
-- Original values preserved in notes/migrationLog for audit
+### Anchors
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/anchors | List all anchors |
+| GET | /api/corpus/:corpusId/anchors | Anchors for a corpus |
+| GET | /api/anchors/:anchorId/proof | Anchor extraction proof with page images |
+
+### Sources
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/sources/:sourceId/pages/:pageIndex | Get rendered page image |
+
+### Packets
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/packets/:packetId | Get evidence packet |
+| GET | /api/packets/:packetId.pdf | Download packet as PDF |
+| GET | /api/packets/:packetId/verify | Verify packet integrity |
+| GET | /api/packets/:packetId/verify_chain | Verify full chain-of-custody |
+
+### Constraints
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/constraints | List all constraints (conflicts, gaps, mismatches) |
+
+### Snapshots
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | /api/snapshots | Create snapshot |
+| GET | /api/corpus/:corpusId/snapshots | List snapshots for corpus |
+| GET | /api/snapshots/:snapshotId | Get snapshot detail |
+| GET | /api/snapshots/:snapshotId/verify | Verify snapshot integrity |
+
+### Ledger
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/corpus/:corpusId/ledger | Get ledger events for corpus |
+| GET | /api/ledger/:eventId/verify | Verify ledger event hash chain |
+
+### Export
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | /api/corpus/:corpusId/export_bundle | Export bundle (ZIP with manifest) |
+| GET | /api/corpus/:corpusId/export_repro_pack | Export reproducibility pack |
 
 ---
 
@@ -158,68 +261,65 @@ export function isDossierPack(p: AnyPack): p is Pack {
 
 ## E. Integrity & Safety Layers
 
-### Report Fingerprinting
+### Evidence Packet Chain-of-Custody
+- **Algorithm**: SHA-256
+- **Scope**: Each evidence packet fingerprinted; full chain verified via `/api/packets/:packetId/verify_chain`
+- **Purpose**: Tamper-evidence for individual evidentiary artifacts
 
+### Append-Only Ledger
+- **Implementation**: `shared/ledger.ts`
+- **Structure**: Each event contains hash of previous event, forming a hash chain
+- **Verification**: `/api/ledger/:eventId/verify` checks hash chain integrity
+- **Property**: Events cannot be modified or deleted after creation
+
+### Snapshot Verification
+- **Implementation**: `server/` snapshot endpoints
+- **Verification**: `/api/snapshots/:snapshotId/verify` checks snapshot data integrity
+- **Purpose**: Point-in-time corpus state with tamper detection
+
+### Verified Record
+- **Implementation**: `server/verifiedRecordGenerator.ts` + `shared/verifiedRecord.ts`
+- **Schema**: v1.0.0
+- **Purpose**: Canonical output artifact suitable for legal/journalistic submission
+
+### Report Fingerprinting
 - **Algorithm**: SHA-256
 - **Input**: Canonical JSON of pack data (sorted keys, sorted arrays)
 - **Output**: 64-character hex string
 - **Location**: Report header, YAML frontmatter in export
 
-### Comparison Fingerprinting
+### Posture System
+- **Levels**: DRAFT, HIGH_RISK, REVIEW_REQUIRED, EVIDENCE_STRONG
+- **Computation**: `client/src/lib/posture.ts` evaluates claim evidence density
+- **Purpose**: Signal readiness of claims for publication/submission
 
-- **Fingerprint A**: SHA-256 of Pack A
-- **Fingerprint B**: SHA-256 of Pack B
-- **Comparison Fingerprint**: SHA-256 of (Fingerprint A + Fingerprint B + comparison timestamp)
-- **Purpose**: Tamper-evidence binding two packs at comparison time
+### Constraints
+- **Types**: CONFLICT, MISSING_EVIDENCE, TIME_MISMATCH
+- **Detection**: Automated analysis of corpus data for inconsistencies
+- **Display**: `/constraints` page with categorized constraint listings
 
-### Migration Logs
-
-- **Storage**: `pack.migrationLog: string[]`
-- **Content**: ISO timestamp + description of transformation
-- **Display**: Shown in report under "Migration Notes" section
-- **Purpose**: Audit trail for schema changes
-
-### Sensitivity Analysis
-
-- **Method**: Remove each entity/edge, rerun heuristics
-- **Output**: Which findings survive single-point removal
-- **Classification**: 
-  - `ROBUST`: Finding survives all removals
-  - `FRAGILE`: Finding disappears on some removals
-  - `SINGLE_POINT`: Finding depends on exactly one data point
+### Incident Reports
+- **Generation**: `server/incidentReportGenerator.ts`
+- **Property**: Immutable once created
+- **Purpose**: Formal record of integrity issues or data anomalies
 
 ---
 
-## F. UX Boundaries
+## F. Semantic Lens System
 
-### What Users Can Do
+### Lens Modes
+- **Newsroom**: Labels and terminology optimized for journalistic workflow
+- **Legal**: Labels and terminology optimized for legal/compliance workflow
 
-- Create extract packs from source text
-- Promote extracts to dossiers
-- Add/edit/delete entities, edges, claims, evidence
-- Run heuristic analysis (automatic on report view)
-- Export reports as Markdown
-- Compare two dossiers
-- View reference documentation
+### Implementation
+- `client/src/context/LensContext.tsx` — React context provider for active lens
+- `client/src/lens/semanticMap.ts` — Mapping tables between lens modes and UI labels
 
-### What Users Cannot Do
-
-- Override insufficiency gating
-- Force analysis without meeting thresholds
-- Edit fingerprints or migration logs
-- Modify heuristic thresholds
-- Access production database (local-first only)
-
-### Where Lantern Refuses Action
-
-| Scenario | Behavior |
-|----------|----------|
-| < 3 edges for Influence Hubs | "Insufficient Data" displayed |
-| < 2 funding edges for Funding Gravity | "Insufficient Data" displayed |
-| No enforcement edges | "No Enforcement Edges Detected" |
-| Comparison with insufficient pack | "Analysis Unavailable" for that section |
-| Invalid pack schema on import | Pack skipped (binary dedupe policy) |
-| Migration validation failure | Error thrown, pack not loaded |
+### Export Templates
+- `client/src/export/templates/newsroom.ts` — Newsroom export format
+- `client/src/export/templates/legal.ts` — Legal export format
+- `client/src/export/templates/newsroomOnePager.ts` — Newsroom one-pager
+- `client/src/export/templates/legalOnePager.ts` — Legal one-pager
 
 ---
 
@@ -227,31 +327,114 @@ export function isDossierPack(p: AnyPack): p is Pack {
 
 ```
 client/src/
-├── App.tsx                    # Router, hamburger menu
+├── App.tsx                           # Router (24 routes)
+├── main.tsx                          # React root
 ├── pages/
-│   ├── library.tsx            # Landing page (/)
-│   ├── lantern-extract.tsx    # Text extraction (/extract)
-│   ├── dossier-editor.tsx     # Dossier CRUD (/dossier/:id)
-│   ├── dossier-report.tsx     # Report view (/dossier/:id/report)
-│   ├── dossier-comparison.tsx # Comparison (/compare)
-│   ├── how-it-works.tsx       # Reference (/reference)
-│   ├── dashboard.tsx          # Legacy (/legacy)
-│   └── not-found.tsx          # 404
+│   ├── claim-space.tsx               # Primary view (/)
+│   ├── intake.tsx                    # Corpus creation (/intake)
+│   ├── sources.tsx                   # Source management (/sources)
+│   ├── anchor-browser.tsx            # Anchor browsing (/anchors/browse)
+│   ├── anchor-view.tsx               # Anchor detail (/anchors)
+│   ├── anchor-proof.tsx              # Extraction proof (/anchors/proof)
+│   ├── evidence-packet.tsx           # Packet viewer (/packets/:packetId)
+│   ├── ledger.tsx                    # Revision ledger (/ledger)
+│   ├── constraints.tsx               # Constraints (/constraints)
+│   ├── snapshots.tsx                 # Snapshot list (/snapshots)
+│   ├── snapshot-detail.tsx           # Snapshot detail (/snapshots/:id)
+│   ├── verified-record.tsx           # Verified record (/verified-record)
+│   ├── incident-report.tsx           # Incident report (/incident-report)
+│   ├── review.tsx                    # Read-only review (/review/:corpusId)
+│   ├── review-bundle.tsx             # Review bundle
+│   ├── review-audit-lines.tsx        # Audit lines
+│   ├── library.tsx                   # Pack library (/library)
+│   ├── lantern-extract.tsx           # Extraction (/extract)
+│   ├── dossier-editor.tsx            # Dossier CRUD (/dossier/:id)
+│   ├── dossier-report.tsx            # Publication report (/dossier/:id/report)
+│   ├── dossier-comparison.tsx        # Cross-dossier (/compare)
+│   ├── cases.tsx                     # Case management (/cases)
+│   ├── how-it-works.tsx              # Reference (/reference)
+│   ├── dashboard.tsx                 # Legacy (/legacy)
+│   └── not-found.tsx                 # 404
 ├── lib/
-│   ├── lanternExtract.ts      # Extraction engine
-│   ├── storage.ts             # Persistence + type guards
-│   ├── migrations.ts          # v1 → v2 migration
-│   ├── integrity.ts           # SHA-256 fingerprinting
-│   ├── comparison.ts          # Cross-dossier analysis
-│   ├── guardrails.ts          # Validation rules
-│   ├── schema/pack_v1.ts      # Zod schemas
-│   └── heuristics/
-│       ├── influenceHubs.ts   # Influence Hubs
-│       ├── fundingGravity.ts  # Funding Gravity
-│       ├── enforcementMap.ts  # Enforcement Map
-│       ├── sensitivity.ts     # Robustness analysis
-│       └── types.ts           # Shared heuristic types
-└── components/                # shadcn/ui components
+│   ├── auth.tsx                      # API key authentication
+│   ├── config.tsx                    # App config + read-only mode
+│   ├── tutorial.tsx                  # Tutorial system
+│   ├── posture.ts                    # Readiness posture computation
+│   ├── evidencePack.ts               # ZIP evidence pack export
+│   ├── verifyPack.ts                 # Evidence pack verification
+│   ├── vault.ts                      # Case-level CRUD vault
+│   ├── storage.ts                    # IndexedDB persistence (idb)
+│   ├── lanternExtract.ts             # Core extraction engine
+│   ├── integrity.ts                  # SHA-256 fingerprinting
+│   ├── comparison.ts                 # Cross-dossier analysis
+│   ├── comparison-export.ts          # Comparison export utilities
+│   ├── migrations.ts                 # v1→v2 migration
+│   ├── export.ts                     # Export utilities
+│   ├── queryClient.ts                # React Query client
+│   ├── utils.ts                      # Utility functions
+│   ├── sovereigntyEngine.ts          # Legacy engine
+│   ├── defaultRamps.ts               # Default configuration
+│   ├── schema/
+│   │   ├── pack_v1.ts                # Zod schemas for packs
+│   │   ├── anchors.ts                # Anchor schemas
+│   │   ├── claims.ts                 # Claim schemas
+│   │   ├── constraints.ts            # Constraint schemas
+│   │   ├── corpus.ts                 # Corpus schemas
+│   │   └── provenance.ts             # Provenance schemas
+│   ├── heuristics/
+│   │   ├── influenceHubs.ts          # Influence Hubs
+│   │   ├── fundingGravity.ts         # Funding Gravity
+│   │   ├── enforcementMap.ts         # Enforcement Map
+│   │   ├── sensitivity.ts            # Robustness analysis
+│   │   ├── types.ts                  # Shared heuristic types
+│   │   ├── entities/
+│   │   │   ├── entityExtractor.ts    # Entity extraction
+│   │   │   ├── entityCanonicalizer.ts# Entity canonicalization
+│   │   │   ├── entitySanitizer.ts    # Entity sanitization
+│   │   │   └── entityTierer.ts       # Entity tiering
+│   │   ├── metrics/
+│   │   │   └── metricNormalizer.ts   # Metric normalization
+│   │   └── segmenters/
+│   │       └── sentenceSegmenter.ts  # Sentence segmentation
+│   ├── converters/
+│   │   └── extract_to_dossier.ts     # Extract→Dossier conversion
+│   ├── llm/
+│   │   └── contract.ts               # LLM contract definitions
+│   └── tests/                        # Unit and integration tests
+├── context/
+│   └── LensContext.tsx               # Newsroom/Legal lens provider
+├── lens/
+│   └── semanticMap.ts                # Semantic label mappings
+├── export/templates/
+│   ├── newsroom.ts                   # Newsroom export
+│   ├── legal.ts                      # Legal export
+│   ├── newsroomOnePager.ts           # Newsroom one-pager
+│   └── legalOnePager.ts              # Legal one-pager
+├── workers/
+│   └── extraction.worker.ts          # Web Worker for extraction
+├── components/                       # UI components (shadcn/ui + custom)
+│   ├── TutorialOverlay.tsx           # Tutorial overlay
+│   ├── UploadDrawer.tsx              # Upload drawer
+│   └── ui/                           # shadcn/ui components
+└── fixtures/                         # Golden test fixtures
+
+server/
+├── index.ts                          # Express server entrypoint
+├── routes.ts                         # 50+ API endpoints
+├── storage.ts                        # PostgreSQL storage adapter
+├── extractionProcessor.ts            # Server-side extraction job queue
+├── pdfProcessor.ts                   # PDF processing
+├── incidentReportGenerator.ts        # Incident report generation
+├── verifiedRecordGenerator.ts        # Verified record generation
+├── static.ts                         # Static file serving
+└── vite.ts                           # Vite dev middleware
+
+shared/
+├── schema.ts                         # Drizzle ORM schema (17 tables)
+├── ledger.ts                         # Ledger hash chain logic
+├── verifiedRecord.ts                 # Verified record schema
+├── incidentReport.ts                 # Incident report schema
+└── bundleVerify.ts                   # Bundle verification
 ```
 
 ---
@@ -260,9 +443,9 @@ client/src/
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.0.0 | 2026-01-22 | Initial release. M1-M12 complete. |
-| Post-v1 | 2026-01-22 | Migration hardening, type guards, route identity fix, reference panel |
+| 1.0.0 | 2026-01-22 | Initial release. M1-M12 complete. Client-only with IndexedDB. |
+| 2.0.0 | 2026-02 | Full PostgreSQL backend, 50+ API endpoints, authentication, Claim Space, Evidence Packets, Ledger, Snapshots, Verified Record, Constraints, Incident Reports, PDF upload, Review mode, Semantic lens, Posture system, Tutorial system, Export bundles. |
 
 ---
 
-*This map reflects the implementation as of the latest checkpoint.*
+*This map reflects the implementation as of February 2026.*

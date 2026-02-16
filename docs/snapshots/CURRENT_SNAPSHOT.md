@@ -1,7 +1,6 @@
 # Nikodemus System Snapshot
 
-Generated: 2026-01-23T07:19:58.207Z
-Commit: 6ca74f2
+Generated: 2026-02-16
 Branch: main
 
 ---
@@ -10,9 +9,11 @@ Branch: main
 
 - **Runtime**: Node.js (tsx for dev, node for prod)
 - **Frontend**: React 19 + Vite + TypeScript
-- **Backend**: Express 5
-- **Storage**: Browser IndexedDB via idb (local-first architecture)
+- **Backend**: Express 5 with 50+ REST API endpoints
+- **Database**: PostgreSQL with Drizzle ORM (17 tables)
+- **Client Storage**: IndexedDB via idb (local pack storage)
 - **Build**: Vite (client) + esbuild (server)
+- **Authentication**: API key via x-api-key header
 
 ---
 
@@ -22,7 +23,15 @@ Branch: main
 ./AUDIT_REPORT.md
 ./BOOK_OF_FIXES.md
 ./CHANGELOG.md
+./LANTERN_CORE_BOUNDARY.md
+./LANTERN_SYSTEM_SNAPSHOT.md
+./M2_SUMMARY.md
+./PRODUCT_PLAN.md
+./README.md
+./SYSTEM_MAP.md
+./UX_GOVERNANCE.md
 ./client/src/App.tsx
+./client/src/main.tsx
 ./client/src/components/AssumptionsForm.tsx
 ./client/src/components/CashflowChart.tsx
 ./client/src/components/copy-id.tsx
@@ -31,73 +40,49 @@ Branch: main
 ./client/src/components/SavingsChart.tsx
 ./client/src/components/SovereigntyChart.tsx
 ./client/src/components/Stage1Checklist.tsx
-./client/src/components/ui/accordion.tsx
-./client/src/components/ui/alert-dialog.tsx
-./client/src/components/ui/alert.tsx
-./client/src/components/ui/aspect-ratio.tsx
-./client/src/components/ui/avatar.tsx
-./client/src/components/ui/badge.tsx
-./client/src/components/ui/breadcrumb.tsx
-./client/src/components/ui/button-group.tsx
-./client/src/components/ui/button.tsx
-./client/src/components/ui/calendar.tsx
-./client/src/components/ui/card.tsx
-./client/src/components/ui/carousel.tsx
-./client/src/components/ui/chart.tsx
-./client/src/components/ui/checkbox.tsx
-./client/src/components/ui/collapsible.tsx
-./client/src/components/ui/command.tsx
-./client/src/components/ui/context-menu.tsx
-./client/src/components/ui/dialog.tsx
-./client/src/components/ui/drawer.tsx
-./client/src/components/ui/dropdown-menu.tsx
-./client/src/components/ui/empty.tsx
-./client/src/components/ui/field.tsx
-./client/src/components/ui/form.tsx
-./client/src/components/ui/hover-card.tsx
-./client/src/components/ui/input-group.tsx
-./client/src/components/ui/input-otp.tsx
-./client/src/components/ui/input.tsx
-./client/src/components/ui/item.tsx
-./client/src/components/ui/kbd.tsx
-./client/src/components/ui/label.tsx
-./client/src/components/ui/menubar.tsx
-./client/src/components/ui/navigation-menu.tsx
-./client/src/components/ui/pagination.tsx
-./client/src/components/ui/popover.tsx
-./client/src/components/ui/progress.tsx
-./client/src/components/ui/radio-group.tsx
-./client/src/components/ui/resizable.tsx
-./client/src/components/ui/scroll-area.tsx
-./client/src/components/ui/select.tsx
-./client/src/components/ui/separator.tsx
-./client/src/components/ui/sheet.tsx
-./client/src/components/ui/sidebar.tsx
-./client/src/components/ui/skeleton.tsx
-./client/src/components/ui/slider.tsx
-./client/src/components/ui/sonner.tsx
-./client/src/components/ui/spinner.tsx
-./client/src/components/ui/switch.tsx
-./client/src/components/ui/table.tsx
-./client/src/components/ui/tabs.tsx
-./client/src/components/ui/textarea.tsx
-./client/src/components/ui/toaster.tsx
-./client/src/components/ui/toast.tsx
-./client/src/components/ui/toggle-group.tsx
-./client/src/components/ui/toggle.tsx
-./client/src/components/ui/tooltip.tsx
+./client/src/components/TutorialOverlay.tsx
+./client/src/components/UploadDrawer.tsx
+./client/src/components/ui/*.tsx
+./client/src/context/LensContext.tsx
+./client/src/export/templates/legal.ts
+./client/src/export/templates/legalOnePager.ts
+./client/src/export/templates/newsroom.ts
+./client/src/export/templates/newsroomOnePager.ts
 ./client/src/fixtures/advanced_tests.json
 ./client/src/fixtures/basic_test.json
 ./client/src/fixtures/metric_and_attribution_edge_cases.json
 ./client/src/hooks/use-mobile.tsx
 ./client/src/hooks/use-toast.ts
+./client/src/lens/semanticMap.ts
+./client/src/lib/auth.tsx
 ./client/src/lib/comparison-export.ts
 ./client/src/lib/comparison.ts
+./client/src/lib/config.tsx
 ./client/src/lib/converters/extract_to_dossier.ts
 ./client/src/lib/defaultRamps.ts
+./client/src/lib/evidencePack.ts
 ./client/src/lib/export.ts
+./client/src/lib/integrity.ts
+./client/src/lib/lanternExtract.ts
+./client/src/lib/migrations.ts
+./client/src/lib/posture.ts
+./client/src/lib/queryClient.ts
+./client/src/lib/schema/anchors.ts
+./client/src/lib/schema/claims.ts
+./client/src/lib/schema/constraints.ts
+./client/src/lib/schema/corpus.ts
+./client/src/lib/schema/pack_v1.ts
+./client/src/lib/schema/provenance.ts
+./client/src/lib/sovereigntyEngine.ts
+./client/src/lib/storage.ts
+./client/src/lib/tutorial.tsx
+./client/src/lib/utils.ts
+./client/src/lib/vault.ts
+./client/src/lib/verifyPack.ts
 ./client/src/lib/heuristics/enforcementMap.ts
+./client/src/lib/heuristics/entities/entityCanonicalizer.ts
 ./client/src/lib/heuristics/entities/entityExtractor.ts
+./client/src/lib/heuristics/entities/entitySanitizer.ts
 ./client/src/lib/heuristics/entities/entityTierer.ts
 ./client/src/lib/heuristics/fundingGravity.ts
 ./client/src/lib/heuristics/influenceHubs.ts
@@ -105,15 +90,7 @@ Branch: main
 ./client/src/lib/heuristics/segmenters/sentenceSegmenter.ts
 ./client/src/lib/heuristics/sensitivity.ts
 ./client/src/lib/heuristics/types.ts
-./client/src/lib/integrity.ts
-./client/src/lib/lanternExtract.ts
-./client/src/lib/LIBRARY_STORAGE.md
-./client/src/lib/migrations.ts
-./client/src/lib/PHASE_3_BACKLOG.md
-./client/src/lib/queryClient.ts
-./client/src/lib/schema/pack_v1.ts
-./client/src/lib/sovereigntyEngine.ts
-./client/src/lib/storage.ts
+./client/src/lib/llm/contract.ts
 ./client/src/lib/tests/integration/m3_3_proof.test.ts
 ./client/src/lib/tests/unit/converter.test.ts
 ./client/src/lib/tests/unit/entityExtractor.test.ts
@@ -127,21 +104,40 @@ Branch: main
 ./client/src/lib/tests/unit/persistence.test.ts
 ./client/src/lib/tests/unit/provenance.test.ts
 ./client/src/lib/tests/unit/v1PackMigration.test.ts
-./client/src/lib/utils.ts
-./client/src/main.tsx
+./client/src/pages/anchor-browser.tsx
+./client/src/pages/anchor-proof.tsx
+./client/src/pages/anchor-view.tsx
+./client/src/pages/cases.tsx
+./client/src/pages/claim-space.tsx
+./client/src/pages/constraints.tsx
 ./client/src/pages/dashboard.tsx
 ./client/src/pages/dossier-comparison.tsx
 ./client/src/pages/dossier-editor.tsx
 ./client/src/pages/dossier-report.tsx
+./client/src/pages/evidence-packet.tsx
 ./client/src/pages/how-it-works.tsx
+./client/src/pages/incident-report.tsx
+./client/src/pages/intake.tsx
 ./client/src/pages/lantern-core.tsx
 ./client/src/pages/lantern-extract.tsx
+./client/src/pages/ledger.tsx
 ./client/src/pages/library.tsx
 ./client/src/pages/not-found.tsx
+./client/src/pages/review-audit-lines.tsx
+./client/src/pages/review-bundle.tsx
+./client/src/pages/review.tsx
+./client/src/pages/snapshot-detail.tsx
+./client/src/pages/snapshots.tsx
+./client/src/pages/sources.tsx
+./client/src/pages/verified-record.tsx
 ./client/src/scripts/test-extract.ts
 ./client/src/scripts/test-provenance.ts
 ./client/src/scripts/test-segmenter.ts
+./client/src/workers/extraction.worker.ts
 ./components.json
+./demos/evidence-walkthrough/evidence.json
+./demos/evidence-walkthrough/interpretation.md
+./demos/evidence-walkthrough/README.md
 ./docs/GOVERNANCE_AUDIT_2026_01_23.md
 ./docs/investor/01_NARRATIVE.md
 ./docs/investor/02_DECK_OUTLINE.md
@@ -153,149 +149,165 @@ Branch: main
 ./docs/snapshots/CURRENT_SNAPSHOT.md
 ./docs/snapshots/SNAPSHOT_POLICY.md
 ./drizzle.config.ts
-./LANTERN_CORE_BOUNDARY.md
-./LANTERN_SYSTEM_SNAPSHOT.md
-./M2_SUMMARY.md
 ./package.json
-./package-lock.json
-./PRODUCT_PLAN.md
-./README.md
-./replit.md
 ./script/build.ts
 ./script/generate-snapshot.ts
 ./script/smoke_test.ts
+./server/extractionProcessor.ts
+./server/incidentReportGenerator.ts
 ./server/index.ts
+./server/pdfProcessor.ts
 ./server/routes.ts
 ./server/static.ts
 ./server/storage.ts
+./server/verifiedRecordGenerator.ts
 ./server/vite.ts
+./shared/bundleVerify.ts
+./shared/incidentReport.ts
+./shared/ledger.ts
 ./shared/schema.ts
-./SYSTEM_MAP.md
+./shared/verifiedRecord.ts
+./tools/verifier_package.json
+./tools/verifier_package_lock.json
+./tools/verify_bundle.ts
+./tools/verify_bundle_standalone.cjs
 ./tsconfig.json
-./UX_GOVERNANCE.md
 ./vite.config.ts
 ./vite-plugin-meta-images.ts
 ```
 
 ---
 
-## Dependencies
+## API Routes (50+)
 
-### Production (69)
-- @hookform/resolvers
-- @jridgewell/trace-mapping
-- @radix-ui/react-accordion
-- @radix-ui/react-alert-dialog
-- @radix-ui/react-aspect-ratio
-- @radix-ui/react-avatar
-- @radix-ui/react-checkbox
-- @radix-ui/react-collapsible
-- @radix-ui/react-context-menu
-- @radix-ui/react-dialog
-- @radix-ui/react-dropdown-menu
-- @radix-ui/react-hover-card
-- @radix-ui/react-label
-- @radix-ui/react-menubar
-- @radix-ui/react-navigation-menu
-- @radix-ui/react-popover
-- @radix-ui/react-progress
-- @radix-ui/react-radio-group
-- @radix-ui/react-scroll-area
-- @radix-ui/react-select
-- @radix-ui/react-separator
-- @radix-ui/react-slider
-- @radix-ui/react-slot
-- @radix-ui/react-switch
-- @radix-ui/react-tabs
-- @radix-ui/react-toast
-- @radix-ui/react-toggle
-- @radix-ui/react-toggle-group
-- @radix-ui/react-tooltip
-- @tanstack/react-query
-- class-variance-authority
-- clsx
-- cmdk
-- connect-pg-simple
-- date-fns
-- drizzle-orm
-- drizzle-zod
-- embla-carousel-react
-- express
-- express-session
-- fake-indexeddb
-- framer-motion
-- html2canvas
-- idb
-- input-otp
-- jspdf
-- lucide-react
-- memorystore
-- next-themes
-- passport
-- passport-local
-- pg
-- react
-- react-day-picker
-- react-dom
-- react-hook-form
-- react-resizable-panels
-- recharts
-- sonner
-- tailwind-merge
-- tailwindcss-animate
-- tw-animate-css
-- uuid
-- vaul
-- vitest
-- wouter
-- ws
-- zod
-- zod-validation-error
+### Authentication
+- `GET /api/auth/status`
+- `GET /api/auth/demo-key`
 
-### Development (22)
-- @replit/vite-plugin-cartographer
-- @replit/vite-plugin-dev-banner
-- @replit/vite-plugin-runtime-error-modal
-- @tailwindcss/vite
-- @types/connect-pg-simple
-- @types/express
-- @types/express-session
-- @types/node
-- @types/passport
-- @types/passport-local
-- @types/react
-- @types/react-dom
-- @types/ws
-- @vitejs/plugin-react
-- autoprefixer
-- drizzle-kit
-- esbuild
-- postcss
-- tailwindcss
-- tsx
-- typescript
-- vite
+### Configuration
+- `GET /api/config`
 
----
+### Review (Read-Only)
+- `GET /api/review/:corpusId/bundle`
+- `GET /api/review/:corpusId/audit_lines`
 
-## API Routes
+### Upload
+- `POST /api/upload`
+- `POST /api/upload/pdf`
 
+### Cases
+- `GET /api/cases`
+- `POST /api/cases`
+- `GET /api/cases/:caseId`
+- `PUT /api/cases/:caseId`
+- `DELETE /api/cases/:caseId`
+- `GET /api/cases/:caseId/uploads`
+
+### Extraction
+- `POST /api/extract`
+- `GET /api/jobs/:jobId`
+
+### Corpora
+- `GET /api/corpus`
+- `POST /api/corpus`
+- `GET /api/corpus/:corpusId`
+- `POST /api/corpus/:corpusId/sources`
+- `POST /api/corpus/:corpusId/build`
+
+### Claims
+- `GET /api/corpus/:corpusId/claims`
+- `POST /api/corpus/:corpusId/claims`
+- `PUT /api/corpus/:corpusId/claims/:claimId`
+- `DELETE /api/corpus/:corpusId/claims/:claimId`
+- `POST /api/corpus/:corpusId/claims/:claimId/packet`
+
+### Anchors
+- `GET /api/anchors`
+- `GET /api/corpus/:corpusId/anchors`
+- `GET /api/anchors/:anchorId/proof`
+
+### Sources
+- `GET /api/sources/:sourceId/pages/:pageIndex`
+
+### Packets
+- `GET /api/packets/:packetId`
+- `GET /api/packets/:packetId.pdf`
+- `GET /api/packets/:packetId/verify`
+- `GET /api/packets/:packetId/verify_chain`
+
+### Constraints
+- `GET /api/constraints`
+
+### Snapshots
+- `POST /api/snapshots`
+- `GET /api/corpus/:corpusId/snapshots`
+- `GET /api/snapshots/:snapshotId`
+- `GET /api/snapshots/:snapshotId/verify`
+
+### Ledger
+- `GET /api/corpus/:corpusId/ledger`
+- `GET /api/ledger/:eventId/verify`
+
+### Export
+- `GET /api/corpus/:corpusId/export_bundle`
+- `GET /api/corpus/:corpusId/export_repro_pack`
+
+### Health
 - `GET /__boot`
 - `GET /__health`
 
 ---
 
-## Client Pages
+## Client Pages (24)
 
-- dashboard
+- anchor-browser
+- anchor-proof
+- anchor-view
+- cases
+- claim-space (primary view, `/`)
+- constraints
+- dashboard (legacy)
 - dossier-comparison
 - dossier-editor
 - dossier-report
+- evidence-packet
 - how-it-works
+- incident-report
+- intake
 - lantern-core
 - lantern-extract
+- ledger
 - library
 - not-found
+- review
+- review-audit-lines
+- review-bundle
+- snapshot-detail
+- snapshots
+- sources
+- verified-record
+
+---
+
+## Database Tables (17)
+
+- users
+- cases
+- uploads
+- upload_pages
+- chunks
+- extraction_jobs
+- corpora
+- corpus_sources
+- anchor_records
+- claim_records
+- evidence_packets
+- snapshots
+- ledger_events
+- pdf_pages
+- constraints
+- incident_reports
+- report_artifacts
 
 ---
 
@@ -304,6 +316,7 @@ Branch: main
 - heuristics/enforcementMap.ts
 - heuristics/entities/entityCanonicalizer.ts
 - heuristics/entities/entityExtractor.ts
+- heuristics/entities/entitySanitizer.ts
 - heuristics/entities/entityTierer.ts
 - heuristics/fundingGravity.ts
 - heuristics/influenceHubs.ts
@@ -316,8 +329,30 @@ Branch: main
 
 ## Schema Definitions
 
-- pack_v1.ts
-- shared/schema.ts (Drizzle)
+- client/src/lib/schema/pack_v1.ts
+- client/src/lib/schema/anchors.ts
+- client/src/lib/schema/claims.ts
+- client/src/lib/schema/constraints.ts
+- client/src/lib/schema/corpus.ts
+- client/src/lib/schema/provenance.ts
+- shared/schema.ts (Drizzle ORM, 17 tables)
+- shared/ledger.ts
+- shared/verifiedRecord.ts
+- shared/incidentReport.ts
+- shared/bundleVerify.ts
+
+---
+
+## Server Modules
+
+- server/routes.ts — 50+ API endpoints
+- server/storage.ts — PostgreSQL storage adapter (Drizzle ORM)
+- server/extractionProcessor.ts — Server-side extraction job queue
+- server/pdfProcessor.ts — PDF upload and page rendering
+- server/incidentReportGenerator.ts — Incident report generation
+- server/verifiedRecordGenerator.ts — Verified record generation
+- server/static.ts — Static file serving
+- server/vite.ts — Vite dev middleware
 
 ---
 
@@ -326,7 +361,11 @@ Branch: main
 - UX_GOVERNANCE.md
 - SYSTEM_MAP.md
 - LANTERN_CORE_BOUNDARY.md
+- LANTERN_SYSTEM_SNAPSHOT.md
+- AUDIT_REPORT.md
+- PRODUCT_PLAN.md
 - docs/investor/*.md
+- docs/GOVERNANCE_AUDIT_2026_01_23.md
 
 ---
 
@@ -340,17 +379,11 @@ The following are explicitly excluded:
 - `dist/` — Build output
 - `.git/` — Git internals
 - `.env`, `.env.*` — Environment variables/secrets
-- Any file containing "Canon", "formula", "threshold" values
+- `uploads/` — Uploaded corpus files and rendered pages
 
 ---
 
 ## Verification
-
-To verify this snapshot is current:
-```bash
-git rev-parse --short HEAD
-# Should match: 6ca74f2
-```
 
 To regenerate:
 ```bash
