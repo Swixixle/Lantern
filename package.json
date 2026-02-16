@@ -13,7 +13,7 @@
     "test:watch": "vitest",
     "test:coc": "vitest run server/__tests__/chainOfCustody",
     "test:encryption": "vitest run server/lib/__tests__/encryption",
-    "test:integration": "docker compose -f docker-compose.test.yml up -d && node tools/wait-for-postgres.cjs && ( ! grep -R \"storage\\.db\\|storage\\.schema\\|storage\\.eq\\|storage\\.and\" -n server || (echo \"ERROR: forbidden storage.* patterns found\" && exit 1) ) && DATABASE_URL=postgresql://lantern_test:test_password@localhost:5433/lantern_test npm run db:push && DATABASE_URL=postgresql://lantern_test:test_password@localhost:5433/lantern_test vitest run server/__tests__/coc.http.integration.test.ts && docker compose -f docker-compose.test.yml down -v",
+    "test:integration": "bash -lc 'set -e; docker compose -f docker-compose.test.yml up -d; node tools/wait-for-postgres.cjs; ( ! grep -R \"storage\\.db\\|storage\\.schema\\|storage\\.eq\\|storage\\.and\" -n server || (echo \"ERROR: forbidden storage.* patterns found\" && exit 1) ); export DATABASE_URL=postgresql://lantern_test:test_password@localhost:5433/lantern_test; npm run db:push; vitest run server/__tests__/coc.http.integration.test.ts;' ; status=$?; docker compose -f docker-compose.test.yml down -v; exit $status",
     "test:integration:setup": "docker compose -f docker-compose.test.yml up -d && sleep 5",
     "test:integration:teardown": "docker compose -f docker-compose.test.yml down",
     "db:push": "drizzle-kit push",
