@@ -4,6 +4,8 @@
 
 The Lantern Heuristic Disclaimer System provides legal protection for analytical metrics by ensuring they are never presented as factual determinations or legal verdicts. This system is a core component of Lantern's Legal Trust Boundary v1.0.
 
+**Implementation Status:** ✅ COMPLETE (Legal Hardening Sprint v1.0)
+
 ## Purpose
 
 Lantern generates analytical metrics (heuristics) from documents, such as:
@@ -23,7 +25,26 @@ The disclaimer system ensures users understand:
 
 ## Components
 
-### 1. HeuristicDisclaimerOverlay Component
+### 1. Central Metric Registry
+
+**Location:** `client/src/lib/metricRegistry.ts`
+
+The `METRIC_REGISTRY` is the single source of truth for all heuristic metadata. All metrics MUST be registered here.
+
+```typescript
+import { METRIC_REGISTRY } from "@/lib/metricRegistry";
+
+// Access a metric
+const metadata = METRIC_REGISTRY.influenceHubs;
+```
+
+**Registered Metrics:**
+- Investigative: `influenceHubs`, `fundingGravity`, `enforcementMap`, `temporalDensity`, `networkCentrality`, `sensitivity`
+- Comparative: `comparisonDelta`, `gapVisualization`
+- Financial Planning: `savingsProjection`, `cashflowAnalysis`, `fundingGap`, `trajectoryVisualization`
+- Claim Quality: `evidenceDensity`, `claimConfidence`
+
+### 2. HeuristicDisclaimerOverlay Component
 
 A React component that wraps analytical visualizations with mandatory disclaimers.
 
@@ -32,11 +53,12 @@ A React component that wraps analytical visualizations with mandatory disclaimer
 #### Usage
 
 ```tsx
-import { HeuristicDisclaimerOverlay, METRIC_LIBRARY } from "@/components/HeuristicDisclaimerOverlay";
+import { HeuristicDisclaimerOverlay } from "@/components/HeuristicDisclaimerOverlay";
+import { METRIC_REGISTRY } from "@/lib/metricRegistry";
 
 // Wrap any heuristic chart or metric display
 <HeuristicDisclaimerOverlay 
-  metadata={METRIC_LIBRARY.fundingGravity}
+  metadata={METRIC_REGISTRY.fundingGravity}
   inline={true}
 >
   <FundingGravityChart data={data} />
@@ -114,9 +136,13 @@ export const METRIC_LIBRARY: Record<string, MetricMetadata> = {
 
 ### 4. EvidenceDensityWarning Component
 
+**INTEGRATED INTO CLAIM WORKFLOW** (Legal Hardening v1.0)
+
 Prompts users when automatic claim mapping is refused due to insufficient evidence.
 
 **Location:** `client/src/components/EvidenceDensityWarning.tsx`
+
+**Integration:** Automatically triggered in dossier editor when creating claims with insufficient evidence density or low confidence.
 
 #### Usage
 
@@ -470,6 +496,56 @@ export function categorizeConfidence(confidence: number): ConfidenceLevel {
 - Daubert Standard (Admissibility of Scientific Evidence)
 - NIST SP 800-53 Rev. 5 (Security and Privacy Controls)
 
+## Implementation Summary (Legal Hardening v1.0)
+
+### Completed Components
+
+**✅ Metric Registry (`client/src/lib/metricRegistry.ts`)**
+- 15+ comprehensive metric metadata entries
+- Single source of truth for all heuristic disclaimers
+- Backward compatibility with legacy exports
+
+**✅ Disclaimer Integration**
+- All heuristic sections in dossier-report.tsx wrapped with disclaimers
+- Comparison page metrics wrapped with disclaimers
+- Inline mode for dashboards, overlay mode for dedicated views
+
+**✅ Refusal Workflow Integration**
+- Evidence density checked before claim creation (dossier-editor.tsx)
+- System refuses when evidence count < 2 OR confidence is "low" or "insufficient"
+- EvidenceDensityWarning dialog shows when refusal triggered
+- User can override with justification → creates "user-asserted" claim
+- Override logged with userId, timestamp, justification in Claim schema
+
+**✅ Visual Indicators**
+- Claims display "User-Asserted" badge when overridden
+- Override justification shown in claim details
+- Clear distinction between system-derived and user-asserted claims
+
+### Workflow: Creating Low-Confidence Claims
+
+1. User attempts to create claim in dossier editor
+2. System checks: `requiresUserAssertion(confidence, evidenceCount)`
+3. If threshold not met:
+   - System refuses automatic mapping
+   - EvidenceDensityWarning dialog appears
+   - User must provide justification to proceed
+   - Claim created with `assertionType: "user-asserted"`
+   - Override logged in `userOverride` field
+4. If threshold met:
+   - Claim created with `assertionType: "system-derived"`
+   - No warning shown
+
+### Files Modified
+
+- `client/src/lib/metricRegistry.ts` (created)
+- `client/src/components/HeuristicDisclaimerOverlay.tsx` (updated to export from registry)
+- `client/src/lib/sovereigntyMetrics.ts` (updated to export from registry)
+- `client/src/lib/schema/pack_v1.ts` (added assertionType and userOverride to Claim)
+- `client/src/pages/dossier-report.tsx` (wrapped 4 heuristic sections)
+- `client/src/pages/dossier-comparison.tsx` (wrapped comparison section)
+- `client/src/pages/dossier-editor.tsx` (integrated refusal workflow)
+
 ## Future Enhancements
 
 - Configurable threshold levels per organization
@@ -477,3 +553,4 @@ export function categorizeConfidence(confidence: number): ConfidenceLevel {
 - Accessibility improvements (ARIA labels)
 - Analytics dashboard for metric usage patterns
 - A/B testing for disclaimer effectiveness
+- Exportable audit trail of user overrides
