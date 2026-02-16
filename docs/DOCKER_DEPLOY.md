@@ -58,7 +58,9 @@ docker-compose exec lantern npm run db:push
 
 Open your browser to:
 - **Application**: http://localhost:5000
-- **Health Check**: http://localhost:5000/__health (production mode disabled)
+- **Health Check** (dev only): http://localhost:5000/__health
+
+**Note:** The `__health` route is only available in development mode. In production, use the Lantern app itself to verify the server is running.
 
 ## Service Management
 

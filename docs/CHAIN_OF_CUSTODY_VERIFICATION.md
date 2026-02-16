@@ -283,7 +283,8 @@ for CASE_ID in $CASES; do
     # Optional: Send alert email
     if command -v mail &> /dev/null; then
       echo "Case $CASE_ID verification failed: $STATUS" | \
-        mail -s "ALERT: Lantern Verification Failure" admin@example.com
+        mail -s "ALERT: Lantern Verification Failure" \
+        ${ALERT_EMAIL:-operator@example.com}
     fi
   fi
 done

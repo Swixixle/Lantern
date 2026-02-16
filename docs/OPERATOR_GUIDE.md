@@ -753,6 +753,5 @@ See [API_REFERENCE.md](./API_REFERENCE.md) for complete API documentation.
 ### Support
 
 For operational questions:
-- Email: operators@lantern-project.example
-- Issues: https://github.com/Swixixle/Lantern/issues
+- GitHub Issues: https://github.com/Swixixle/Lantern/issues
 - Documentation: `/docs` directory

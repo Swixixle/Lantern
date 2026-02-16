@@ -40,7 +40,7 @@ services:
       NODE_ENV: production
       PORT: 5000
       DATABASE_URL: postgresql://lantern:${POSTGRES_PASSWORD:-change-in-production}@postgres:5432/lantern
-      LANTERN_VAULT_KEY: ${LANTERN_VAULT_KEY:?LANTERN_VAULT_KEY is required - generate with: openssl rand -hex 32}
+      LANTERN_VAULT_KEY: ${LANTERN_VAULT_KEY:?ERROR: LANTERN_VAULT_KEY is required. Generate with: openssl rand -hex 32}
       LANTERN_API_KEY: ${LANTERN_API_KEY:-}
       LANTERN_PUBLIC_READONLY: ${LANTERN_PUBLIC_READONLY:-false}
     ports:
@@ -50,7 +50,7 @@ services:
     networks:
       - lantern-network
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/__health"]
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/', (r) => { r.statusCode === 200 ? process.exit(0) : process.exit(1) })"]
       interval: 30s
       timeout: 10s
       retries: 3
