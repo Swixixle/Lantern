@@ -68,6 +68,15 @@ The app will be available at `http://localhost:5000`.
 
 See `/demos/evidence-walkthrough` for a complete walkthrough.
 
+## Handling Conflicts
+
+When Lantern detects contradictory evidence in your corpus, it flags these as conflicts for analyst review. See [Conflict Resolution Guide](docs/CONFLICT_RESOLUTION_GUIDE.md) for detailed instructions on:
+
+- Understanding conflict types
+- Accessing detected conflicts
+- Resolution workflow and best practices
+- Examples of common conflict scenarios
+
 ## Production Build
 
 ```bash
