@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, GitCompare, Users, ArrowRightLeft, Download } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { HeuristicDisclaimerOverlay } from "@/components/HeuristicDisclaimerOverlay";
+import { METRIC_REGISTRY } from "@/lib/metricRegistry";
 
 import { computeReportHash, computeComparisonHash } from "@/lib/integrity";
 import { computeInfluenceHubs } from "@/lib/heuristics/influenceHubs";
@@ -189,6 +191,7 @@ export default function DossierComparison() {
                                 </CardContent>
                             </Card>
 
+                            <HeuristicDisclaimerOverlay metadata={METRIC_REGISTRY.comparisonDelta} inline>
                             <Card>
                                 <CardHeader>
                                     <CardTitle className="text-sm font-bold uppercase flex items-center gap-2">
@@ -237,6 +240,7 @@ export default function DossierComparison() {
 
                                 </CardContent>
                             </Card>
+                            </HeuristicDisclaimerOverlay>
                         </div>
                     </div>
                 ) : (

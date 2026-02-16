@@ -97,7 +97,14 @@ export const ClaimSchema = z.object({
   confidence: z.number().min(0).max(1), // 0 to 1
   evidenceIds: z.array(z.string()), // Must have >=1 if type is 'fact' (enforced in UI/Business logic)
   counterEvidenceIds: z.array(z.string()).default([]),
-  createdAt: z.string() // ISO date
+  createdAt: z.string(), // ISO date
+  // Legal Hardening v1.0: Assertion tracking
+  assertionType: z.enum(["system-derived", "user-asserted"]).optional(), // Track claim origin
+  userOverride: z.object({
+    userId: z.string(),
+    overriddenAt: z.string(), // ISO timestamp
+    justification: z.string().optional()
+  }).optional() // Present if user overrode refusal threshold
 });
 
 // --- Pack Root ---

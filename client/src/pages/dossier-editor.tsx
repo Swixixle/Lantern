@@ -43,6 +43,8 @@ import { CopyID } from "@/components/copy-id";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { Check, ChevronsUpDown, Search, MessageSquarePlus } from "lucide-react";
+import { EvidenceDensityWarning } from "@/components/EvidenceDensityWarning";
+import { requiresUserAssertion, createUserOverride } from "@/lib/refusalThreshold";
 
 function EntityCombobox({ 
   value, 
@@ -123,6 +125,10 @@ export default function DossierEditor() {
     text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() 
   });
   const [evidenceSearch, setEvidenceSearch] = useState("");
+  
+  // Evidence Density Warning (Legal Hardening v1.0)
+  const [showEvidenceWarning, setShowEvidenceWarning] = useState(false);
+  const [pendingClaim, setPendingClaim] = useState<typeof newClaim | null>(null);
 
   // Keyboard Shortcuts
   useEffect(() => {
@@ -284,6 +290,21 @@ export default function DossierEditor() {
           return; // Button should be disabled, but double check
       }
 
+      // Legal Hardening v1.0: Check evidence density and confidence
+      const evidenceCount = newClaim.evidenceIds.size;
+      const confidence = newClaim.confidence;
+      
+      const { required, reason } = requiresUserAssertion(confidence, evidenceCount);
+      
+      if (required) {
+          // Show warning - user must explicitly override
+          setPendingClaim({...newClaim});
+          setShowEvidenceWarning(true);
+          toast.warning("Evidence density below threshold - user assertion required");
+          return;
+      }
+      
+      // Create claim as system-derived (sufficient evidence)
       const claim: Claim = {
           id: uuidv4(),
           text: newClaim.text,
@@ -292,12 +313,49 @@ export default function DossierEditor() {
           confidence: newClaim.confidence,
           evidenceIds: Array.from(newClaim.evidenceIds),
           counterEvidenceIds: [],
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          assertionType: "system-derived"
       };
       
       const updated = { ...pack, claims: [...pack.claims, claim] };
       saveDossier(updated);
       setNewClaim({ text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() });
+      toast.success("Claim added (system-derived)");
+  };
+  
+  // Handle user assertion override
+  const handleUserAssertion = (justification: string) => {
+      if (!pack || !pendingClaim) return;
+      
+      // Create user override record
+      const userOverride = createUserOverride("current-user", justification);
+      
+      // Create claim as user-asserted
+      const claim: Claim = {
+          id: uuidv4(),
+          text: pendingClaim.text,
+          claimType: pendingClaim.type as any,
+          claimScope: pendingClaim.scope as "utterance" | "content",
+          confidence: pendingClaim.confidence,
+          evidenceIds: Array.from(pendingClaim.evidenceIds),
+          counterEvidenceIds: [],
+          createdAt: new Date().toISOString(),
+          assertionType: "user-asserted",
+          userOverride: userOverride
+      };
+      
+      const updated = { ...pack, claims: [...pack.claims, claim] };
+      saveDossier(updated);
+      setNewClaim({ text: "", type: "allegation", scope: "content", confidence: 0.8, evidenceIds: new Set() });
+      setPendingClaim(null);
+      setShowEvidenceWarning(false);
+      toast.success("Claim added as user-asserted");
+  };
+  
+  const handleCancelAssertion = () => {
+      setPendingClaim(null);
+      setShowEvidenceWarning(false);
+      toast.info("Claim creation cancelled");
   };
 
   const deleteClaim = (cId: string) => {
@@ -639,9 +697,19 @@ export default function DossierEditor() {
                                            className={cn("text-[10px] uppercase", c.claimType !== "fact" && "text-amber-500 border-amber-500")}>
                                         {c.claimType}
                                     </Badge>
+                                    {c.assertionType === "user-asserted" && (
+                                        <Badge variant="outline" className="text-[10px] uppercase text-orange-600 border-orange-400">
+                                            User-Asserted
+                                        </Badge>
+                                    )}
                                     <span className="text-xs text-muted-foreground font-mono">Conf: {c.confidence}</span>
                                 </div>
                                 <p className="font-medium text-sm">{c.text}</p>
+                                {c.userOverride && (
+                                    <p className="text-xs text-orange-600 italic">
+                                        Override: {c.userOverride.justification || "No justification provided"}
+                                    </p>
+                                )}
                              </div>
                              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" onClick={() => deleteClaim(c.id)}>
                                 <Trash2 className="w-3 h-3 text-destructive" />
@@ -847,6 +915,18 @@ export default function DossierEditor() {
 
         </Tabs>
       </div>
+      
+      {/* Evidence Density Warning Dialog (Legal Hardening v1.0) */}
+      {pendingClaim && (
+        <EvidenceDensityWarning
+          evidenceCount={pendingClaim.evidenceIds.size}
+          confidence={pendingClaim.confidence}
+          onUserAssert={handleUserAssertion}
+          onCancel={handleCancelAssertion}
+          variant="dialog"
+          open={showEvidenceWarning}
+        />
+      )}
     </div>
   );
 }
