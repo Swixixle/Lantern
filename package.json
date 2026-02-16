@@ -9,6 +9,10 @@
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
     "check": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coc": "vitest run server/__tests__/chainOfCustody",
+    "test:encryption": "vitest run server/lib/__tests__/encryption",
     "db:push": "drizzle-kit push",
     "validate:replit": "node tools/validate-replit-env.js"
   },
