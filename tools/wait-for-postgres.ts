@@ -5,7 +5,7 @@
  * More reliable than sleep-based approaches.
  * 
  * Usage:
- *   node tools/wait-for-postgres.js
+ *   tsx tools/wait-for-postgres.ts
  * 
  * Environment variables:
  *   PGHOST - PostgreSQL host (default: localhost)
