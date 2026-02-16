@@ -23,6 +23,7 @@ import type {
   ChainOfCustodySource,
   ChainOfCustodyClaim,
 } from "./schemas/chainOfCustody";
+import { requirePermission, requireRole, UserRole, Permission } from "./rbac";
 import { z } from "zod";
 
 /**
@@ -33,8 +34,9 @@ export function registerChainOfCustodyRoutes(app: Express) {
    * GET /api/case/:caseId/manifest
    * 
    * Retrieve current chain-of-custody manifest for a case.
+   * Requires READ permission.
    */
-  app.get("/api/case/:caseId/manifest", async (req: Request, res: Response) => {
+  app.get("/api/case/:caseId/manifest", requirePermission(Permission.READ), async (req: Request, res: Response) => {
     try {
       const { caseId } = req.params;
       
@@ -73,8 +75,9 @@ export function registerChainOfCustodyRoutes(app: Express) {
    * GET /api/case/:caseId/verify
    * 
    * Verify integrity of case evidence pack by recomputing hashes.
+   * Requires VERIFY permission (Auditor or Lead Investigator).
    */
-  app.get("/api/case/:caseId/verify", async (req: Request, res: Response) => {
+  app.get("/api/case/:caseId/verify", requirePermission(Permission.VERIFY), async (req: Request, res: Response) => {
     try {
       const { caseId } = req.params;
       
@@ -112,8 +115,9 @@ export function registerChainOfCustodyRoutes(app: Express) {
    * POST /api/case/:caseId/finalize
    * 
    * Finalize evidence pack and create immutable manifest.
+   * Requires WRITE permission (Lead Investigator only).
    */
-  app.post("/api/case/:caseId/finalize", async (req: Request, res: Response) => {
+  app.post("/api/case/:caseId/finalize", requireRole(UserRole.LEAD_INVESTIGATOR), async (req: Request, res: Response) => {
     try {
       const { caseId } = req.params;
       const { report_hash } = req.body;
@@ -210,8 +214,9 @@ export function registerChainOfCustodyRoutes(app: Express) {
    * POST /api/case/:caseId/claim
    * 
    * Create a new claim with assertion type tracking.
+   * Requires WRITE permission (Lead Investigator only).
    */
-  app.post("/api/case/:caseId/claim", async (req: Request, res: Response) => {
+  app.post("/api/case/:caseId/claim", requireRole(UserRole.LEAD_INVESTIGATOR), async (req: Request, res: Response) => {
     try {
       const { caseId } = req.params;
       const claimSchema = z.object({
@@ -278,8 +283,9 @@ export function registerChainOfCustodyRoutes(app: Express) {
    * GET /api/case/:caseId/export
    * 
    * Export complete evidence package with manifest.
+   * Requires READ permission.
    */
-  app.get("/api/case/:caseId/export", async (req: Request, res: Response) => {
+  app.get("/api/case/:caseId/export", requirePermission(Permission.READ), async (req: Request, res: Response) => {
     try {
       const { caseId } = req.params;
       
