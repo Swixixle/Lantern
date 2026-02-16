@@ -27,6 +27,25 @@ The system manages two primary pack types:
 - **Extract Packs:** Machine-extracted, provenance-heavy input artifacts.
 - **Dossier Packs:** Curated, claim-bearing output artifacts.
 
+**Entity Classification Guards:**
+- `entityGuards.ts` contains 100+ PERSON_STOPWORDS (legal/document terms like "Evidence", "Statement", "Agreement") to prevent misclassification as Person entities.
+- `shouldBlockPersonCandidate()` integrated into `entitySanitizer.ts` `classifyEntityType()` - blocked candidates get EntityClass "Concept" with `included: false`, `blocked: true`.
+- Extraction view supports Aggregated/Raw toggle: aggregated deduplicates by normalized text+type, shows mention count (Nx), confidence range, top excerpts; raw shows all mentions with BLOCKED badges.
+
+**Curation Actions:**
+- Dossier editor entity cards have hover-revealed Reclassify (type dropdown), Merge (EntityCombobox target picker), and Block buttons.
+- All actions persist to `pack.curationActions` array (type, entityId, fromType, toType, sourceId, targetId, timestamp, actor) for audit trail and export.
+
+**Evidence Pack Export (9 files):**
+- MANIFEST.json, DOSSIER.md, ONE_PAGER.md, CLAIMS.json, SOURCES.json, ENTITIES.json (aggregated curated entities with mention counts), CURATION.json (curation action log), APP.json, plus optional RAW_APPENDIX.json (checkbox toggle in export modal).
+- All files SHA-256 hashed in manifest; verification via `verifyPack.ts` iterates manifest entries dynamically.
+
+**Court-Safe Language:**
+- Legal lens exports use precise classification labels: "Supported by excerpt(s)", "Unsubstantiated within provided corpus", "Disputed / Ambiguous support".
+- IMPORTANT NOTICE disclaimer at top of legal exports.
+- Curated Entity Index section in legal template.
+- Unsourced claims annotated with reason (no bound excerpt / conflicting sources / ambiguous support).
+
 **Heuristics System:**
 Includes analytical algorithms such as Influence Hubs (degree centrality), Funding Gravity (monetary flow), Enforcement Map (coercive edge detection), and an Entity Sanitizer for data analysis and refinement.
 
