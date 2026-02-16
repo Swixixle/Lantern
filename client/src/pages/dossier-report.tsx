@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, Printer, Download, Share2, AlertTriangle } from "lucide-react";
+import { HeuristicDisclaimerOverlay } from "@/components/HeuristicDisclaimerOverlay";
+import { METRIC_REGISTRY } from "@/lib/metricRegistry";
 
 import { computeReportHash } from "@/lib/integrity";
 
@@ -169,6 +171,7 @@ export default function DossierReport() {
 
         {/* 2. Structural Analysis (Influence) */}
         {influence && (
+            <HeuristicDisclaimerOverlay metadata={METRIC_REGISTRY.influenceHubs} inline>
             <section className="break-inside-avoid">
                 <h2 className="text-xl font-bold uppercase border-b border-gray-400 mb-4 text-purple-900">
                     02. Structural Influence (Hubs)
@@ -202,10 +205,12 @@ export default function DossierReport() {
                     </div>
                 )}
             </section>
+            </HeuristicDisclaimerOverlay>
         )}
 
         {/* 3. Financial Analysis (Funding) */}
         {funding && (
+            <HeuristicDisclaimerOverlay metadata={METRIC_REGISTRY.fundingGravity} inline>
             <section className="break-inside-avoid">
                 <h2 className="text-xl font-bold uppercase border-b border-gray-400 mb-4 text-emerald-900">
                     03. Financial Flows (Gravity)
@@ -255,10 +260,12 @@ export default function DossierReport() {
                     </>
                 )}
             </section>
+            </HeuristicDisclaimerOverlay>
         )}
 
         {/* 4. Gatekeeping Analysis (Enforcement) */}
         {enforcement && (
+            <HeuristicDisclaimerOverlay metadata={METRIC_REGISTRY.enforcementMap} inline>
             <section className="break-inside-avoid">
                  <h2 className="text-xl font-bold uppercase border-b border-gray-400 mb-4 text-red-900">
                     04. Gatekeeping & Enforcement
@@ -310,10 +317,12 @@ export default function DossierReport() {
                     </>
                 )}
             </section>
+            </HeuristicDisclaimerOverlay>
         )}
 
         {/* 5. Robustness & Stability (M11) */}
         {sensitivity && (sensitivity.influence || sensitivity.funding) && (
+            <HeuristicDisclaimerOverlay metadata={METRIC_REGISTRY.sensitivity} inline>
              <section className="break-inside-avoid mb-12">
                  <h2 className="text-xl font-bold uppercase border-b border-gray-400 mb-4 text-blue-900">
                     05. Robustness & Stability Checks
@@ -354,6 +363,7 @@ export default function DossierReport() {
                     )}
                 </div>
              </section>
+             </HeuristicDisclaimerOverlay>
         )}
 
         {/* 6. Appendix: Claims & Evidence */}

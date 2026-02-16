@@ -186,33 +186,6 @@ function MetricDetailsDialog({ metadata }: { metadata: MetricMetadata }) {
 
 /**
  * Predefined metric metadata for common heuristics.
+ * @deprecated Use METRIC_REGISTRY from @/lib/metricRegistry instead
  */
-export const METRIC_LIBRARY: Record<string, MetricMetadata> = {
-  fundingGravity: {
-    metric_name: "Funding Gravity",
-    metric_type: "Graph-Derived Centrality Metric",
-    formula_reference: "Σ(weighted inbound financial edges)",
-    disclaimer: "This metric reflects document co-occurrence patterns and does not establish legal responsibility.",
-  },
-  
-  influence: {
-    metric_name: "Influence Score",
-    metric_type: "Document Network Centrality",
-    formula_reference: "PageRank-style eigenvector centrality on entity mention graph",
-    disclaimer: "This metric measures document-derived importance and does not determine actual influence or authority.",
-  },
-  
-  enforcement: {
-    metric_name: "Enforcement Likelihood",
-    metric_type: "Heuristic Pattern Match",
-    formula_reference: "Keyword frequency × regulatory document proximity",
-    disclaimer: "This metric identifies potential enforcement patterns and does not predict actual legal outcomes.",
-  },
-  
-  temporalDensity: {
-    metric_name: "Temporal Density",
-    metric_type: "Time-Series Event Clustering",
-    formula_reference: "Kernel density estimation over event timestamps",
-    disclaimer: "This metric shows document-mentioned time patterns and does not establish actual timelines or causation.",
-  },
-};
+export { METRIC_LIBRARY, METRIC_REGISTRY } from "@/lib/metricRegistry";
