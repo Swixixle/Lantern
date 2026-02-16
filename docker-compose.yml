@@ -1,0 +1,67 @@
+# Lantern Docker Compose Configuration
+# Deployable investigative platform with PostgreSQL backend
+
+version: '3.8'
+
+services:
+  # PostgreSQL Database (System of Record)
+  postgres:
+    image: postgres:16-alpine
+    container_name: lantern-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: lantern
+      POSTGRES_USER: lantern
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-in-production}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lantern"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - lantern-network
+
+  # Lantern Application Server
+  lantern:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lantern-app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://lantern:${POSTGRES_PASSWORD:-change-in-production}@postgres:5432/lantern
+      LANTERN_VAULT_KEY: ${LANTERN_VAULT_KEY:?LANTERN_VAULT_KEY is required - generate with: openssl rand -hex 32}
+      LANTERN_API_KEY: ${LANTERN_API_KEY:-}
+      LANTERN_PUBLIC_READONLY: ${LANTERN_PUBLIC_READONLY:-false}
+    ports:
+      - "5000:5000"
+    volumes:
+      - uploads_data:/app/uploads
+    networks:
+      - lantern-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5000/__health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  postgres_data:
+    driver: local
+  uploads_data:
+    driver: local
+
+networks:
+  lantern-network:
+    driver: bridge

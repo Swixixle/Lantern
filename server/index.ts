@@ -2,6 +2,17 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { validateEncryptionKeySetup } from "./lib/encryption";
+
+// Validate security configuration at startup (fail-closed)
+try {
+  validateEncryptionKeySetup();
+} catch (error) {
+  console.error("\n❌ SECURITY VALIDATION FAILED:");
+  console.error((error as Error).message);
+  console.error("\nServer startup aborted.\n");
+  process.exit(1);
+}
 
 const isDev = process.env.NODE_ENV !== "production";
 const app = express();
