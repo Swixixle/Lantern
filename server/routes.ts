@@ -1,11 +1,12 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { insertCaseSchema, insertUploadSchema, ingestionStateEnum, extractionJobStateEnum, claimSchema, anchorSchema, corpusPurposeEnum, sourceRoleEnum, buildModeEnum, type Anchor, type AnchorRecord } from "@shared/schema";
+import { storage, db } from "./storage";
+import { insertCaseSchema, insertUploadSchema, ingestionStateEnum, extractionJobStateEnum, claimSchema, anchorSchema, corpusPurposeEnum, sourceRoleEnum, buildModeEnum, enhancedSources, type Anchor, type AnchorRecord } from "@shared/schema";
 import { generateVerifiedRecord, generateVerifiedRecordPDF } from "./verifiedRecordGenerator";
 import { z } from "zod";
 import { createHash } from "crypto";
 import { encryptFile, decryptFile } from "./lib/encryption";
+import { eq, and } from "drizzle-orm";
 
 const MOCK_ANCHORS: Record<string, Anchor> = {
   "anchor-001": {
@@ -1107,7 +1108,7 @@ export async function registerRoutes(
       // Store encrypted source as system of record
       // TODO: Optimize storage by using separate binary columns for ciphertext and authTag
       // Current JSON+base64 approach has ~33% overhead but provides compatibility
-      await storage.db.insert(storage.schema.enhancedSources).values({
+      await db.insert(enhancedSources).values({
         caseId: caseId,
         uploadId: uploadId,
         filename: upload.filename,
@@ -1155,12 +1156,12 @@ export async function registerRoutes(
     const sourceId = req.params.sourceId as string;
     const decryptData = req.query.decrypt === "true";
     
-    const [source] = await storage.db
+    const [source] = await db
       .select()
-      .from(storage.schema.enhancedSources)
-      .where(storage.and(
-        storage.eq(storage.schema.enhancedSources.id, sourceId),
-        storage.eq(storage.schema.enhancedSources.caseId, caseId)
+      .from(enhancedSources)
+      .where(and(
+        eq(enhancedSources.id, sourceId),
+        eq(enhancedSources.caseId, caseId)
       ));
     
     if (!source) {

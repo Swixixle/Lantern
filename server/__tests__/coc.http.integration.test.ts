@@ -11,6 +11,11 @@
  * Set DATABASE_URL environment variable to point to test database.
  */
 
+// CRITICAL: Set environment variables BEFORE any imports
+// This prevents race conditions where modules read env vars at import time
+process.env.NODE_ENV = "test";
+process.env.LANTERN_TEST_AUTH_BYPASS = "true";
+
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
 import { createTestApp } from "./testApp";
@@ -33,9 +38,8 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
   const testFileSha256 = createHash("sha256").update(testFileContent).digest("hex");
   
   beforeAll(async () => {
-    // Set environment variables for test auth bypass
-    process.env.NODE_ENV = "test";
-    process.env.LANTERN_TEST_AUTH_BYPASS = "true";
+    // Environment variables are set at top of file (before imports)
+    // This ensures no import-time race conditions
     
     // Create test app with all routes
     app = await createTestApp();
@@ -338,7 +342,7 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
   });
   
   describe("Refusal Override Logging Proof", () => {
-    it("should store user-asserted claim with assertion_type and create ledger event", async () => {
+    it("should store user-asserted claim with assertion_type and audit fields for future ledger integration", async () => {
       // Create source
       const [enhancedSource] = await db
         .insert(enhancedSources)
@@ -383,12 +387,15 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
       expect(trackedClaim.userOverrideAt).toBeTruthy();
       expect(trackedClaim.confidence).toBeNull();
       
-      // Note: In the actual implementation, ledger events are tied to corpus, not case.
-      // For this test, we verify that the trackedClaim itself stores all required fields
-      // for audit trail: assertionType, userId, userOverrideAt.
+      // tracked_claims contains sufficient audit fields to support ledger event creation
+      // when corpus integration is implemented. The claim stores:
+      // - assertionType: distinguishes user overrides from system-derived claims
+      // - userId: tracks who made the assertion
+      // - userOverrideAt: timestamp of the override action
       // 
-      // The ledger event would be created in production when the claim is added to a corpus.
-      // We test that the claim has all the necessary fields for future ledger entry.
+      // Note: Ledger events in the current schema are corpus-scoped, not case-scoped.
+      // This test verifies that tracked_claims preserves all necessary audit information
+      // for future ledger integration when claims are added to a corpus.
       
       // Verify the claim can be queried
       const claimQuery = await db
