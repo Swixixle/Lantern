@@ -42,12 +42,16 @@ async function checkPostgresReady() {
     return stdout.includes("accepting connections");
   } catch (error) {
     // pg_isready might not be available, try basic TCP connection
+    // Also, in Docker containers, the port might be open before DB is ready
+    // So we always wait at least 2 seconds before declaring success
     try {
       // Use Node.js net module via a small inline script
       await execAsync(
         `node -e "require('net').createConnection(${config.port}, '${config.host}').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"`,
         { timeout: 5000 }
       );
+      // Even if TCP succeeds, give DB 1 more second to fully initialize
+      await new Promise(resolve => setTimeout(resolve, 1000));
       return true;
     } catch {
       return false;
