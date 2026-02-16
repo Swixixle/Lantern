@@ -8,6 +8,12 @@ Lantern does not assert truth, intent, or legitimacy. It demonstrates how conclu
 
 > **Status**: Early research. Open to technical collaboration on cryptographic verification and interpretive frameworks.
 
+## Deploy to Replit
+
+[![Run on Replit](https://replit.com/badge/github/Swixixle/Lantern)](https://replit.com/new/github/Swixixle/Lantern)
+
+**→ See [REPLIT_SETUP.md](./REPLIT_SETUP.md) for detailed Replit deployment instructions**
+
 ## Key Features
 
 - **Interpretive Lenses**: Analyze evidence under multiple explicit interpretive frameworks
@@ -22,8 +28,11 @@ See `/demos/evidence-walkthrough` for a complete example of Lantern's interpreti
 
 ## Installation
 
+### Local Development
+
 **Prerequisites:**
-- Node.js 16+ 
+- Node.js 20+ 
+- PostgreSQL 16+
 - npm or yarn
 
 **Clone and install:**
@@ -33,6 +42,27 @@ cd Lantern
 npm install
 ```
 
+**Configure environment:**
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env and set your DATABASE_URL
+# Example: DATABASE_URL=postgresql://user:password@localhost:5432/lantern
+```
+
+**Initialize database:**
+```bash
+npm run db:push
+```
+
+### Replit Deployment (Recommended for Quick Start)
+
+For the easiest setup, deploy to Replit with automatic PostgreSQL provisioning:
+
+[![Run on Replit](https://replit.com/badge/github/Swixixle/Lantern)](https://replit.com/new/github/Swixixle/Lantern)
+
+See [REPLIT_SETUP.md](./REPLIT_SETUP.md) for detailed instructions.
 ## Environment Configuration
 
 **ELI Integration (Optional):**
