@@ -5,6 +5,7 @@ import { insertCaseSchema, insertUploadSchema, ingestionStateEnum, extractionJob
 import { generateVerifiedRecord, generateVerifiedRecordPDF } from "./verifiedRecordGenerator";
 import { z } from "zod";
 import { createHash } from "crypto";
+import { encryptFile, decryptFile } from "./lib/encryption";
 
 const MOCK_ANCHORS: Record<string, Anchor> = {
   "anchor-001": {
@@ -1092,10 +1093,44 @@ export async function registerRoutes(
     }
     const buffer = Buffer.concat(chunks);
     
+    // Compute SHA-256 of raw bytes
     const sha256 = computeSha256(buffer);
     const storagePath = join(UPLOADS_DIR, `${uploadId}_${upload.filename}`);
     
+    // Write to disk (temporary storage / cache)
     await writeFile(storagePath, buffer);
+    
+    // Legal Hardening v1.0: Encrypt and store in enhanced_sources table
+    try {
+      const encrypted = encryptFile(buffer);
+      
+      // Store encrypted source as system of record
+      // TODO: Optimize storage by using separate binary columns for ciphertext and authTag
+      // Current JSON+base64 approach has ~33% overhead but provides compatibility
+      await storage.db.insert(storage.schema.enhancedSources).values({
+        caseId: caseId,
+        uploadId: uploadId,
+        filename: upload.filename,
+        sha256: sha256,
+        byteLength: buffer.length,
+        encryptedBlob: JSON.stringify({
+          ciphertext: encrypted.ciphertext.toString('base64'),
+          authTag: encrypted.authTag.toString('base64')
+        }),
+        encryptionIv: encrypted.iv.toString('base64'),
+        encryptionAlgorithm: encrypted.algorithm,
+      });
+      
+      console.log(`[Legal Hardening] Encrypted source stored: ${uploadId} (${sha256})`);
+    } catch (encError) {
+      console.error("Encryption failed:", encError);
+      // Legal Hardening v1.0: Fail upload if encryption fails (no silent fallback)
+      return res.status(500).json({
+        error: "Failed to encrypt source file",
+        details: encError instanceof Error ? encError.message : "Unknown error",
+        message: "Encryption is required for all uploads. Please ensure ENCRYPTION_KEY is configured."
+      });
+    }
     
     await storage.updateUpload(uploadId, {
       sha256,
@@ -1106,6 +1141,73 @@ export async function registerRoutes(
     
     const updated = await storage.getUpload(uploadId);
     res.json(updated);
+  }));
+  
+  /**
+   * GET /api/cases/:caseId/sources/:sourceId
+   * 
+   * Retrieve encrypted source from enhanced_sources table.
+   * Returns decrypted file data or metadata.
+   * Legal Hardening v1.0: Backend as system of record.
+   */
+  app.get("/api/cases/:caseId/sources/:sourceId", asyncHandler(async (req, res) => {
+    const caseId = req.params.caseId as string;
+    const sourceId = req.params.sourceId as string;
+    const decryptData = req.query.decrypt === "true";
+    
+    const [source] = await storage.db
+      .select()
+      .from(storage.schema.enhancedSources)
+      .where(storage.and(
+        storage.eq(storage.schema.enhancedSources.id, sourceId),
+        storage.eq(storage.schema.enhancedSources.caseId, caseId)
+      ));
+    
+    if (!source) {
+      return res.status(404).json({
+        type: "NOT_FOUND",
+        message: "Source not found"
+      });
+    }
+    
+    // Return metadata only
+    if (!decryptData) {
+      return res.json({
+        id: source.id,
+        filename: source.filename,
+        sha256: source.sha256,
+        byteLength: source.byteLength,
+        ingestedAt: source.ingestedAt,
+        encrypted: !!source.encryptedBlob
+      });
+    }
+    
+    // Decrypt and return file data
+    if (source.encryptedBlob && source.encryptionIv) {
+      try {
+        const encryptedData = JSON.parse(source.encryptedBlob);
+        const decrypted = decryptFile({
+          ciphertext: Buffer.from(encryptedData.ciphertext, 'base64'),
+          iv: Buffer.from(source.encryptionIv, 'base64'),
+          authTag: Buffer.from(encryptedData.authTag, 'base64'),
+          algorithm: source.encryptionAlgorithm || 'aes-256-gcm'
+        });
+        
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Disposition', `attachment; filename="${source.filename}"`);
+        res.send(decrypted);
+      } catch (decError) {
+        console.error("Decryption failed:", decError);
+        return res.status(500).json({
+          error: "Failed to decrypt source",
+          details: decError instanceof Error ? decError.message : "Unknown error"
+        });
+      }
+    } else {
+      return res.status(400).json({
+        error: "Source not encrypted or encryption data missing"
+      });
+    }
   }));
 
   app.post("/api/cases/:caseId/uploads/complete", asyncHandler(async (req, res) => {

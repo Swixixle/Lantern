@@ -60,6 +60,80 @@ Optional at-rest encryption using AES-256-GCM:
 
 ## API Endpoints
 
+### POST /api/cases/:caseId/uploads/init
+
+Initialize an upload for a case.
+
+**Permissions:** WRITE
+
+**Request Body:**
+```json
+{
+  "filename": "evidence.pdf",
+  "mimeType": "application/pdf",
+  "evidenceType": "document",
+  "sourceLabel": "Primary Evidence"
+}
+```
+
+**Response:**
+```json
+{
+  "uploadId": "upload-uuid",
+  "uploadUrl": "/api/cases/:caseId/uploads/:uploadId/data",
+  "method": "PUT"
+}
+```
+
+### PUT /api/cases/:caseId/uploads/:uploadId/data
+
+Upload file data. **Legal Hardening v1.0:** Automatically encrypts and stores in enhanced_sources table.
+
+**Permissions:** WRITE
+
+**Request:** Raw file bytes in request body
+
+**Process:**
+1. Computes SHA-256 hash of raw bytes
+2. Encrypts file with AES-256-GCM
+3. Stores encrypted blob + IV + hash in `enhanced_sources` table
+4. Writes to disk as temporary cache
+
+**Response:**
+```json
+{
+  "id": "upload-uuid",
+  "sha256": "sha256-hex",
+  "fileSize": 12345,
+  "ingestionState": "stored"
+}
+```
+
+### GET /api/cases/:caseId/sources/:sourceId
+
+Retrieve encrypted source metadata or decrypted file.
+
+**Permissions:** READ
+
+**Query Parameters:**
+- `decrypt=true` - Return decrypted file data (default: false, returns metadata only)
+
+**Response (metadata):**
+```json
+{
+  "id": "source-uuid",
+  "filename": "evidence.pdf",
+  "sha256": "sha256-hex",
+  "byteLength": 12345,
+  "ingestedAt": "ISO 8601 timestamp",
+  "encrypted": true
+}
+```
+
+**Response (decrypt=true):** Binary file data with headers:
+- `Content-Type: application/octet-stream`
+- `Content-Disposition: attachment; filename="evidence.pdf"`
+
 ### GET /api/case/:caseId/manifest
 
 Retrieves the current chain-of-custody manifest for a case.
@@ -167,6 +241,10 @@ Exports the complete evidence pack as a deterministic ZIP bundle.
 
 ## Encryption Configuration
 
+**Implementation Status:** ✅ INTEGRATED (Legal Hardening v1.0)
+
+All file uploads are automatically encrypted at rest using AES-256-GCM authenticated encryption.
+
 ### Environment Variables
 
 ```bash
@@ -184,7 +262,44 @@ ENCRYPTION_KEY=your-secure-key-here
 3. **Rotation**: Plan key rotation strategy for long-term deployments
 4. **Backup**: Ensure encrypted data is recoverable if key is lost
 
-### Using Encryption
+### Automatic Encryption (Legal Hardening v1.0)
+
+**Upload Flow:**
+1. Client uploads file to `PUT /api/cases/:caseId/uploads/:uploadId/data`
+2. Server computes SHA-256 on raw bytes
+3. Server encrypts file with AES-256-GCM
+4. Server stores in `enhanced_sources` table:
+   - `encryptedBlob`: Base64-encoded JSON with ciphertext + authTag
+   - `encryptionIv`: Base64-encoded IV (initialization vector)
+   - `sha256`: Hash of raw bytes (before encryption)
+   - `byteLength`: Original file size
+5. Server writes to disk as temporary cache
+
+**Decryption Flow:**
+1. Client requests `GET /api/cases/:caseId/sources/:sourceId?decrypt=true`
+2. Server fetches from `enhanced_sources` table
+3. Server decrypts using stored IV and auth tag
+4. Server verifies auth tag (prevents tampering)
+5. Server returns decrypted file
+
+### Database Storage (enhanced_sources table)
+
+```sql
+CREATE TABLE enhanced_sources (
+  id TEXT PRIMARY KEY,
+  case_id TEXT NOT NULL,
+  upload_id TEXT,
+  filename TEXT NOT NULL,
+  sha256 TEXT NOT NULL,
+  byte_length INTEGER NOT NULL,
+  encrypted_blob TEXT, -- JSON: {ciphertext: base64, authTag: base64}
+  encryption_iv TEXT, -- Base64-encoded IV
+  encryption_algorithm TEXT DEFAULT 'aes-256-gcm',
+  ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### Using Encryption (Programmatic)
 
 ```typescript
 import { encryptFile, decryptFile, getEncryptionKey } from "./lib/encryption";
@@ -380,6 +495,65 @@ Planned features:
 - Automated evidence pack distribution
 - Blockchain anchoring for tamper evidence
 - Time-stamping service integration
+
+## Implementation Summary (Legal Hardening v1.0)
+
+### Completed Features
+
+**✅ Encrypted Storage**
+- All uploads automatically encrypted with AES-256-GCM
+- Encrypted data stored in `enhanced_sources` table (system of record)
+- Disk storage used as temporary cache only
+- Authentication tag prevents tampering
+
+**✅ Chain-of-Custody Manifest**
+- Canonical manifest generation with `evidence_pack_hash`
+- Sources tracked with SHA-256, byte length, ingestion timestamp
+- Claims tracked with assertion type, offsets, fragment hash
+- Manifest chaining via `previous_manifest_hash`
+
+**✅ Integrity Verification**
+- Recomputes evidence pack hash from manifest data
+- Detects any modification to sources or claims
+- Returns mismatch status with detailed error messages
+
+**✅ Integration Tests**
+- 6 comprehensive tests in `server/__tests__/chainOfCustody.integration.test.ts`
+- Tests manifest creation, verification, tamper detection
+- Validates chain integrity across multiple manifests
+
+### Files Modified
+
+- `server/routes.ts` (added encryption to upload endpoint, added source retrieval endpoint)
+- `server/chainOfCustodyRoutes.ts` (verified endpoints work correctly)
+- `server/chainOfCustodyUtil.ts` (verified integrity functions)
+- `server/__tests__/chainOfCustody.integration.test.ts` (created)
+- `shared/schema.ts` (enhanced_sources and tracked_claims tables)
+
+### Workflow: Upload with Encryption
+
+```mermaid
+sequenceDiagram
+    Client->>Server: POST /api/cases/:id/uploads/init
+    Server->>Client: uploadId + upload URL
+    Client->>Server: PUT /api/cases/:id/uploads/:id/data (raw bytes)
+    Server->>Server: Compute SHA-256 on raw bytes
+    Server->>Server: Encrypt with AES-256-GCM
+    Server->>DB: Insert into enhanced_sources (encrypted)
+    Server->>Disk: Write to cache
+    Server->>Client: Upload complete (SHA-256, fileSize)
+```
+
+### Verification Flow
+
+```mermaid
+sequenceDiagram
+    Client->>Server: GET /api/case/:id/verify
+    Server->>DB: Fetch manifest from chain_of_custody_manifests
+    Server->>Server: Recompute evidence_pack_hash from manifest data
+    Server->>Server: Compare computed vs stored hash
+    Server->>Client: Verification result (valid/mismatch)
+```
 
 ## Support
 
