@@ -3,7 +3,7 @@ import { useLocation, Link, useSearch } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Eye, Layers, AlertTriangle, HelpCircle, Clock } from "lucide-react";
+import { ArrowLeft, Eye, Layers, AlertTriangle, HelpCircle, Clock, Info } from "lucide-react";
 import { MOCK_CONSTRAINTS, type ConstraintItem, type ConstraintType } from "@/lib/schema/constraints";
 import { apiGet } from "@/lib/auth";
 
@@ -189,6 +189,31 @@ export default function Constraints() {
           <p className="text-xs text-muted-foreground font-mono mt-1">
             Corpus: {corpusId}
           </p>
+
+          <Card className="mt-4 bg-blue-500/5 border-blue-500/20">
+            <CardContent className="py-3">
+              <div className="flex gap-3 items-start">
+                <Info className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                <div className="text-xs text-muted-foreground">
+                  <p className="mb-1">
+                    <strong className="text-foreground">Need help resolving conflicts?</strong>
+                  </p>
+                  <p>
+                    Conflicts indicate contradictory evidence in your corpus. See the{" "}
+                    <a 
+                      href="https://github.com/Swixixle/Lantern/blob/main/docs/CONFLICT_RESOLUTION_GUIDE.md" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-400 hover:text-blue-300 underline"
+                    >
+                      Conflict Resolution Guide
+                    </a>
+                    {" "}for detailed workflows, examples, and best practices.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </header>
 
         {loading ? (
