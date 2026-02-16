@@ -27,9 +27,11 @@ export function renderLegalOnePager(
 * **Supported:** ${supported.length}
 * **Unsubstantiated:** ${unsupported.length}
 * **Exhibits Referenced:** ${pack.evidence.length}
-* **Parties:** ${pack.entities.length}
+* **Curated Parties:** ${pack.entities.length}
 
 `;
+
+  md += `> *This is a structured compilation, not a factual finding.*\n\n`;
 
   md += `## Principal Supported Assertions\n\n`;
   if (topAssertions.length === 0) {

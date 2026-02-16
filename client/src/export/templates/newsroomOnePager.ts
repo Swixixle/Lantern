@@ -27,7 +27,7 @@ export function renderNewsroomOnePager(
 * **Verified (sourced):** ${verified.length}
 * **Unsourced:** ${unsourced.length}
 * **Evidence Items:** ${pack.evidence.length}
-* **Entities:** ${pack.entities.length}
+* **Curated Entities:** ${pack.entities.length}
 
 `;
 

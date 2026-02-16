@@ -61,6 +61,7 @@ generatedBy: Lantern (Evidence-First Workbench)
   md += `* **Allegations:** ${allegations}\n`;
   md += `* **Evidence Items:** ${pack.evidence.length}\n`;
   md += `* **Relationships:** ${pack.edges.length}\n`;
+  md += `* **Curated Entities:** ${pack.entities.length}\n`;
   md += `* ${postureLineForExport({ defensible: sourcedCount, restricted: unsourcedCount, ambiguous: allegations }, "newsroom")}\n\n`;
 
   md += `## 02. Unknown Inventory\n\n`;
@@ -69,7 +70,9 @@ generatedBy: Lantern (Evidence-First Workbench)
     md += `*All claims have at least one evidence source.*\n\n`;
   } else {
     unsourced.forEach((c, i) => {
-      md += `${i + 1}. ${safeStr(c.text)}\n`;
+      const reason = c.evidenceIds.length === 0 ? "no bound excerpt" : 
+                     c.counterEvidenceIds.length > 0 ? "conflicting sources" : "ambiguous support";
+      md += `${i + 1}. ${safeStr(c.text)} — *Reason: ${reason}*\n`;
     });
     md += `\n`;
   }

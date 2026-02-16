@@ -1,7 +1,8 @@
 import type { ExtractedEntity } from "./entityExtractor";
 import { mockHash } from "../../lanternExtract";
+import { shouldBlockPersonCandidate } from "../../entityGuards";
 
-export type EntityClass = "Person" | "Organization" | "Location" | "Event" | "Product" | "DocumentSection" | "EXCLUDED";
+export type EntityClass = "Person" | "Organization" | "Location" | "Event" | "Product" | "DocumentSection" | "Concept" | "EXCLUDED";
 
 export type SanitizedEntity = ExtractedEntity & {
   entity_class: EntityClass;
@@ -110,6 +111,9 @@ function classifyEntityType(text: string, canonical: string): EntityClass {
   const wordCount = text.split(/\s+/).length;
   if (wordCount === 1 || wordCount === 2) {
     if (/^[A-Z][a-z]+$/.test(text.split(/\s+/)[0])) {
+      if (shouldBlockPersonCandidate(text)) {
+        return "Concept";
+      }
       return "Person";
     }
   }

@@ -62,6 +62,7 @@ export default function LanternExtract() {
   
   // Pagination State
   const PAGE_SIZE = 100;
+  const [entityViewMode, setEntityViewMode] = useState<"aggregated" | "raw">("aggregated");
   const [entityPage, setEntityPage] = useState(1);
   const [quotePage, setQuotePage] = useState(1);
   const [metricPage, setMetricPage] = useState(1);
@@ -1253,8 +1254,87 @@ export default function LanternExtract() {
                   <ScrollArea className="h-full pr-4">
                     {/* Content with pagination for large datasets */}
                     <TabsContent value="entities" className="mt-0 space-y-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-xs font-mono" data-testid="entity-view-toggle">
+                          <button 
+                            data-testid="button-entity-aggregated"
+                            className={`px-2 py-1 rounded ${entityViewMode === 'aggregated' ? 'bg-cyan-500/20 text-cyan-400' : 'text-muted-foreground'}`}
+                            onClick={() => setEntityViewMode('aggregated')}
+                          >Aggregated</button>
+                          <button 
+                            data-testid="button-entity-raw"
+                            className={`px-2 py-1 rounded ${entityViewMode === 'raw' ? 'bg-cyan-500/20 text-cyan-400' : 'text-muted-foreground'}`}
+                            onClick={() => setEntityViewMode('raw')}
+                          >Raw</button>
+                        </div>
+                      </div>
                       {(() => {
-                        const items = pack.items.entities;
+                        const allEntities = pack.items.entities;
+
+                        if (entityViewMode === "aggregated") {
+                          const groups = new Map<string, typeof allEntities>();
+                          allEntities.forEach(item => {
+                            if ((item as any).blocked) return;
+                            const key = `${item.text.toLowerCase().trim()}|${item.type}`;
+                            const group = groups.get(key) || [];
+                            group.push(item);
+                            groups.set(key, group);
+                          });
+
+                          const aggregated = Array.from(groups.entries()).map(([_key, mentions]) => {
+                            const confidences = mentions.map(m => m.confidence_score || m.confidence);
+                            return {
+                              displayName: mentions[0].text,
+                              type: mentions[0].type,
+                              mentionCount: mentions.length,
+                              confMin: Math.min(...confidences),
+                              confMax: Math.max(...confidences),
+                              topExcerpts: mentions.slice(0, 3).map(m => ({
+                                sentence: m.provenance.sentence_text?.slice(0, 120) || "",
+                                offset: m.provenance.start
+                              })),
+                              included: mentions.some(m => m.included),
+                              id: mentions[0].id,
+                            };
+                          }).sort((a, b) => b.mentionCount - a.mentionCount);
+
+                          return aggregated.map((agg) => {
+                            const confMinPct = Math.round(agg.confMin * 100);
+                            const confMaxPct = Math.round(agg.confMax * 100);
+                            const confColor = confMinPct >= 70 ? "text-emerald-500" : confMinPct >= 50 ? "text-yellow-500" : "text-red-500";
+                            return (
+                              <div key={agg.id} data-testid={`entity-agg-${agg.id}`} className={cn(
+                                "border rounded-lg p-3 bg-card/50 hover:border-cyan-500/30 transition-colors",
+                                !agg.included && "opacity-50"
+                              )}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Users className="w-4 h-4 text-cyan-500 flex-shrink-0" />
+                                    <span className="font-bold text-sm">{agg.displayName}</span>
+                                    <Badge variant="secondary" className="text-[10px]">{agg.type}</Badge>
+                                  </div>
+                                  <div className="flex gap-1 items-center flex-shrink-0">
+                                    <Badge variant="outline" className="text-[9px] font-mono border-cyan-500/30 text-cyan-400">{agg.mentionCount}x</Badge>
+                                    <Badge variant="outline" className={`text-[9px] font-mono border-current ${confColor}`}>
+                                      {confMinPct === confMaxPct ? `${confMinPct}%` : `${confMinPct}-${confMaxPct}%`}
+                                    </Badge>
+                                  </div>
+                                </div>
+                                {agg.topExcerpts.length > 0 && (
+                                  <div className="mt-2 space-y-1">
+                                    {agg.topExcerpts.map((ex, i) => (
+                                      <div key={i} className="text-[10px] text-muted-foreground font-mono truncate pl-6">
+                                        <span className="text-cyan-500/50">@{ex.offset}</span> {ex.sentence}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          });
+                        }
+
+                        const items = allEntities;
                         const totalPages = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
                         const safePage = Math.min(entityPage, totalPages);
                         const start = (safePage - 1) * PAGE_SIZE;
@@ -1296,6 +1376,7 @@ export default function LanternExtract() {
                                   meta={
                                     <div className="flex gap-1 items-center">
                                       <Badge variant="outline" className={`text-[9px] font-mono border-current ${confColor}`}>{confScore}%</Badge>
+                                      {(item as any).blocked && <Badge variant="outline" className="text-[9px] font-mono border-red-500/30 text-red-500">BLOCKED</Badge>}
                                       <Badge variant="outline" className="text-[9px] font-mono border-cyan-500/20 text-cyan-500">{item.canonical_family_id?.slice(0,6)}</Badge>
                                     </div>
                                   }

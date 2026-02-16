@@ -118,7 +118,19 @@ export const PackSchema = z.object({
   sourceExtractPackId: z.string().optional(),
   
   // M7.3: Migration Transparency
-  migrationLog: z.array(z.string()).default([]) 
+  migrationLog: z.array(z.string()).default([]),
+
+  curationActions: z.array(z.object({
+    type: z.string(),
+    token: z.string().optional(),
+    entityId: z.string().optional(),
+    fromType: z.string().optional(),
+    toType: z.string().optional(),
+    sourceId: z.string().optional(),
+    targetId: z.string().optional(),
+    timestamp: z.string(),
+    actor: z.string().default("local_user"),
+  })).default([]),
 });
 
 // --- Types (inferred) ---

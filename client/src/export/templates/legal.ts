@@ -52,6 +52,8 @@ generatedBy: Lantern (Evidence-First Workbench)
 
 `;
 
+  md += `> **IMPORTANT NOTICE:** This is a structured compilation of factual assertions and evidentiary references, not a factual finding. No assertion herein should be construed as proven, confirmed, or established unless independently verified. All claims are presented as "supported by excerpt(s)", "unsubstantiated within provided corpus", or "disputed / ambiguous support."\n\n`;
+
   md += `## I. Executive Summary\n\n`;
   const supported = pack.claims.filter((c) => c.claimType === "fact").length;
   const allegations = pack.claims.filter(
@@ -63,6 +65,7 @@ generatedBy: Lantern (Evidence-First Workbench)
   md += `* **Allegations Under Review:** ${allegations}\n`;
   md += `* **Exhibits Referenced:** ${pack.evidence.length}\n`;
   md += `* **Relationships Documented:** ${pack.edges.length}\n`;
+  md += `* **Curated Entities:** ${pack.entities.length}\n`;
   md += `* ${postureLineForExport({ defensible: supportedCount, restricted: unsupportedCount, ambiguous: allegations }, "legal")}\n\n`;
 
   md += `## II. Unsupported / Unsubstantiated Assertions\n\n`;
@@ -71,7 +74,9 @@ generatedBy: Lantern (Evidence-First Workbench)
     md += `*All assertions have at least one evidentiary reference.*\n\n`;
   } else {
     unsupported.forEach((c, i) => {
-      md += `${i + 1}. ${safeStr(c.text)}\n`;
+      const reason = c.evidenceIds.length === 0 ? "no bound excerpt" : 
+                     c.counterEvidenceIds.length > 0 ? "conflicting sources" : "ambiguous support";
+      md += `${i + 1}. ${safeStr(c.text)} — *Reason: ${reason}*\n`;
     });
     md += `\n> **Note:** The above assertions lack sufficient evidentiary basis in the current record and should not be relied upon without further corroboration.\n\n`;
   }
@@ -85,11 +90,11 @@ generatedBy: Lantern (Evidence-First Workbench)
   sorted.forEach((claim, i) => {
     const classification =
       claim.claimType === "fact"
-        ? "Supported"
+        ? "Supported by excerpt(s)"
         : claim.claimType === "allegation"
-          ? "Allegation"
+          ? (claim.evidenceIds.length === 0 ? "Unsubstantiated within provided corpus" : "Allegation under review")
           : claim.claimType === "inference"
-            ? "Inference"
+            ? "Disputed / Ambiguous support"
             : "Opinion";
     md += `| ${i + 1} | ${classification} | ${safeStr(claim.text.slice(0, 80))} | ${(claim.confidence * 100).toFixed(0)}% | ${claim.evidenceIds.length} |\n`;
   });
@@ -183,6 +188,15 @@ generatedBy: Lantern (Evidence-First Workbench)
 
   md += `## VIII. Open Issues / Required Corroboration\n\n`;
   md += `*Items requiring additional evidence, witness statements, or documentary support before any assertion can be deemed supportable.*\n\n`;
+
+  md += `## VIII-A. Curated Entity Index\n\n`;
+  md += `| No. | Entity | Type | Relationships |\n`;
+  md += `|-----|--------|------|---------------|\n`;
+  [...pack.entities].sort((a, b) => a.name.localeCompare(b.name)).forEach((e, i) => {
+    const relCount = pack.edges.filter(edge => edge.fromEntityId === e.id || edge.toEntityId === e.id).length;
+    md += `| ${i + 1} | ${safeStr(e.name)} | ${e.type} | ${relCount} |\n`;
+  });
+  md += `\n`;
 
   md += `## IX. Exhibit Index\n\n`;
   const sortedEvidence = [...pack.evidence].sort((a, b) => a.id.localeCompare(b.id));

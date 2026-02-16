@@ -34,7 +34,10 @@ import {
   Link as LinkIcon,
   AlertTriangle,
   FolderOpen,
-  Zap
+  Zap,
+  Ban,
+  GitMerge,
+  RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -114,6 +117,10 @@ export default function DossierEditor() {
   const [influenceResult, setInfluenceResult] = useState<InfluenceHubsFinding | null>(null);
   const [fundingResult, setFundingResult] = useState<FundingGravityFinding | null>(null);
   const [enforcementResult, setEnforcementResult] = useState<EnforcementMapFinding | null>(null);
+
+  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState("");
+  const [reclassifyEntityId, setReclassifyEntityId] = useState<string | null>(null);
 
   // Form States (New Item Inputs)
   const [newEntity, setNewEntity] = useState<{name: string, type: string}>({ name: "", type: "person" });
@@ -222,10 +229,84 @@ export default function DossierEditor() {
     const updated = { 
         ...pack, 
         entities: pack.entities.filter(e => e.id !== eId),
-        // Cleanup connected edges
         edges: pack.edges.filter(edge => edge.fromEntityId !== eId && edge.toEntityId !== eId) 
     };
     saveDossier(updated);
+  };
+
+  const reclassifyEntity = (eId: string, newType: string) => {
+    if (!pack) return;
+    const entity = pack.entities.find(e => e.id === eId);
+    if (!entity) return;
+    const fromType = entity.type;
+    const action = {
+      type: "reclassify",
+      entityId: eId,
+      fromType,
+      toType: newType,
+      timestamp: new Date().toISOString(),
+      actor: "local_user",
+    };
+    const updated = {
+      ...pack,
+      entities: pack.entities.map(e => e.id === eId ? { ...e, type: newType as any } : e),
+      curationActions: [...(pack.curationActions || []), action],
+    };
+    saveDossier(updated);
+    setReclassifyEntityId(null);
+    toast.success(`Reclassified "${entity.name}" from ${fromType} to ${newType}`);
+  };
+
+  const mergeEntity = (sourceId: string, targetId: string) => {
+    if (!pack || sourceId === targetId) return;
+    const source = pack.entities.find(e => e.id === sourceId);
+    const target = pack.entities.find(e => e.id === targetId);
+    if (!source || !target) return;
+    const mergedAliases = [...new Set([...target.aliases, source.name, ...source.aliases])];
+    const action = {
+      type: "merge",
+      sourceId,
+      targetId,
+      timestamp: new Date().toISOString(),
+      actor: "local_user",
+    };
+    const updated = {
+      ...pack,
+      entities: pack.entities
+        .filter(e => e.id !== sourceId)
+        .map(e => e.id === targetId ? { ...e, aliases: mergedAliases } : e),
+      edges: pack.edges.map(edge => ({
+        ...edge,
+        fromEntityId: edge.fromEntityId === sourceId ? targetId : edge.fromEntityId,
+        toEntityId: edge.toEntityId === sourceId ? targetId : edge.toEntityId,
+      })),
+      curationActions: [...(pack.curationActions || []), action],
+    };
+    saveDossier(updated);
+    setMergeSourceId(null);
+    setMergeTargetId("");
+    toast.success(`Merged "${source.name}" into "${target.name}"`);
+  };
+
+  const blockEntity = (eId: string) => {
+    if (!pack) return;
+    const entity = pack.entities.find(e => e.id === eId);
+    if (!entity) return;
+    const action = {
+      type: "block_token",
+      token: entity.name,
+      entityId: eId,
+      timestamp: new Date().toISOString(),
+      actor: "local_user",
+    };
+    const updated = {
+      ...pack,
+      entities: pack.entities.filter(e => e.id !== eId),
+      edges: pack.edges.filter(edge => edge.fromEntityId !== eId && edge.toEntityId !== eId),
+      curationActions: [...(pack.curationActions || []), action],
+    };
+    saveDossier(updated);
+    toast.success(`Blocked "${entity.name}"`);
   };
 
   // --- EDGE CRUD ---
@@ -382,23 +463,75 @@ export default function DossierEditor() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                  {pack.entities.map(e => (
-                    <Card key={e.id} className="group hover:border-blue-500/50 transition-colors">
-                       <CardContent className="p-4 flex justify-between items-start">
-                          <div>
-                             <div className="flex items-center gap-2">
-                                <span className="font-bold">{e.name}</span>
-                                <Badge variant="secondary" className="text-[10px]">{e.type}</Badge>
-                             </div>
-                             {e.tags.length > 0 && (
-                                <div className="flex gap-1 mt-2 flex-wrap">
-                                   {e.tags.map(t => <Badge key={t} variant="outline" className="text-[9px] opacity-70">{t}</Badge>)}
+                    <Card key={e.id} data-testid={`entity-card-${e.id}`} className="group hover:border-blue-500/50 transition-colors">
+                       <CardContent className="p-4">
+                          <div className="flex justify-between items-start">
+                             <div>
+                                <div className="flex items-center gap-2">
+                                   <span className="font-bold">{e.name}</span>
+                                   <Badge variant="secondary" className="text-[10px]">{e.type}</Badge>
                                 </div>
-                             )}
+                                {e.aliases.length > 0 && (
+                                   <div className="text-[10px] text-muted-foreground mt-1">
+                                      aka: {e.aliases.join(", ")}
+                                   </div>
+                                )}
+                                {e.tags.length > 0 && (
+                                   <div className="flex gap-1 mt-2 flex-wrap">
+                                      {e.tags.map(t => <Badge key={t} variant="outline" className="text-[9px] opacity-70">{t}</Badge>)}
+                                   </div>
+                                )}
+                             </div>
+                             <div className="flex gap-1">
+                                <CopyID id={e.id} />
+                                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteEntity(e.id)} data-testid={`button-delete-entity-${e.id}`}>
+                                   <Trash2 className="w-3 h-3 text-destructive" />
+                                </Button>
+                             </div>
                           </div>
-                          <div className="flex gap-1">
-                             <CopyID id={e.id} />
-                             <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteEntity(e.id)}>
-                                <Trash2 className="w-3 h-3 text-destructive" />
+                          <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                             <Popover open={reclassifyEntityId === e.id} onOpenChange={(open) => setReclassifyEntityId(open ? e.id : null)}>
+                                <PopoverTrigger asChild>
+                                   <Button variant="outline" size="sm" className="h-6 px-2 text-[10px]" data-testid={`button-reclassify-${e.id}`}>
+                                      <RefreshCw className="w-3 h-3 mr-1" /> Reclassify
+                                   </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-40 p-1" align="start">
+                                   {EntityTypeEnum.options.filter(o => o !== e.type).map(opt => (
+                                      <button
+                                         key={opt}
+                                         data-testid={`reclassify-option-${opt}`}
+                                         className="w-full text-left px-2 py-1 text-xs hover:bg-muted rounded"
+                                         onClick={() => reclassifyEntity(e.id, opt)}
+                                      >{opt}</button>
+                                   ))}
+                                </PopoverContent>
+                             </Popover>
+                             <Popover open={mergeSourceId === e.id} onOpenChange={(open) => { setMergeSourceId(open ? e.id : null); setMergeTargetId(""); }}>
+                                <PopoverTrigger asChild>
+                                   <Button variant="outline" size="sm" className="h-6 px-2 text-[10px]" data-testid={`button-merge-${e.id}`}>
+                                      <GitMerge className="w-3 h-3 mr-1" /> Merge
+                                   </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-72 p-2" align="start">
+                                   <p className="text-[10px] text-muted-foreground mb-2">Merge "{e.name}" into:</p>
+                                   <EntityCombobox
+                                      value={mergeTargetId}
+                                      onChange={setMergeTargetId}
+                                      entities={pack.entities.filter(ent => ent.id !== e.id)}
+                                      placeholder="Select target..."
+                                   />
+                                   <Button
+                                      size="sm"
+                                      className="w-full mt-2 h-7 text-xs"
+                                      disabled={!mergeTargetId}
+                                      onClick={() => mergeEntity(e.id, mergeTargetId)}
+                                      data-testid={`button-confirm-merge-${e.id}`}
+                                   >Merge</Button>
+                                </PopoverContent>
+                             </Popover>
+                             <Button variant="outline" size="sm" className="h-6 px-2 text-[10px] text-red-500 hover:text-red-400" onClick={() => blockEntity(e.id)} data-testid={`button-block-${e.id}`}>
+                                <Ban className="w-3 h-3 mr-1" /> Block
                              </Button>
                           </div>
                        </CardContent>

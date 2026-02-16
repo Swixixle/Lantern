@@ -33,7 +33,8 @@ export async function exportEvidencePack(
   pack: Pack,
   lens: Lens,
   findings: Findings,
-  reportHash: string
+  reportHash: string,
+  options?: { includeRawAppendix?: boolean; rawExtractItems?: any }
 ): Promise<Blob> {
   const createdAt = new Date().toISOString();
 
@@ -80,6 +81,39 @@ export async function exportEvidencePack(
     2
   );
 
+  const curationJson = JSON.stringify(
+    {
+      schema: "lantern.curation.v0",
+      case_id: pack.packId,
+      actor: "local_user",
+      actions: (pack as any).curationActions || [],
+    },
+    null,
+    2
+  );
+
+  const entitiesJson = JSON.stringify(
+    {
+      schema: "lantern.entities.v0",
+      pack_id: pack.packId,
+      export_lens: lens,
+      entities: [...pack.entities]
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map((e) => ({
+          id: e.id,
+          name: e.name,
+          type: e.type,
+          aliases: e.aliases,
+          tags: e.tags,
+          mentionCount: pack.edges.filter(
+            (edge) => edge.fromEntityId === e.id || edge.toEntityId === e.id
+          ).length + 1,
+        })),
+    },
+    null,
+    2
+  );
+
   const appJson = JSON.stringify(
     {
       tool: "Lantern",
@@ -106,14 +140,46 @@ export async function exportEvidencePack(
   const dossierBytes = toBytes(dossierMd);
   const claimsBytes = toBytes(claimsJson);
   const sourcesBytes = toBytes(sourcesJson);
+  const curationBytes = toBytes(curationJson);
+  const entitiesBytes = toBytes(entitiesJson);
   const appBytes = toBytes(appJson);
   const onePagerBytes = toBytes(onePagerMd);
 
   const dossierHash = await sha256Bytes(dossierBytes);
   const claimsHash = await sha256Bytes(claimsBytes);
   const sourcesHash = await sha256Bytes(sourcesBytes);
+  const curationHash = await sha256Bytes(curationBytes);
+  const entitiesHash = await sha256Bytes(entitiesBytes);
   const appHash = await sha256Bytes(appBytes);
   const onePagerHash = await sha256Bytes(onePagerBytes);
+
+  const manifestFiles: Record<string, { sha256: string; size: number }> = {
+    "DOSSIER.md": { sha256: dossierHash, size: dossierBytes.byteLength },
+    "ONE_PAGER.md": { sha256: onePagerHash, size: onePagerBytes.byteLength },
+    "CLAIMS.json": { sha256: claimsHash, size: claimsBytes.byteLength },
+    "SOURCES.json": { sha256: sourcesHash, size: sourcesBytes.byteLength },
+    "CURATION.json": { sha256: curationHash, size: curationBytes.byteLength },
+    "ENTITIES.json": { sha256: entitiesHash, size: entitiesBytes.byteLength },
+    "APP.json": { sha256: appHash, size: appBytes.byteLength },
+  };
+
+  let rawAppendixBytesForZip: Uint8Array | null = null;
+  if (options?.includeRawAppendix && options?.rawExtractItems) {
+    const rawAppendixJson = JSON.stringify(
+      {
+        schema: "lantern.raw_appendix.v0",
+        pack_id: pack.packId,
+        note: "Raw extraction output. May contain duplicates, misclassifications, and noise. For forensic reference only.",
+        items: options.rawExtractItems,
+      },
+      null,
+      2
+    );
+    const rawAppendixBytes = toBytes(rawAppendixJson);
+    const rawAppendixHash = await sha256Bytes(rawAppendixBytes);
+    manifestFiles["RAW_APPENDIX.json"] = { sha256: rawAppendixHash, size: rawAppendixBytes.byteLength };
+    rawAppendixBytesForZip = rawAppendixBytes;
+  }
 
   const manifestJson = JSON.stringify(
     {
@@ -125,13 +191,7 @@ export async function exportEvidencePack(
       tool_version: TOOL_VERSION,
       schema_version: pack.schemaVersion,
       report_hash: reportHash,
-      files: {
-        "DOSSIER.md": { sha256: dossierHash, size: dossierBytes.byteLength },
-        "ONE_PAGER.md": { sha256: onePagerHash, size: onePagerBytes.byteLength },
-        "CLAIMS.json": { sha256: claimsHash, size: claimsBytes.byteLength },
-        "SOURCES.json": { sha256: sourcesHash, size: sourcesBytes.byteLength },
-        "APP.json": { sha256: appHash, size: appBytes.byteLength },
-      },
+      files: manifestFiles,
       raw_sources_included: false,
       raw_sources_reason: "Raw source embedding not implemented in v0",
     },
@@ -146,7 +206,13 @@ export async function exportEvidencePack(
   zip.file("ONE_PAGER.md", onePagerBytes);
   zip.file("CLAIMS.json", claimsBytes);
   zip.file("SOURCES.json", sourcesBytes);
+  zip.file("CURATION.json", curationBytes);
+  zip.file("ENTITIES.json", entitiesBytes);
   zip.file("APP.json", appBytes);
+
+  if (rawAppendixBytesForZip) {
+    zip.file("RAW_APPENDIX.json", rawAppendixBytesForZip);
+  }
 
   return zip.generateAsync({ type: "blob" });
 }

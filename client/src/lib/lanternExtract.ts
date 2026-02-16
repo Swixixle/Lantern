@@ -28,6 +28,7 @@ export type EntityItem = BaseItem & {
   canonical_id?: string;
   entity_class?: EntityClass;
   confidence_score?: number;
+  blocked?: boolean;
 };
 
 export type QuoteItem = BaseItem & {
@@ -269,19 +270,21 @@ export const extract = (text: string, options: ExtractionOptions): { items: Lant
       const stableId = mockHash(`${e.canonical}:${e.start}:${e.end}`);
       const entityType = (e.entity_class === "Person" || e.entity_class === "Location" || 
                          e.entity_class === "Organization" || e.entity_class === "Event" || 
-                         e.entity_class === "Product") ? e.entity_class : "Organization";
+                         e.entity_class === "Product") ? e.entity_class : 
+                         e.entity_class === "Concept" ? "Organization" : "Organization";
       
       items.entities.push({
           id: stableId,
           provenance,
           confidence: e.confidence_score,
-          included: e.tier !== "NOISE" && e.confidence_score >= CONFIDENCE_THRESHOLD,
+          included: e.tier !== "NOISE" && e.confidence_score >= CONFIDENCE_THRESHOLD && e.entity_class !== "Concept",
           text: e.text,
           type: entityType,
           canonical_family_id: e.entity_id,
           canonical_id: e.canonical_id,
           entity_class: e.entity_class,
-          confidence_score: e.confidence_score
+          confidence_score: e.confidence_score,
+          blocked: e.entity_class === "Concept",
       });
   });
 

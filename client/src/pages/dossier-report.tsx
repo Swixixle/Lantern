@@ -32,6 +32,7 @@ export default function DossierReport() {
   const [showExportModal, setShowExportModal] = useState(false);
   const [verifyResult, setVerifyResult] = useState<VerifyPackResult | null>(null);
   const [verifying, setVerifying] = useState(false);
+  const [includeRawAppendix, setIncludeRawAppendix] = useState(false);
   
   // Computed Findings
   const [influence, setInfluence] = useState<InfluenceHubsFinding | null>(null);
@@ -89,7 +90,9 @@ export default function DossierReport() {
     if (!pack) return;
     const lensToUse = targetLens || exportLens;
     const findingsObj = { influence, funding, enforcement };
-    const blob = await exportEvidencePack(pack, lensToUse, findingsObj, reportHash);
+    const blob = await exportEvidencePack(pack, lensToUse, findingsObj, reportHash, {
+      includeRawAppendix,
+    });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -164,6 +167,19 @@ export default function DossierReport() {
                     <option value="newsroom">Newsroom (Editor Review Packet)</option>
                     <option value="legal">Legal (Case Memorandum + Exhibit Index)</option>
                   </select>
+                </div>
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="include-raw-appendix"
+                    checked={includeRawAppendix}
+                    onChange={(e) => setIncludeRawAppendix(e.target.checked)}
+                    className="rounded border-gray-300"
+                    data-testid="checkbox-raw-appendix"
+                  />
+                  <label htmlFor="include-raw-appendix" className="text-sm text-gray-700">
+                    Include Raw Appendix (forensic reference)
+                  </label>
                 </div>
                 <div className="flex flex-col gap-2 pt-2">
                   <Button
