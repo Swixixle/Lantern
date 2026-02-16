@@ -149,20 +149,37 @@ All source documents are encrypted using **AES-256-GCM** (authenticated encrypti
 - 128-bit authentication tags for integrity
 - Fail-closed: Server rejects startup without encryption key in production
 
-### Chain-of-Custody Guarantees
+### Chain-of-Custody Capabilities
 
-**What Lantern guarantees:**
-- ✅ Cryptographic integrity (SHA-256 hashing)
-- ✅ Tamper-evident audit trails (append-only ledger)
+**What Lantern provides:**
+- ✅ Cryptographic integrity verification (SHA-256 hashing)
+- ✅ Tamper detection (manifest integrity checks)
 - ✅ Deterministic verification (canonical JSON hashing)
-- ✅ Complete custody history (timestamped operations)
+- ✅ Complete custody tracking (timestamped operations)
+- ✅ User override logging (assertion type tracking)
+- ✅ Encryption-at-rest for sensitive evidence
 
-**What Lantern does NOT guarantee:**
-- ❌ Document authenticity (cannot detect pre-ingestion forgery)
-- ❌ Legal admissibility (depends on jurisdiction)
+**What Lantern does NOT provide:**
+- ❌ Document authenticity verification (cannot detect pre-ingestion forgery)
+- ❌ Legal admissibility certification (depends on jurisdiction)
 - ❌ Deep fake detection
 
-**Verification:**
+**Testing & Verification:**
+
+Lantern includes comprehensive HTTP+DB integration tests that prove:
+- Valid chain-of-custody workflow (create → upload → claim → finalize → verify)
+- Tamper detection (modification triggers integrity mismatch)
+- Encryption-at-rest (ciphertext ≠ plaintext, decryption roundtrip)
+- Refusal override logging (user assertions tracked with metadata)
+
+Run integration tests:
+```bash
+npm run test:integration
+```
+
+See [server/__tests__/INTEGRATION_TESTS.md](./server/__tests__/INTEGRATION_TESTS.md) for details.
+
+**API Verification:**
 ```bash
 # Verify case integrity
 curl -X GET "http://localhost:5000/api/case/{caseId}/verify"
@@ -181,8 +198,9 @@ Before using Lantern in legal proceedings:
 3. Export cases regularly (backup and archival)
 4. Verify integrity periodically (automated checks)
 5. Protect encryption keys (secure key management)
+6. Run integration tests to validate system integrity
 
-**See [docs/OPERATOR_GUIDE.md](./docs/OPERATOR_GUIDE.md) for court/compliance-ready procedures.**
+**See [docs/OPERATOR_GUIDE.md](./docs/OPERATOR_GUIDE.md) for operational procedures.**
 
 ## Handling Conflicts
 
