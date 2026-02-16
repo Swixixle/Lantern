@@ -4,9 +4,73 @@
  * Verifies AES-256-GCM encryption/decryption functionality.
  */
 
-import { encrypt, decrypt, encryptString, decryptString, encryptFile, decryptFile, deriveKey } from "../encryption";
+import { encrypt, decrypt, encryptString, decryptString, encryptFile, decryptFile, deriveKey, getEncryptionKey } from "../encryption";
 
 describe("Encryption Utilities", () => {
+  describe("getEncryptionKey", () => {
+    const originalEnv = process.env;
+    
+    beforeEach(() => {
+      // Reset environment for each test
+      process.env = { ...originalEnv };
+      delete process.env.LANTERN_VAULT_KEY;
+      delete process.env.ENCRYPTION_KEY;
+    });
+    
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+    
+    it("should throw in production without key", () => {
+      process.env.NODE_ENV = "production";
+      delete process.env.LANTERN_VAULT_KEY;
+      delete process.env.ENCRYPTION_KEY;
+      
+      expect(() => getEncryptionKey()).toThrow("SECURITY: LANTERN_VAULT_KEY or ENCRYPTION_KEY must be set in production");
+    });
+    
+    it("should return deterministic default key in dev with allowDefault", () => {
+      process.env.NODE_ENV = "development";
+      delete process.env.LANTERN_VAULT_KEY;
+      delete process.env.ENCRYPTION_KEY;
+      
+      const key1 = getEncryptionKey({ allowDefault: true });
+      const key2 = getEncryptionKey({ allowDefault: true });
+      
+      expect(key1.length).toBe(32);
+      expect(key1.equals(key2)).toBe(true);
+    });
+    
+    it("should throw in dev without key when allowDefault is false", () => {
+      process.env.NODE_ENV = "development";
+      delete process.env.LANTERN_VAULT_KEY;
+      delete process.env.ENCRYPTION_KEY;
+      
+      expect(() => getEncryptionKey({ allowDefault: false })).toThrow("Encryption key not configured");
+    });
+    
+    it("should use LANTERN_VAULT_KEY when set", () => {
+      process.env.LANTERN_VAULT_KEY = "test-vault-key";
+      
+      const keyWithVault = getEncryptionKey();
+      expect(keyWithVault.length).toBe(32);
+      
+      // Compare with a key derived from default
+      delete process.env.LANTERN_VAULT_KEY;
+      const keyDefault = getEncryptionKey({ allowDefault: true });
+      
+      expect(keyWithVault.equals(keyDefault)).toBe(false);
+    });
+    
+    it("should use ENCRYPTION_KEY as fallback", () => {
+      process.env.ENCRYPTION_KEY = "test-encryption-key";
+      delete process.env.LANTERN_VAULT_KEY;
+      
+      const key = getEncryptionKey();
+      expect(key.length).toBe(32);
+    });
+  });
+  
   describe("deriveKey", () => {
     it("should derive a 32-byte key from passphrase", () => {
       const key = deriveKey("test-passphrase");
