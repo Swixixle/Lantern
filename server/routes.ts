@@ -3408,6 +3408,10 @@ Notes:
     }
   });
 
+  // Register chain-of-custody routes
+  const { registerChainOfCustodyRoutes } = await import("./chainOfCustodyRoutes");
+  registerChainOfCustodyRoutes(app);
+
   // Start the job processor
   startJobProcessor();
 
