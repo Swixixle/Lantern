@@ -25,7 +25,7 @@ Lantern does not assert truth, intent, or legitimacy. It demonstrates how conclu
 - **RBAC**: Role-based access control (Lead Investigator, Reviewer, Auditor)
 - **Local-First Design**: Browser-based UI with persistent backend storage
 - **Epistemic Discipline**: Clear separation between facts, claims, and interpretations
-- **Court-Ready**: Legal-grade documentation and verification procedures
+- **Verification Support**: Tamper detection and integrity verification for evidence bundles
 
 ## Evidence Walkthrough
 
