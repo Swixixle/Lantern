@@ -468,7 +468,7 @@ export function categorizeConfidence(confidence: number): ConfidenceLevel {
 - Federal Rules of Evidence, Rule 702 (Expert Testimony)
 - Model Rules of Professional Conduct 3.3 (Candor)
 - Daubert Standard (Admissibility of Scientific Evidence)
-- NIST Guidelines for Analytical Disclosure
+- NIST SP 800-53 Rev. 5 (Security and Privacy Controls)
 
 ## Future Enhancements
 
