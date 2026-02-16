@@ -1,6 +1,8 @@
 import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, ReferenceLine } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { MonthRow } from "@/lib/sovereigntyEngine";
+import { HeuristicDisclaimerOverlay } from "./HeuristicDisclaimerOverlay";
+import { SOVEREIGNTY_METRICS } from "@/lib/sovereigntyMetrics";
 
 interface SavingsChartProps {
   data: MonthRow[];
@@ -32,43 +34,45 @@ export function SavingsChart({ data }: SavingsChartProps) {
   const targetDownPayment = data[0]?.targetDownPayment || 0;
 
   return (
-    <Card className="h-full border-border bg-card/50 backdrop-blur-sm">
-      <CardHeader>
-        <CardTitle className="font-mono text-sm uppercase tracking-widest text-muted-foreground">
-          Savings Trajectory (60 Months)
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="h-[300px]">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" vertical={false} />
-            <XAxis 
-              dataKey="label" 
-              stroke="hsl(var(--muted-foreground))" 
-              tick={{ fontSize: 10, fontFamily: 'var(--font-mono)' }}
-              interval={5}
-            />
-            <YAxis 
-              stroke="hsl(var(--muted-foreground))" 
-              tick={{ fontSize: 10, fontFamily: 'var(--font-mono)' }}
-              tickFormatter={(value) => `$${value / 1000}k`}
-            />
-            <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '3 3' }} />
-            
-            <ReferenceLine y={targetDownPayment} stroke="hsl(var(--chart-1))" strokeDasharray="3 3" label={{ position: 'right', value: 'Target', fill: 'hsl(var(--chart-1))', fontSize: 10 }} />
-            
-            <Line 
-              type="monotone" 
-              dataKey="totalSavings" 
-              name="Total Savings"
-              stroke="hsl(var(--chart-2))" 
-              strokeWidth={2}
-              dot={false}
-              activeDot={{ r: 4, strokeWidth: 0 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
-      </CardContent>
-    </Card>
+    <HeuristicDisclaimerOverlay metadata={SOVEREIGNTY_METRICS.savingsProjection} inline>
+      <Card className="h-full border-border bg-card/50 backdrop-blur-sm">
+        <CardHeader>
+          <CardTitle className="font-mono text-sm uppercase tracking-widest text-muted-foreground">
+            Savings Trajectory (60 Months)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={data} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--muted))" vertical={false} />
+              <XAxis 
+                dataKey="label" 
+                stroke="hsl(var(--muted-foreground))" 
+                tick={{ fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                interval={5}
+              />
+              <YAxis 
+                stroke="hsl(var(--muted-foreground))" 
+                tick={{ fontSize: 10, fontFamily: 'var(--font-mono)' }}
+                tickFormatter={(value) => `$${value / 1000}k`}
+              />
+              <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1, strokeDasharray: '3 3' }} />
+              
+              <ReferenceLine y={targetDownPayment} stroke="hsl(var(--chart-1))" strokeDasharray="3 3" label={{ position: 'right', value: 'Target', fill: 'hsl(var(--chart-1))', fontSize: 10 }} />
+              
+              <Line 
+                type="monotone" 
+                dataKey="totalSavings" 
+                name="Total Savings"
+                stroke="hsl(var(--chart-2))" 
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, strokeWidth: 0 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+    </HeuristicDisclaimerOverlay>
   );
 }
