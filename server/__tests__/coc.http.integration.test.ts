@@ -9,6 +9,13 @@
  * 
  * These tests require a running PostgreSQL database.
  * Set DATABASE_URL environment variable to point to test database.
+ * 
+ * AUTH BYPASS SECURITY MODEL:
+ * Three-layer guardrails prevent production activation:
+ * 1. NODE_ENV === "test" (environment-level gate)
+ * 2. LANTERN_TEST_AUTH_BYPASS === "true" (explicit opt-in via env)
+ * 3. x-lantern-test-auth header === "true" (per-request opt-in)
+ * All three must be present for bypass to activate.
  */
 
 // CRITICAL: Set environment variables BEFORE any imports
@@ -85,6 +92,7 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
       // Step 1: Verify case exists (already created in beforeEach)
       const getCase = await request(app)
         .get(`/api/cases/${testCaseId}`)
+        .set("x-lantern-test-auth", "true")
         .expect(200);
       
       expect(getCase.body.id).toBe(testCaseId);
@@ -175,6 +183,7 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
       // This proves the actual deployed route behaves correctly
       const verifyResponse = await request(app)
         .get(`/api/case/${testCaseId}/verify`)
+        .set("x-lantern-test-auth", "true")
         .expect(200);
       
       expect(verifyResponse.body.status).toBe("valid");
@@ -281,6 +290,7 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
       // This proves the actual deployed route detects tampering
       const verifyResponse = await request(app)
         .get(`/api/case/${testCaseId}/verify`)
+        .set("x-lantern-test-auth", "true")
         .expect(200);
       
       expect(verifyResponse.body.status).toBe("mismatch");
