@@ -39,24 +39,26 @@ export function deriveKey(passphrase: string): Buffer {
  * 
  * IMPORTANT: Set LANTERN_VAULT_KEY or ENCRYPTION_KEY in production environment!
  * 
- * @param allowDefault - If false, throws error when no key is set (fail-closed mode)
+ * @param opts - Options object with allowDefault flag
+ * @param opts.allowDefault - If false, throws error when no key is set (fail-closed mode)
  * @returns Encryption key buffer
- * @throws Error if production mode and no key is set
+ * @throws Error if production mode and no key is set, or if allowDefault is false and no key exists
  */
-export function getEncryptionKey(allowDefault = true): Buffer {
+export function getEncryptionKey(opts?: { allowDefault?: boolean }): Buffer {
+  const allowDefault = opts?.allowDefault ?? true;
   const keyString = process.env.LANTERN_VAULT_KEY || process.env.ENCRYPTION_KEY;
   
   // Fail-closed in production if no key is set
   if (!keyString) {
-    if (process.env.NODE_ENV === "production" && !allowDefault) {
+    if (process.env.NODE_ENV === "production") {
       throw new Error(
         "SECURITY: LANTERN_VAULT_KEY or ENCRYPTION_KEY must be set in production. " +
         "Generate a secure key with: openssl rand -hex 32"
       );
     }
-    // Development fallback
+    // Development mode - fail if allowDefault is false
     if (!allowDefault) {
-      throw new Error("Encryption key not configured");
+      throw new Error("Encryption key not configured and allowDefault is false");
     }
     return deriveKey("default-dev-key-change-in-production");
   }
