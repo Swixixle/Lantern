@@ -33,6 +33,10 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
   const testFileSha256 = createHash("sha256").update(testFileContent).digest("hex");
   
   beforeAll(async () => {
+    // Set environment variables for test auth bypass
+    process.env.NODE_ENV = "test";
+    process.env.LANTERN_TEST_AUTH_BYPASS = "true";
+    
     // Create test app with all routes
     app = await createTestApp();
     
@@ -42,6 +46,9 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
       password: "test-password-hash",
     });
     testUserId = user.id;
+    
+    // Set test user ID for auth bypass
+    process.env.LANTERN_TEST_USER_ID = testUserId;
     
     // Grant lead investigator role for test user
     await db
@@ -160,15 +167,15 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
           createdBy: testUserId,
         });
       
-      // Step 5: Verify manifest integrity (DB-level verification)
-      // Note: HTTP endpoint requires authentication. We prove verification works
-      // by directly using the verification function with DB data.
-      const { verifyManifestIntegrity } = await import("../chainOfCustodyUtil");
-      const verification = verifyManifestIntegrity(manifest);
+      // Step 5: Verify manifest integrity via HTTP endpoint (HTTP+DB PROOF)
+      // This proves the actual deployed route behaves correctly
+      const verifyResponse = await request(app)
+        .get(`/api/case/${testCaseId}/verify`)
+        .expect(200);
       
-      expect(verification.status).toBe("valid");
-      expect(verification.computed_hash).toBe(manifest.evidence_pack_hash);
-      expect(verification.error_details).toBeUndefined();
+      expect(verifyResponse.body.status).toBe("valid");
+      expect(verifyResponse.body.computed_hash).toBe(manifest.evidence_pack_hash);
+      expect(verifyResponse.body.error_details).toBeUndefined();
     });
   });
   
@@ -266,21 +273,15 @@ describe("HTTP+DB Chain-of-Custody Integration Tests", () => {
         })
         .where(eq(chainOfCustodyManifests.caseId, testCaseId));
       
-      // Verify tamper detection (DB-level verification)
-      // Retrieve the tampered manifest from DB and verify it fails
-      const manifestsFromDb = await db
-        .select()
-        .from(chainOfCustodyManifests)
-        .where(eq(chainOfCustodyManifests.caseId, testCaseId));
+      // Verify tamper detection via HTTP endpoint (HTTP+DB PROOF)
+      // This proves the actual deployed route detects tampering
+      const verifyResponse = await request(app)
+        .get(`/api/case/${testCaseId}/verify`)
+        .expect(200);
       
-      const tamperedManifestFromDb = JSON.parse(manifestsFromDb[0].manifestJson);
-      
-      const { verifyManifestIntegrity } = await import("../chainOfCustodyUtil");
-      const verification = verifyManifestIntegrity(tamperedManifestFromDb);
-      
-      expect(verification.status).toBe("mismatch");
-      expect(verification.computed_hash).not.toBe(manifest.evidence_pack_hash);
-      expect(verification.error_details).toBeTruthy();
+      expect(verifyResponse.body.status).toBe("mismatch");
+      expect(verifyResponse.body.computed_hash).not.toBe(manifest.evidence_pack_hash);
+      expect(verifyResponse.body.error_details).toBeTruthy();
     });
   });
   

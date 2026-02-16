@@ -10,7 +10,15 @@
 
 import type { Express, Request, Response } from "express";
 import archiver from "archiver";
-import { storage } from "./storage";
+import { storage, db } from "./storage";
+import { eq, desc, asc } from "drizzle-orm";
+import {
+  chainOfCustodyManifests,
+  enhancedSources,
+  trackedClaims,
+  ledgerEvents,
+  incidentReports,
+} from "@shared/schema";
 import {
   createManifest,
   createSourceEntry,
@@ -43,11 +51,11 @@ export function registerChainOfCustodyRoutes(app: Express) {
       const { caseId } = req.params;
       
       // Fetch latest manifest from database
-      const manifests = await storage.db
+      const manifests = await db
         .select()
-        .from(storage.schema.chainOfCustodyManifests)
-        .where(storage.eq(storage.schema.chainOfCustodyManifests.caseId, caseId))
-        .orderBy(storage.desc(storage.schema.chainOfCustodyManifests.createdAt))
+        .from(chainOfCustodyManifests)
+        .where(eq(chainOfCustodyManifests.caseId, caseId))
+        .orderBy(desc(chainOfCustodyManifests.createdAt))
         .limit(1);
       
       if (manifests.length === 0) {
@@ -84,11 +92,11 @@ export function registerChainOfCustodyRoutes(app: Express) {
       const { caseId } = req.params;
       
       // Fetch latest manifest
-      const manifests = await storage.db
+      const manifests = await db
         .select()
-        .from(storage.schema.chainOfCustodyManifests)
-        .where(storage.eq(storage.schema.chainOfCustodyManifests.caseId, caseId))
-        .orderBy(storage.desc(storage.schema.chainOfCustodyManifests.createdAt))
+        .from(chainOfCustodyManifests)
+        .where(eq(chainOfCustodyManifests.caseId, caseId))
+        .orderBy(desc(chainOfCustodyManifests.createdAt))
         .limit(1);
       
       if (manifests.length === 0) {
@@ -131,16 +139,16 @@ export function registerChainOfCustodyRoutes(app: Express) {
       }
       
       // Fetch all enhanced sources for this case
-      const sources = await storage.db
+      const sources = await db
         .select()
-        .from(storage.schema.enhancedSources)
-        .where(storage.eq(storage.schema.enhancedSources.caseId, caseId));
+        .from(enhancedSources)
+        .where(eq(enhancedSources.caseId, caseId));
       
       // Fetch all tracked claims for this case
-      const claims = await storage.db
+      const claims = await db
         .select()
-        .from(storage.schema.trackedClaims)
-        .where(storage.eq(storage.schema.trackedClaims.caseId, caseId));
+        .from(trackedClaims)
+        .where(eq(trackedClaims.caseId, caseId));
       
       // Convert to manifest format
       const manifestSources: ChainOfCustodySource[] = sources.map(s => ({
@@ -163,11 +171,11 @@ export function registerChainOfCustodyRoutes(app: Express) {
       }));
       
       // Check for previous manifest to enable chaining
-      const previousManifests = await storage.db
+      const previousManifests = await db
         .select()
-        .from(storage.schema.chainOfCustodyManifests)
-        .where(storage.eq(storage.schema.chainOfCustodyManifests.caseId, caseId))
-        .orderBy(storage.desc(storage.schema.chainOfCustodyManifests.createdAt))
+        .from(chainOfCustodyManifests)
+        .where(eq(chainOfCustodyManifests.caseId, caseId))
+        .orderBy(desc(chainOfCustodyManifests.createdAt))
         .limit(1);
       
       const previousManifestHash = previousManifests.length > 0
@@ -185,8 +193,8 @@ export function registerChainOfCustodyRoutes(app: Express) {
       );
       
       // Store manifest in database
-      const [manifestRecord] = await storage.db
-        .insert(storage.schema.chainOfCustodyManifests)
+      const [manifestRecord] = await db
+        .insert(chainOfCustodyManifests)
         .values({
           caseId,
           manifestVersion: manifest.manifest_version,
@@ -252,8 +260,8 @@ export function registerChainOfCustodyRoutes(app: Express) {
       );
       
       // Store claim in database
-      const [claim] = await storage.db
-        .insert(storage.schema.trackedClaims)
+      const [claim] = await db
+        .insert(trackedClaims)
         .values({
           caseId,
           sourceId: claimData.source_id,
@@ -307,11 +315,11 @@ export function registerChainOfCustodyRoutes(app: Express) {
       const verifyBeforeExport = req.query.verify_before_export === "true";
       
       // Fetch latest manifest
-      const manifests = await storage.db
+      const manifests = await db
         .select()
-        .from(storage.schema.chainOfCustodyManifests)
-        .where(storage.eq(storage.schema.chainOfCustodyManifests.caseId, caseId))
-        .orderBy(storage.desc(storage.schema.chainOfCustodyManifests.createdAt))
+        .from(chainOfCustodyManifests)
+        .where(eq(chainOfCustodyManifests.caseId, caseId))
+        .orderBy(desc(chainOfCustodyManifests.createdAt))
         .limit(1);
       
       if (manifests.length === 0) {
@@ -349,10 +357,10 @@ export function registerChainOfCustodyRoutes(app: Express) {
       archive.append(JSON.stringify(manifest, null, 2), { name: "manifest.json" });
       
       // Fetch and add sources
-      const sources = await storage.db
+      const sources = await db
         .select()
-        .from(storage.schema.enhancedSources)
-        .where(storage.eq(storage.schema.enhancedSources.caseId, caseId));
+        .from(enhancedSources)
+        .where(eq(enhancedSources.caseId, caseId));
       
       for (const source of sources) {
         if (source.encryptedBlob) {
@@ -397,19 +405,19 @@ export function registerChainOfCustodyRoutes(app: Express) {
       }
       
       // Fetch and add claims
-      const claims = await storage.db
+      const claims = await db
         .select()
-        .from(storage.schema.trackedClaims)
-        .where(storage.eq(storage.schema.trackedClaims.caseId, caseId));
+        .from(trackedClaims)
+        .where(eq(trackedClaims.caseId, caseId));
       
       archive.append(JSON.stringify(claims, null, 2), { name: "claims.json" });
       
       // Fetch and add ledger events (JSON Lines format)
-      const events = await storage.db
+      const events = await db
         .select()
-        .from(storage.schema.ledgerEvents)
-        .where(storage.eq(storage.schema.ledgerEvents.caseId, caseId))
-        .orderBy(storage.asc(storage.schema.ledgerEvents.seq));
+        .from(ledgerEvents)
+        .where(eq(ledgerEvents.caseId, caseId))
+        .orderBy(asc(ledgerEvents.seq));
       
       const eventsJsonl = events.map(e => JSON.stringify(e)).join("\n");
       archive.append(eventsJsonl, { name: "events.jsonl" });
@@ -433,11 +441,11 @@ export function registerChainOfCustodyRoutes(app: Express) {
       // Optional: Add report.md
       if (includeReport && manifest.report_hash) {
         // Fetch report from database if available
-        const reports = await storage.db
+        const reports = await db
           .select()
-          .from(storage.schema.incidentReports)
-          .where(storage.eq(storage.schema.incidentReports.caseId, caseId))
-          .orderBy(storage.desc(storage.schema.incidentReports.createdAt))
+          .from(incidentReports)
+          .where(eq(incidentReports.caseId, caseId))
+          .orderBy(desc(incidentReports.createdAt))
           .limit(1);
         
         if (reports.length > 0 && reports[0].markdownContent) {

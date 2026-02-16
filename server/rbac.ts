@@ -8,7 +8,9 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
-import { storage } from "./storage";
+import { storage, db } from "./storage";
+import { eq, and, or, isNull } from "drizzle-orm";
+import { userRoles } from "@shared/schema";
 
 /**
  * User role definitions.
@@ -77,13 +79,13 @@ export async function userHasRole(
   try {
     // Check case-specific role first
     if (caseId) {
-      const caseRoles = await storage.db
+      const caseRoles = await db
         .select()
-        .from(storage.schema.userRoles)
-        .where(storage.and(
-          storage.eq(storage.schema.userRoles.userId, userId),
-          storage.eq(storage.schema.userRoles.caseId, caseId),
-          storage.eq(storage.schema.userRoles.role, requiredRole)
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, userId),
+          eq(userRoles.caseId, caseId),
+          eq(userRoles.role, requiredRole)
         ));
       
       if (caseRoles.length > 0) {
@@ -92,13 +94,13 @@ export async function userHasRole(
     }
     
     // Check global role
-    const globalRoles = await storage.db
+    const globalRoles = await db
       .select()
-      .from(storage.schema.userRoles)
-      .where(storage.and(
-        storage.eq(storage.schema.userRoles.userId, userId),
-        storage.isNull(storage.schema.userRoles.caseId),
-        storage.eq(storage.schema.userRoles.role, requiredRole)
+      .from(userRoles)
+      .where(and(
+        eq(userRoles.userId, userId),
+        isNull(userRoles.caseId),
+        eq(userRoles.role, requiredRole)
       ));
     
     return globalRoles.length > 0;
@@ -120,33 +122,28 @@ export async function getUserRoles(
   caseId: string | null
 ): Promise<UserRole[]> {
   try {
-    let query = storage.db
-      .select()
-      .from(storage.schema.userRoles)
-      .where(storage.eq(storage.schema.userRoles.userId, userId));
-    
     if (caseId) {
       // Get both case-specific and global roles
-      const roles = await storage.db
+      const roles = await db
         .select()
-        .from(storage.schema.userRoles)
-        .where(storage.and(
-          storage.eq(storage.schema.userRoles.userId, userId),
-          storage.or(
-            storage.eq(storage.schema.userRoles.caseId, caseId),
-            storage.isNull(storage.schema.userRoles.caseId)
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, userId),
+          or(
+            eq(userRoles.caseId, caseId),
+            isNull(userRoles.caseId)
           )
         ));
       
       return roles.map(r => r.role as UserRole);
     } else {
       // Get only global roles
-      const roles = await storage.db
+      const roles = await db
         .select()
-        .from(storage.schema.userRoles)
-        .where(storage.and(
-          storage.eq(storage.schema.userRoles.userId, userId),
-          storage.isNull(storage.schema.userRoles.caseId)
+        .from(userRoles)
+        .where(and(
+          eq(userRoles.userId, userId),
+          isNull(userRoles.caseId)
         ));
       
       return roles.map(r => r.role as UserRole);
@@ -283,8 +280,8 @@ export async function grantRole(
   caseId: string | null,
   grantedBy: string
 ): Promise<void> {
-  await storage.db
-    .insert(storage.schema.userRoles)
+  await db
+    .insert(userRoles)
     .values({
       userId,
       caseId,
