@@ -1,342 +1,326 @@
-# Lantern
+# ELI Sentinel
 
-Lantern is an interpretive inspection framework for reasoning about fixed evidence artifacts.
+## Cryptographically Verifiable AI Governance Infrastructure
 
-It integrates with cryptographic receipt systems to support tamper-evident audit trails. Currently demonstrated using HALO-RECEIPTS (private system; available by inquiry).
+---
 
-Lantern does not assert truth, intent, or legitimacy. It demonstrates how conclusions change under explicit interpretive lenses.
+## Overview
 
-> **Status**: Early research. Open to technical collaboration on cryptographic verification and interpretive frameworks.
+**ELI Sentinel** is a protocol-backed AI governance gateway.
 
-## Deploy to Replit
+It intercepts AI model calls, enforces policy **before execution**, and emits a **tamper-evident, cryptographically signed accountability packet** that can be verified **offline** without trusting Sentinel's infrastructure.
 
-[![Run on Replit](https://replit.com/badge/github/Swixixle/Lantern)](https://replit.com/new/github/Swixixle/Lantern)
+This is not a logging tool.
+This is not an observability platform.
+This is a **black-box recorder for AI decisions**.
 
-**→ See [REPLIT_SETUP.md](./REPLIT_SETUP.md) for detailed Replit deployment instructions**
+If a court, regulator, auditor, or insurer asks:
 
-## Key Features
+> "Prove that this AI call followed approved governance at the time it executed."
 
-- **Interpretive Lenses**: Analyze evidence under multiple explicit interpretive frameworks
-- **Tamper-Evident Trails**: Cryptographic chain-of-custody with SHA-256 hashing
-- **Encrypted Storage**: AES-256-GCM encryption for sources at rest
-- **Append-Only Ledger**: Complete audit trail of all evidence operations
-- **Evidence Export**: Comprehensive ZIP bundles with integrity verification
-- **Docker Deployment**: Production-ready containerized deployment
-- **RBAC**: Role-based access control (Lead Investigator, Reviewer, Auditor)
-- **Local-First Design**: Browser-based UI with persistent backend storage
-- **Epistemic Discipline**: Clear separation between facts, claims, and interpretations
-- **Verification Support**: Tamper detection and integrity verification for evidence bundles
+ELI Sentinel produces a mathematically verifiable answer.
 
-## Evidence Walkthrough
+---
 
-See `/demos/evidence-walkthrough` for a complete example of Lantern's interpretive discipline applied to a fixed exhibit.
+# Core Outcome
 
-## Installation
+For every AI transaction:
 
-### Local Development
+1. Evaluate governance policy **pre-execution**
+2. Allow or deny execution
+3. Construct a deterministic **HALO chain**
+4. Sign a canonical message with a cryptographic key
+5. Persist a self-contained accountability packet
+6. Enable independent offline verification
 
-**Prerequisites:**
-- Node.js 20+ 
-- PostgreSQL 16+
-- npm or yarn
+---
 
-**Clone and install:**
-```bash
-git clone https://github.com/Swixixle/Lantern.git
-cd Lantern
-npm install
+# System Capabilities
+
+## 1. Pre-Execution Policy Enforcement
+
+Policies are evaluated **before** the model is contacted.
+
+Checks may include:
+
+* Model allowlist
+* Feature-specific constraints (e.g., billing requires temperature=0.0)
+* Token ceilings
+* Tool permissions
+* Network access controls
+* Environment rules (dev/staging/prod)
+
+Denied calls never reach the provider.
+
+---
+
+## 2. HALO Chain (Hash-Linked Accountability Ledger)
+
+Each transaction produces a deterministic five-block hash chain:
+
+1. Genesis
+2. Intent
+3. Inputs (hashes only)
+4. Policy + Model Snapshot
+5. Output (or Denial)
+
+Each block hashes the previous block's hash plus canonicalized payload.
+
+Any modification breaks verification.
+
+---
+
+## 3. Cryptographic Signing (Trust Anchor)
+
+Each transaction signs a canonical message:
+
+```json
+{
+  "transaction_id": "...",
+  "gateway_timestamp_utc": "...",
+  "final_hash": "...",
+  "policy_version_hash": "...",
+  "client_key_fingerprint": "..."
+}
 ```
 
-**Configure environment:**
-```bash
-# Copy the example environment file
-cp .env.example .env
+Signature algorithm:
 
-# Edit .env and set:
-# 1. DATABASE_URL - PostgreSQL connection string
-# 2. LANTERN_VAULT_KEY - Encryption key (generate with: openssl rand -hex 32)
-# Example: DATABASE_URL=postgresql://user:password@localhost:5432/lantern
+* ECDSA_SHA_256 (preferred)
+* or RSA-PSS-SHA256
+
+Signing is pluggable:
+
+* Local dev keys
+* KMS (AWS/GCP/Azure)
+* HSM integration (future)
+
+Optional:
+
+* RFC 3161 trusted timestamp
+
+---
+
+## 4. Accountability Packet
+
+Each transaction emits a full packet containing:
+
+* Identifiers and timestamps
+* Intent + feature_tag
+* Model fingerprint
+* Parameter snapshot
+* Prompt hash / RAG hash
+* Policy receipt
+* Execution summary
+* HALO chain
+* Verification bundle
+* Data handling attestation
+* Enforcement mode
+
+The packet is self-contained and exportable as:
+
+* JSON
+* PDF (with embedded JSON)
+
+---
+
+## 5. Offline Verifier
+
+A portable CLI tool verifies:
+
+* Schema validity
+* HALO chain integrity
+* Signature authenticity
+* Optional TSA timestamp
+* Policy provenance
+
+Verification does not require contacting Sentinel.
+
+---
+
+## 6. Policy Governance (SOX-Grade Minimal Model)
+
+Policy changes follow:
+
+* Proposer
+* Approver
+* proposer ≠ approver (prod enforced)
+* Immutable policy versions
+* Append-only change log
+* Single mutable active pointer per environment
+
+This supports:
+
+* SOX 404
+* SOC 2
+* ISO 27001
+* Litigation defensibility
+
+---
+
+## 7. Legal Hold
+
+Allows freezing scoped transactions for:
+
+* Litigation
+* Regulatory review
+* Discovery requests
+
+Generates signed Legal Hold Certificate.
+
+---
+
+# Integration Modes
+
+ELI Sentinel supports multiple integration patterns:
+
+### API Gateway (Enforced Mode)
+
+Sentinel calls provider directly.
+
+### SDK Wrapper (Two-Phase)
+
+* Preflight policy approval
+* Client executes provider call
+* Finalize with output hash
+
+### Sidecar Proxy
+
+Zero code change deployment.
+
+### Orchestration Plugin
+
+Langchain / LlamaIndex callback integration.
+
+Each packet records `enforcement_mode`.
+
+---
+
+# Architectural Principles
+
+These are non-negotiable:
+
+* Deterministic canonicalization (`json_c14n_v1`)
+* SHA-256 hashing
+* Signature required in production
+* Policy evaluated pre-execution
+* Raw prompt/output storage disabled by default
+* Packet must be self-contained
+* Separation-of-duties enforced in code
+
+If canonicalization drifts, verification collapses.
+
+Protocol integrity is the product.
+
+---
+
+# What We Are NOT Building
+
+* Hallucination scoring
+* AI evaluation dashboards
+* Observability analytics
+* Blockchain anchoring
+* Prompt storage by default
+* Autonomous policy generation
+
+ELI Sentinel governs structure, not semantics.
+
+---
+
+# Repository Structure (Planned)
+
+```
+eli-sentinel/
+  gateway/
+    app/
+      services/
+        c14n.py
+        hashing.py
+        halo.py
+        signer.py
+        policy_engine.py
+        packet_builder.py
+      routes/
+      models/
+  tools/
+    eli_verify.py
+  docs/
+    openapi.yaml
+    canonicalization.md
+    verification.md
 ```
 
-**Security Configuration (REQUIRED):**
-```bash
-# Generate a secure encryption key
-openssl rand -hex 32
+---
 
-# Add to .env file
-LANTERN_VAULT_KEY=your-generated-64-character-hex-key
-```
+# Build Order (Strict)
 
-**Initialize database:**
-```bash
-npm run db:push
-```
+1. json_c14n_v1 + test vectors
+2. Hash utilities
+3. HALO chain compute + verify
+4. Signer interface + verification tests
+5. Packet schema
+6. Offline verifier CLI
+7. Policy governance endpoints
+8. `/v1/ai/call` end-to-end
+9. JSON + PDF exports
+10. Legal hold
+11. Usage reporting
 
-### Docker Deployment (Recommended for Production)
+Protocol primitives before API sugar.
 
-For production deployment with PostgreSQL and automated setup:
+---
 
-```bash
-# Generate required secrets
-openssl rand -base64 32  # PostgreSQL password
-openssl rand -hex 32      # Encryption vault key
+# Threat Model
 
-# Configure environment
-cp .env.docker .env
-# Edit .env and set POSTGRES_PASSWORD and LANTERN_VAULT_KEY
+ELI Sentinel defends against:
 
-# Start services
-docker-compose up -d
+* Database tampering
+* Backdated records
+* Insider policy manipulation
+* Log deletion
+* Fabricated receipts
+* Silent policy changes
 
-# Initialize database
-docker-compose exec lantern npm run db:push
+If an attacker compromises the database but not the signing key,
+they cannot forge valid packets.
 
-# View logs
-docker-compose logs -f
-```
+---
 
-**See [docs/DOCKER_DEPLOY.md](./docs/DOCKER_DEPLOY.md) for complete deployment guide.**
+# Quality Bar
 
-### Replit Deployment (Recommended for Quick Start)
+This system must:
 
-For the easiest setup, deploy to Replit with automatic PostgreSQL provisioning:
+* Produce identical packets for identical inputs
+* Verify offline without contacting Sentinel
+* Prove policy executed before output
+* Survive operator distrust
+* Be explainable to an auditor in under 10 minutes
 
-[![Run on Replit](https://replit.com/badge/github/Swixixle/Lantern)](https://replit.com/new/github/Swixixle/Lantern)
+If asked:
 
-See [REPLIT_SETUP.md](./REPLIT_SETUP.md) for detailed instructions.
-## Environment Configuration
+> "Can this record be forged?"
 
-**ELI Integration (Optional):**
+The correct answer must be:
 
-To enable "Send to ELI" functionality for external case management, set these environment variables:
+> "Only if you break SHA-256 or compromise the signing key."
 
-```bash
-ELI_BASE_URL=https://ajmaksimeli.com
-ELI_INGEST_TOKEN=<your-eli-token>
-```
+---
 
-**In Replit:**
-- **Development**: Project → Secrets → Add the variables above
-- **Production**: Deployments → [Your Deployment] → Secrets/Env → Add the variables above
+# Project Status
 
-Without these secrets, the "Send to ELI" button will show a configuration error.
+This repository is in active development.
 
-## Quick Start
+Initial focus:
 
-```bash
-npm install
-npm run dev
-```
+* Deterministic canonicalization
+* HALO chain
+* Signing + verification
+* Offline verifier
 
-The app will be available at `http://localhost:5000`.
+UI and dashboards are explicitly out of scope.
 
-## Usage Example
+---
 
-1. Upload a fixed evidence artifact (PDF, document, etc.)
-2. Select an interpretive lens (legal, technical, operational)
-3. View how conclusions change under different frameworks
-4. Export tamper-evident audit trail
+## License
 
-See `/demos/evidence-walkthrough` for a complete walkthrough.
-
-## Security & Chain-of-Custody
-
-### Encryption at Rest
-
-All source documents are encrypted using **AES-256-GCM** (authenticated encryption):
-- 256-bit keys derived from `LANTERN_VAULT_KEY`
-- 96-bit random IVs per operation
-- 128-bit authentication tags for integrity
-- Fail-closed: Server rejects startup without encryption key in production
-
-### Chain-of-Custody Capabilities
-
-**What Lantern provides:**
-- ✅ Cryptographic integrity verification (SHA-256 hashing)
-- ✅ Tamper detection (manifest integrity checks)
-- ✅ Deterministic verification (canonical JSON hashing)
-- ✅ Complete custody tracking (timestamped operations)
-- ✅ User override logging (assertion type tracking)
-- ✅ Encryption-at-rest for sensitive evidence
-
-**What Lantern does NOT provide:**
-- ❌ Document authenticity verification (cannot detect pre-ingestion forgery)
-- ❌ Legal admissibility certification (depends on jurisdiction)
-- ❌ Deep fake detection
-
-**Testing & Verification:**
-
-Lantern includes comprehensive HTTP+DB integration tests that prove:
-- Valid chain-of-custody workflow (create → upload → claim → finalize → verify)
-- Tamper detection (modification triggers integrity mismatch)
-- Encryption-at-rest (ciphertext ≠ plaintext, decryption roundtrip)
-- Refusal override logging (user assertions tracked with metadata)
-
-Run integration tests:
-```bash
-npm run test:integration
-```
-
-See [server/__tests__/INTEGRATION_TESTS.md](./server/__tests__/INTEGRATION_TESTS.md) for details.
-
-**API Verification:**
-```bash
-# Verify case integrity
-curl -X GET "http://localhost:5000/api/case/{caseId}/verify"
-
-# Export evidence package
-curl -X GET "http://localhost:5000/api/case/{caseId}/export" > evidence.zip
-```
-
-**See [docs/CHAIN_OF_CUSTODY_VERIFICATION.md](./docs/CHAIN_OF_CUSTODY_VERIFICATION.md) for complete procedures.**
-
-### Operator Responsibilities
-
-Before using Lantern in legal proceedings:
-1. Document evidence provenance (chain from original source)
-2. Maintain custody logs (who handled evidence)
-3. Export cases regularly (backup and archival)
-4. Verify integrity periodically (automated checks)
-5. Protect encryption keys (secure key management)
-6. Run integration tests to validate system integrity
-
-**See [docs/OPERATOR_GUIDE.md](./docs/OPERATOR_GUIDE.md) for operational procedures.**
-
-## Handling Conflicts
-
-When Lantern detects contradictory evidence in your corpus, it flags these as conflicts for analyst review. See [Conflict Resolution Guide](docs/CONFLICT_RESOLUTION_GUIDE.md) for detailed instructions on:
-
-- Understanding conflict types
-- Accessing detected conflicts
-- Resolution workflow and best practices
-- Examples of common conflict scenarios
-
-## Production Build
-
-```bash
-npm run build
-npm start
-```
-
-## How to Open the External App URL (Replit)
-
-1. In the Replit workspace, look for the **Webview** panel on the right side
-2. Click the **"Open in new tab"** button (square with arrow icon) in the Webview header
-3. Alternatively, copy the URL from the Webview address bar and paste it into a new browser tab
-
-If you don't see a Webview panel:
-- Ensure the workflow is running (green status)
-- Try refreshing the page
-- Check the Console for error messages
-
-## Technical Stack
-
-**Frontend:**
-- React 19, TypeScript, Vite
-- Radix UI components with Tailwind CSS
-- TanStack Query for data fetching
-- IndexedDB for local caching
-
-**Backend:**
-- Node.js 20+ with Express
-- PostgreSQL 16+ (System of Record)
-- Drizzle ORM for database access
-- AES-256-GCM encryption (crypto module)
-
-**Security:**
-- Encrypted source storage (AES-256-GCM)
-- SHA-256 hashing for integrity
-- Append-only ledger (tamper-evident)
-- RBAC with Passport.js authentication
-
-**Deployment:**
-- Docker + Docker Compose
-- Multi-stage builds (optimized images)
-- Health checks and auto-restart
-- Volume persistence for data
-
-**Architecture:**
-- **Storage Layer**: PostgreSQL (cases, sources, claims, ledger)
-- **Encryption Layer**: At-rest AES-256-GCM with key derivation
-- **API Layer**: Express REST endpoints with RBAC
-- **UI Layer**: React SPA with local caching
-- **Export Layer**: ZIP bundles with complete evidence packages
-
-## Troubleshooting
-
-### White Screen / App Won't Load
-
-1. Check the Console for errors
-2. Visit `/__boot` (dev only) to verify the server is responding
-3. If `/__boot` loads but the app doesn't, the issue is in the React layer
-
-### EADDRINUSE Error
-
-This error means another process is already using port 5000.
-
-**Fix:**
-1. Stop all running workflows
-2. Wait 5 seconds for the port to release
-3. Restart the workflow
-
-The server will now display a clear error message with fix instructions if this occurs.
-
-### Stale Process
-
-If the app behaves unexpectedly:
-1. Stop the workflow completely
-2. Wait for the Console to show no activity
-3. Start the workflow again
-
-## Architecture
-
-- **Frontend**: React + Vite + TypeScript
-- **Storage**: Browser localStorage (local-first design)
-- **Server**: Express (static asset host in production)
-
-## Development Routes (Dev Only)
-
-These routes are disabled in production:
-- `/__boot` - Plain HTML boot test
-- `/__health` - JSON health check with PID
-
-## Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm start` | Run production server |
-| `npm run check` | TypeScript type check |
-| `npm run db:push` | Push database schema changes |
-
-## Documentation
-
-Comprehensive guides for deployment, operation, and legal compliance:
-
-| Document | Description |
-|----------|-------------|
-| [DOCKER_DEPLOY.md](./docs/DOCKER_DEPLOY.md) | Complete Docker deployment guide with security setup |
-| [OPERATOR_GUIDE.md](./docs/OPERATOR_GUIDE.md) | Court/compliance-ready operational procedures (20KB+) |
-| [CHAIN_OF_CUSTODY_VERIFICATION.md](./docs/CHAIN_OF_CUSTODY_VERIFICATION.md) | Step-by-step verification procedures with scripts |
-| [REPLIT_SETUP.md](./REPLIT_SETUP.md) | Quick start guide for Replit deployment |
-| [SECURITY.md](./SECURITY.md) | Security model and threat analysis |
-| [CONFLICT_RESOLUTION_GUIDE.md](./docs/CONFLICT_RESOLUTION_GUIDE.md) | Handling contradictory evidence |
-
-**Key topics covered:**
-- Threat model (what Lantern detects vs. doesn't detect)
-- Chain-of-custody technical implementation
-- Export/import evidence packages
-- Retention and no-delete policy
-- Audit verification procedures (automated scripts)
-- Legal considerations and admissibility requirements
-- Operator responsibilities and best practices
-
-## Collaboration
-
-Open to technical collaboration on:
-- Cryptographic verification protocols
-- Interpretive framework design
-- Audit trail architectures
-
-**Contact**: Available via GitHub Issues or inquiry for HALO-RECEIPTS integration.
+TBD
