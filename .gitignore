@@ -13,3 +13,4 @@ attached_assets/
 .upm/
 .cache/
 .local/
+.env
